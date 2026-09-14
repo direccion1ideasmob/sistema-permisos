@@ -266,17 +266,22 @@ const s = {
   },
   
   // --- FONDOS INDUSTRIALES ROTATIVOS ---
+  // --- FONDOS INDUSTRIALES ROTATIVOS ---
   fondoGlobal: { 
     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 
   },
   imagenFondo: { 
     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
     objectFit: 'cover', 
-    transition: 'opacity 1s ease-in-out' // Transición mucho más rápida
+    transition: 'opacity 1s ease-in-out',
+    
+    /* === AGREGA ESTA LÍNEA PARA VOLVERLAS GRISES Y OSCURAS === */
+    filter: 'grayscale(5%) brightness(0.85) contrast(0.95)'
   },
   overlayGradiente: { 
     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
-    background: 'linear-gradient(to right, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.1) 100%)', // Gradiente suave
+    /* Capa oscura ligera para emparejar la transición */
+    background: 'rgba(0, 0, 0, 0.35)', 
   },
 
   // --- CONTENEDOR FLOTANTE ---
