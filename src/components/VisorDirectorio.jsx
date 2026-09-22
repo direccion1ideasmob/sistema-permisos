@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import DirectorioGrid from './DirectorioGrid'; // Conexión a tu archivo original existente
+import DirectorioGrid from './DirectorioGrid';
 import VistaArbol from './VistaArbol';
 import ModalFotoZoom from './ModalFotoZoom';
 import ModalGestionDepto from './ModalGestionDepto';
@@ -16,42 +16,40 @@ export default function VisorDirectorio({
     setDeptosAbiertos(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Si la vista activa es DataGrid, delega a tu DirectorioGrid existente
-  if (vista === 'excel') {
-    return (
-      <DirectorioGrid 
-  usuarios={usuarios} 
-  departamentos={departamentos} 
-  sedes={sedes}
-  areas={areas} 
-  puestos={puestos} 
-  recargarDatos={recargarDatos} 
-  onRestablecerPin={onRestablecerPin}
-  setFotoZoom={setFotoZoom}
-  modoOscuro={modoOscuro} 
-/>
-    );
-  }
-
-  // Si la vista activa es Estructura
   return (
     <div style={{ width: '100%', boxSizing: 'border-box' }}>
-      <VistaArbol 
-        usuarios={usuarios}
-        departamentos={departamentos}
-        deptosAbiertos={deptosAbiertos} 
-        toggleDepto={toggleDepto} 
-        onToggleEstado={onToggleEstado} 
-        onRestablecerPin={onRestablecerPin} 
-        setFotoZoom={setFotoZoom} 
-        onEditarDepto={(depto) => setDeptoEditando(depto)}
-        modoOscuro={modoOscuro} 
-      />
+      
+      {/* RENDERIZA LA VISTA ACTIVA (CONCENTRADO O ESTRUCTURA) */}
+      {vista === 'excel' ? (
+        <DirectorioGrid 
+          usuarios={usuarios} 
+          departamentos={departamentos} 
+          sedes={sedes}
+          areas={areas} 
+          puestos={puestos} 
+          recargarDatos={recargarDatos} 
+          onRestablecerPin={onRestablecerPin}
+          setFotoZoom={setFotoZoom}
+          modoOscuro={modoOscuro} 
+        />
+      ) : (
+        <VistaArbol 
+          usuarios={usuarios}
+          departamentos={departamentos}
+          deptosAbiertos={deptosAbiertos} 
+          toggleDepto={toggleDepto} 
+          onToggleEstado={onToggleEstado} 
+          onRestablecerPin={onRestablecerPin} 
+          setFotoZoom={setFotoZoom} 
+          onEditarDepto={(depto) => setDeptoEditando(depto)}
+          modoOscuro={modoOscuro} 
+        />
+      )}
 
-      {/* MODAL PARA VER FOTO AMPLIADA */}
+      {/* MODAL DE FOTO: SIEMPRE DISPONIBLE PARA AMBAS VISTAS */}
       <ModalFotoZoom fotoZoom={fotoZoom} onClose={() => setFotoZoom(null)} />
 
-      {/* MODAL PARA RECLASIFICAR DEPARTAMENTO */}
+      {/* MODAL DEPARTAMENTOS: SIEMPRE DISPONIBLE PARA AMBAS VISTAS */}
       {deptoEditando && (
         <ModalGestionDepto 
           deptoEditando={deptoEditando}
@@ -60,9 +58,10 @@ export default function VisorDirectorio({
             setDeptoEditando(null);
             if (recargarDatos) recargarDatos();
           }}
-          modoOscuro={modoOscuro}
+          modoOscuro={modoOscuro} 
         />
       )}
+
     </div>
   );
 }
