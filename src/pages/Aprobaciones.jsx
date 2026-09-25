@@ -7,7 +7,7 @@ import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../componen
 import TarjetaAprobacion from '../components/aprobaciones/TarjetaAprobacion';
 import ModalDictamenAprobar from '../components/aprobaciones/ModalDictamenAprobar';
 import ModalRechazoPermiso from '../components/aprobaciones/ModalRechazoPermiso';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2, Clock, Bell } from 'lucide-react';
 
 export default function Aprobaciones() {
   const { usuario } = useAuth();
@@ -20,10 +20,46 @@ export default function Aprobaciones() {
   const [solicitudAprobar, setSolicitudAprobar] = useState(null);
   const [solicitudRechazar, setSolicitudRechazar] = useState(null);
 
+  // Detecta si este navegador/celular ya tiene permiso concedido (si ya tiene, el botón se oculta)
+  const [dispositivoVinculado, setDispositivoVinculado] = useState(() => {
+    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  });
+
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);
 
-  // Notificar al empleado por Push
+  // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
+  const vincularDispositivoManual = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.register('/sw.js');
+      }
+
+      const sub = await registrarSuscripcionPush();
+      
+      if (!sub) {
+        alert("No se otorgaron permisos de notificación en el navegador.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from('suscripciones_push')
+        .upsert(
+          [{ usuario_id: usuario.id, subscription: sub, endpoint: sub.endpoint }],
+          { onConflict: 'endpoint' }
+        );
+
+      if (error) throw error;
+
+      // El botón desaparece inmediatamente de la pantalla
+      setDispositivoVinculado(true);
+      alert("✅ ¡Teléfono vinculado con éxito! Las alertas ya sonarán aquí.");
+    } catch (err) {
+      alert("Error al vincular: " + err.message);
+    }
+  };
+
+  // Notificar al empleado por Push a su celular
   const notificarEmpleado = async (empleadoId, titulo, mensaje) => {
     try {
       const { data: subs } = await supabase
@@ -49,13 +85,13 @@ export default function Aprobaciones() {
     } catch (_) {}
   };
 
-  // Cargar solicitudes de forma limpia y blindada
+  // Cargar solicitudes relacionadas con este usuario firmante
   const cargarSolicitudes = useCallback(async () => {
     if (!usuario?.id) return;
     setCargando(true);
 
     try {
-      // Consulta protegida: no busca departamento_id en permisos para no causar error 400
+      // Consulta blindada: pide departamento a través de usuarios para no causar error 400
       const { data, error } = await supabase
         .from('permisos')
         .select(`
@@ -85,12 +121,6 @@ export default function Aprobaciones() {
   useEffect(() => {
     if (usuario?.id) {
       cargarSolicitudes();
-      // Registrar suscripción push silenciosamente
-      registrarSuscripcionPush().then(sub => {
-        if (sub) {
-          supabase.from('suscripciones_push').upsert([{ usuario_id: usuario.id, subscription: sub, endpoint: sub.endpoint }], { onConflict: 'endpoint' });
-        }
-      });
     }
   }, [usuario?.id, cargarSolicitudes]);
 
@@ -106,7 +136,6 @@ export default function Aprobaciones() {
 
       if (esJefeDepto) {
         updates.firma_1_estado = 'autorizado';
-        // Si el permiso no tenía firma_1_id grabado, le estampa el ID real del jefe que lo aprobó
         if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
       }
       if (esGerente) {
@@ -129,7 +158,7 @@ export default function Aprobaciones() {
 
       if (error) throw error;
 
-      // Notificar al empleado por Web Push
+      // Disparar push al empleado
       await notificarEmpleado(
         solicitud.usuario_id,
         '✅ PERMISO AUTORIZADO',
@@ -160,7 +189,7 @@ export default function Aprobaciones() {
 
       if (error) throw error;
 
-      // Notificar al empleado por Web Push
+      // Disparar push al empleado
       await notificarEmpleado(
         solicitud.usuario_id,
         '❌ PERMISO RECHAZADO',
@@ -176,24 +205,20 @@ export default function Aprobaciones() {
     }
   };
 
-  // FILTRADO INTELIGENTE: Qué solicitudes corresponden a este usuario
+  // Filtrado de solicitudes para este usuario
   const solicitudesDelUsuario = solicitudes.filter(s => {
-    // Si es RH, ve absolutamente todo lo que esté en el sistema
     if (usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh') return true;
 
-    // Si es Jefe de Área, ve los permisos donde sea la firma 1 O los permisos de gente de su mismo departamento
     if (usuario?.rol === 'jefe_area') {
       if (s.firma_1_id === usuario.id) return true;
       if (s.usuarios?.departamento_id && s.usuarios.departamento_id === usuario.departamento_id) return true;
     }
 
-    // Si es Gerente
     if (s.firma_2_id === usuario?.id) return true;
 
     return false;
   });
 
-  // Separar en Pendientes vs Historial
   const solicitudesPendientes = solicitudesDelUsuario.filter(s => {
     if (s.estado_general === 'rechazado' || s.estado_general === 'autorizado') return false;
 
@@ -214,6 +239,23 @@ export default function Aprobaciones() {
   return (
     <div className="aprobaciones-container">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+
+      {/* BOTÓN DISCRETO QUE SE OCULTA SOLO EN CUANTO EL CELULAR SE VINCULA */}
+      {!dispositivoVinculado && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+          <button
+            onClick={vincularDispositivoManual}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '6px 14px', borderRadius: '20px',
+              backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid #f59e0b',
+              color: '#f59e0b', fontSize: '11px', fontWeight: '800', cursor: 'pointer'
+            }}
+          >
+            <Bell size={12} /> Activar notificaciones en este celular
+          </button>
+        </div>
+      )}
 
       {/* PESTAÑAS: PENDIENTES VS HISTORIAL */}
       <div className="tabs-aprobacion-bar">

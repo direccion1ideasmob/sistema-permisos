@@ -8,7 +8,6 @@ import {
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, modoOscuro }) {
   const sesionActual = JSON.parse(localStorage.getItem("permisos_sesion") || '{}');
 
-  // Variable unificada con la columna de Supabase
   const [tipoPermiso, setTipoPermiso] = useState('salida');
   const [naturaleza, setNaturaleza] = useState('Personal');
 
@@ -89,6 +88,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
     setGuardando(true);
     try {
+      // 1. Obtener datos del departamento
       const { data: depto, error: errD } = await supabase
         .from('departamentos')
         .select('nombre, clasificacion, jefe_id, gerente_id, rh_id')
@@ -97,7 +97,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errD) throw new Error("No se encontró el departamento del colaborador.");
 
-// BLINDAJE REAL: Si el departamento no tiene jefe_id asignado, busca al jefe de área en usuarios
+      // BLINDAJE REAL: Si jefe_id viene en null en departamentos, busca al jefe de área en usuarios
       let jefeFinalId = depto.jefe_id;
       if (!jefeFinalId) {
         const { data: jefeEncontrado } = await supabase
@@ -112,7 +112,6 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           jefeFinalId = jefeEncontrado.id;
         }
       }
-
 
       const clasif = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
       let letra = 'P';
@@ -135,9 +134,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         detalleHorarioTexto = `Falta programada día completo: ${fechaPermiso}`;
       }
 
-      // Caseta automática según departamento
       const requiereCasetaAuto = clasif.includes('prod') || tipoPermiso === 'salida' || tipoPermiso === 'retardo';
 
+      // 2. Guardar permiso con jefeFinalId asegurado
       const { error: errInsert } = await supabase
         .from('permisos')
         .insert([{
@@ -152,7 +151,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           total_horas: calcularHoras(),
           observaciones: detalleHorarioTexto,
           firma_empleado: true,
-firma_1_id: jefeFinalId, // <-- USA EL ID REAL ENCONTRADO
+          firma_1_id: jefeFinalId, // ID REAL VINCULADO
           firma_1_estado: 'pendiente',
           firma_2_id: depto.gerente_id,
           firma_2_estado: 'pendiente',
@@ -163,6 +162,32 @@ firma_1_id: jefeFinalId, // <-- USA EL ID REAL ENCONTRADO
         }]);
 
       if (errInsert) throw errInsert;
+
+      // 3. Notificación Push directa al Jefe
+      if (jefeFinalId) {
+        try {
+          const { data: subs } = await supabase
+            .from('suscripciones_push')
+            .select('subscription')
+            .eq('usuario_id', jefeFinalId);
+
+          if (subs && subs.length > 0) {
+            subs.forEach(async (item) => {
+              try {
+                await fetch('/api/notificar', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    subscription: item.subscription,
+                    titulo: '⚠️ NUEVO PASE POR AUTORIZAR',
+                    mensaje: `${sesionActual.nombre_completo || 'Un colaborador'} solicitó permiso (${folioFinal}).`
+                  })
+                });
+              } catch (_) {}
+            });
+          }
+        } catch (_) {}
+      }
 
       alert(`✅ Solicitud enviada correctamente.\nFolio Oficial: ${folioFinal}`);
       setMotivo('');
