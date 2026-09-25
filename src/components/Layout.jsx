@@ -353,13 +353,21 @@ const s = {
     justifyContent: 'center', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,0.2)'
   },
   
-  // SIDEBAR CON TRANSICIÓN SUAVE TANTO DE MARGEN (PC) COMO DE TRANSFORMACIÓN (MÓVIL)
   sidebar: { 
-    flexShrink: 0, height: '100vh', 
-    display: 'flex', flexDirection: 'column', 
-    borderRight: '1px solid', boxSizing: 'border-box', 
-    zIndex: 250, overflow: 'hidden', position: 'relative',
-    transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+    zIndex: 150, 
+    height: '100dvh', /* Ajuste dinámico para pantallas de celular */
+    overflowY: 'auto', /* Permite deslizar si la pantalla es chica */
+    paddingBottom: '40px', /* Espacio extra abajo para que nunca se tape */
+    display: 'flex', 
+    flexDirection: 'column', 
+    padding: '20px 20px 30px 20px', 
+    transition: 'all 0.3s ease', 
+    boxSizing: 'border-box', 
+    width: '300px', 
+    flexShrink: 0, 
+    backdropFilter: 'blur(10px)', 
+    WebkitBackdropFilter: 'blur(10px)',
+    boxShadow: '4px 0 25px rgba(0,0,0,0.1)' 
   },
 
   // MARCA DE AGUA LATERAL
