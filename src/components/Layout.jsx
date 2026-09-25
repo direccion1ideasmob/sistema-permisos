@@ -354,7 +354,7 @@ const s = {
   },
   
   sidebar: { 
-    zIndex: 150, 
+    zIndex: 300, 
     height: '100dvh', /* Ajuste dinámico para pantallas de celular */
     overflowY: 'auto', /* Permite deslizar si la pantalla es chica */
     paddingBottom: '40px', /* Espacio extra abajo para que nunca se tape */
@@ -390,7 +390,16 @@ const s = {
     userSelect: 'none',
     transition: 'opacity 0.3s ease'
   },
-
+overlay: { 
+    position: 'fixed', 
+    top: 0, 
+    left: 0, 
+    width: '100vw', 
+    height: '100vh', 
+    backgroundColor: 'rgba(0,0,0,0.6)', 
+    backdropFilter: 'blur(3px)', 
+    zIndex: 200 /* <-- AHORA QUEDA POR DETRÁS DE LA BARRA */
+  },
   // CABECERA
   brandHeader: {
     position: 'relative', zIndex: 1,
