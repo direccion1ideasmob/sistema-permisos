@@ -1,5 +1,5 @@
 // La LLAVE NUEVA que generamos y pusimos en Vercel
-const PUBLIC_VAPID_KEY = 'BAkZmVNuM9RfB9ZucTH1QeiR2KLrZVj6Zu1dsjVwRLP-fxksAoYbm9zulFICWLy15NN536NQlhzGetSz8mHUeqM';
+const PUBLIC_VAPID_KEY = 'BNThRogYfbR6B2Pmy7cKGHLZDAfMMkgWoCPzBREZjJzkSxa4BGpnmVQ2zRQLGCRI5iLoNoAWhkDToDIpFbmRNu4';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);

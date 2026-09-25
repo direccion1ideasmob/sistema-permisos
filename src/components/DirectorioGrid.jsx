@@ -481,17 +481,17 @@ export default function DirectorioGrid({
   setDatosEdit={setDatosEdit}
   departamentos={departamentos}
   sedes={sedes}
+  areas={areas}     
+  puestos={puestos} 
   subiendoFoto={subiendoFoto}
   onCambiarFoto={handleCambiarFoto}
-  onGuardar={guardarCambios}
-  guardando={guardando}
+  recargarDatos={recargarDatos}
   onRestablecerPin={onRestablecerPin}
   onAbrirBaja={(u) => setUsuarioParaBaja(u)}
   onReactivar={reactivar}
-  setFotoZoom={setFotoZoom} // <-- ESTA LÍNEA RESTAURA LA FOTO AMPLIABLE
+  setFotoZoom={setFotoZoom}
   c={c}
 />
-
       {/* MODAL PIN */}
       <ModalSeguridadPin 
         abierto={modalPinAbierto}

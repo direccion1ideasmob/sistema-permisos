@@ -17,7 +17,7 @@ export default function MisPermisos() {
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const [papeletaSeleccionada, setPapeletaSeleccionada] = useState(null);
 
-  const cargarHistorial = useCallback(async () => {
+const cargarHistorial = useCallback(async () => {
     if (!usuario?.id) return;
     setCargandoHistorial(true);
 
@@ -25,8 +25,17 @@ export default function MisPermisos() {
       .from('permisos')
       .select(`
         *,
-        usuarios:usuario_id (numero_empleado, nombre_completo, area, puesto),
-        departamentos:departamento_id (nombre)
+        usuarios:usuario_id (
+          numero_empleado,
+          nombre_completo,
+          area,
+          puesto,
+          firma_url,
+          departamentos:departamento_id (nombre)
+        ),
+        jefe:firma_1_id (nombre_completo, firma_url),
+        gerente:firma_2_id (nombre_completo, firma_url),
+        rh:firma_3_id (nombre_completo, firma_url)
       `)
       .eq('usuario_id', usuario.id)
       .order('created_at', { ascending: false });
@@ -38,7 +47,7 @@ export default function MisPermisos() {
     }
     setCargandoHistorial(false);
   }, [usuario?.id]);
-
+  
   useEffect(() => {
     if (usuario?.id) {
       cargarHistorial();

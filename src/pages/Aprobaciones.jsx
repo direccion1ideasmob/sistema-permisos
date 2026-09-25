@@ -3,245 +3,286 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
 import { registrarSuscripcionPush } from '../services/notificaciones';
 
+import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../components/aprobaciones/aprobacionesStyles';
+import TarjetaAprobacion from '../components/aprobaciones/TarjetaAprobacion';
+import ModalDictamenAprobar from '../components/aprobaciones/ModalDictamenAprobar';
+import ModalRechazoPermiso from '../components/aprobaciones/ModalRechazoPermiso';
+import { CheckCircle2, Clock } from 'lucide-react';
+
 export default function Aprobaciones() {
-  const { usuario, cerrarSesion } = useAuth();
+  const { usuario } = useAuth();
+  const [tabActiva, setTabActiva] = useState('pendientes'); // 'pendientes' | 'historial'
   const [solicitudes, setSolicitudes] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [procesandoId, setProcesandoId] = useState(null);
-  const [notifActivadas, setNotifActivadas] = useState(false);
-  const [guardandoPush, setGuardandoPush] = useState(false);
+  const [procesando, setProcesando] = useState(false);
 
-  const activarNotificacionesWeb = useCallback(async (mostrarAlerts = true) => {
-    setGuardandoPush(true);
+  // Modales
+  const [solicitudAprobar, setSolicitudAprobar] = useState(null);
+  const [solicitudRechazar, setSolicitudRechazar] = useState(null);
+
+  const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
+  const c = obtenerTemaAprobaciones(modoOscuro);
+
+  // Notificar al empleado por Push
+  const notificarEmpleado = async (empleadoId, titulo, mensaje) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || usuario?.id;
+      const { data: subs } = await supabase
+        .from('suscripciones_push')
+        .select('subscription')
+        .eq('usuario_id', empleadoId);
 
-      if (!userId) {
-        if (mostrarAlerts) alert("Error: No hay una sesión activa de usuario.");
-        setGuardandoPush(false);
-        return;
+      if (subs && subs.length > 0) {
+        subs.forEach(async (item) => {
+          try {
+            await fetch('/api/notificar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                subscription: item.subscription,
+                titulo,
+                mensaje
+              })
+            });
+          } catch (_) {}
+        });
       }
+    } catch (_) {}
+  };
 
-      const suscripcion = await registrarSuscripcionPush();
-      
-      if (suscripcion) {
-        // CORREGIDO: Usa .upsert() con onConflict 'usuario_id' para EVITAR DUPLICADOS
-        const { error } = await supabase
-          .from('suscripciones_push')
-          .upsert(
-            [
-              {
-                usuario_id: userId,
-                subscription: suscripcion
-              }
-            ],
-            { onConflict: 'usuario_id' }
-          );
+  // Cargar solicitudes de forma limpia y blindada
+  const cargarSolicitudes = useCallback(async () => {
+    if (!usuario?.id) return;
+    setCargando(true);
 
-        if (error) {
-          console.error("Error al guardar en Supabase:", error);
-          if (mostrarAlerts) alert("Error de base de datos: " + error.message);
-        } else {
-          setNotifActivadas(true);
-          if (mostrarAlerts) alert("¡Dispositivo vinculado con éxito para recibir alertas!");
-        }
-      } else {
-        if (mostrarAlerts) alert("No se pudo obtener la suscripción Web Push desde el navegador.");
-      }
-    } catch (error) {
-      console.error("Error en activación Push:", error);
-      if (mostrarAlerts) alert("Error al activar notificaciones: " + error.message);
+    try {
+      // Consulta protegida: no busca departamento_id en permisos para no causar error 400
+      const { data, error } = await supabase
+        .from('permisos')
+        .select(`
+          *,
+          usuarios:usuario_id (
+            id,
+            numero_empleado,
+            nombre_completo,
+            area,
+            puesto,
+            foto_url,
+            departamento_id,
+            departamentos:departamento_id (id, nombre, clasificacion)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSolicitudes(data || []);
+    } catch (err) {
+      console.error("Error al cargar aprobaciones:", err);
     } finally {
-      setGuardandoPush(false);
+      setCargando(false);
     }
   }, [usuario?.id]);
-
-  const comprobarYRegistrarNotificaciones = useCallback(async () => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      setNotifActivadas(true);
-      await activarNotificacionesWeb(false);
-    }
-  }, [activarNotificacionesWeb]);
-
-  const cargarSolicitudes = useCallback(async () => {
-    setCargando(true);
-    const { data, error } = await supabase
-      .from('permisos')
-      .select('*, usuarios!empleado_id(nombre, username)')
-      .order('id', { ascending: false });
-
-    if (!error) setSolicitudes(data || []);
-    setCargando(false);
-  }, []);
 
   useEffect(() => {
     if (usuario?.id) {
       cargarSolicitudes();
-      comprobarYRegistrarNotificaciones();
+      // Registrar suscripción push silenciosamente
+      registrarSuscripcionPush().then(sub => {
+        if (sub) {
+          supabase.from('suscripciones_push').upsert([{ usuario_id: usuario.id, subscription: sub, endpoint: sub.endpoint }], { onConflict: 'endpoint' });
+        }
+      });
     }
-  }, [usuario?.id, cargarSolicitudes, comprobarYRegistrarNotificaciones]);
+  }, [usuario?.id, cargarSolicitudes]);
 
-  const responderSolicitud = async (idPermiso, nuevoEstado, empleadoId) => {
-    setProcesandoId(idPermiso);
+  // AUTORIZAR PERMISO CON DICTAMEN DE PAGO
+  const ejecutarAprobacion = async (solicitud, dictamenPago, comentarios) => {
+    setProcesando(true);
+    try {
+      const esJefeDepto = usuario.rol === 'jefe_area' && (solicitud.firma_1_id === usuario.id || solicitud.usuarios?.departamento_id === usuario.departamento_id);
+      const esGerente = solicitud.firma_2_id === usuario.id;
+      const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
+
+      const updates = { pago: dictamenPago };
+
+      if (esJefeDepto) {
+        updates.firma_1_estado = 'autorizado';
+        // Si el permiso no tenía firma_1_id grabado, le estampa el ID real del jefe que lo aprobó
+        if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
+      }
+      if (esGerente) {
+        updates.firma_2_estado = 'autorizado';
+      }
+      if (esRH) {
+        updates.firma_3_estado = 'autorizado';
+        updates.estado_general = 'autorizado';
+        if (!solicitud.firma_3_id) updates.firma_3_id = usuario.id;
+      }
+
+      if (comentarios && comentarios.trim()) {
+        updates.observaciones = `${solicitud.observaciones || ''} | Res: ${comentarios.trim()}`;
+      }
+
+      const { error } = await supabase
+        .from('permisos')
+        .update(updates)
+        .eq('id', solicitud.id);
+
+      if (error) throw error;
+
+      // Notificar al empleado por Web Push
+      await notificarEmpleado(
+        solicitud.usuario_id,
+        '✅ PERMISO AUTORIZADO',
+        `Tu solicitud (${solicitud.folio}) fue autorizada con dictamen: "${dictamenPago}".`
+      );
+
+      setSolicitudAprobar(null);
+      await cargarSolicitudes();
+    } catch (err) {
+      alert("Error al autorizar: " + err.message);
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  // RECHAZAR PERMISO CON MOTIVO OBLIGATORIO
+  const ejecutarRechazo = async (solicitud, motivoRechazo) => {
+    setProcesando(true);
     try {
       const { error } = await supabase
         .from('permisos')
-        .update({ estado: nuevoEstado })
-        .eq('id', idPermiso);
+        .update({
+          firma_1_estado: 'rechazado',
+          estado_general: 'rechazado',
+          observaciones: `${solicitud.observaciones || ''} | RECHAZO: ${motivoRechazo}`
+        })
+        .eq('id', solicitud.id);
 
-      if (!error) {
-        if (empleadoId) {
-          // Obtener la suscripción push activa del empleado
-          const { data: suscripciones, error: errSub } = await supabase
-            .from('suscripciones_push')
-            .select('subscription')
-            .eq('usuario_id', empleadoId);
+      if (error) throw error;
 
-          if (errSub) console.error("Error consultando suscripción del empleado:", errSub);
+      // Notificar al empleado por Web Push
+      await notificarEmpleado(
+        solicitud.usuario_id,
+        '❌ PERMISO RECHAZADO',
+        `Tu solicitud (${solicitud.folio}) fue rechazada. Motivo: ${motivoRechazo}`
+      );
 
-          if (suscripciones && suscripciones.length > 0) {
-            const mensajeEstado = nuevoEstado === 'aprobado' ? 'Aprobado ✅' : 'Rechazado ❌';
-            
-            const envios = suscripciones.map(item =>
-              fetch('/api/notificar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  subscription: item.subscription,
-                  titulo: `Permiso ${mensajeEstado}`,
-                  mensaje: `Tu solicitud de permiso FOLIO #${idPermiso} ha sido ${nuevoEstado}.`
-                })
-              }).catch(err => console.error("Error al notificar empleado:", err))
-            );
-
-            await Promise.allSettled(envios);
-          }
-        }
-
-        cargarSolicitudes();
-      }
+      setSolicitudRechazar(null);
+      await cargarSolicitudes();
     } catch (err) {
-      alert("Error al procesar la solicitud: " + err.message);
+      alert("Error al rechazar: " + err.message);
     } finally {
-      setProcesandoId(null);
+      setProcesando(false);
     }
   };
 
-  const obtenerEtiquetaEstado = (estado) => {
-    switch (estado) {
-      case 'pendiente_jefe': return { texto: 'PENDIENTE JEFE', color: '#d97706', bg: '#fef3c7' };
-      case 'aprobado': return { texto: 'APROBADO', color: '#15803d', bg: '#dcfce7' };
-      case 'rechazado': return { texto: 'RECHAZADO', color: '#b91c1c', bg: '#fee2e2' };
-      default: return { texto: estado ? estado.toUpperCase() : 'PENDIENTE', color: '#4b5563', bg: '#f3f4f6' };
+  // FILTRADO INTELIGENTE: Qué solicitudes corresponden a este usuario
+  const solicitudesDelUsuario = solicitudes.filter(s => {
+    // Si es RH, ve absolutamente todo lo que esté en el sistema
+    if (usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh') return true;
+
+    // Si es Jefe de Área, ve los permisos donde sea la firma 1 O los permisos de gente de su mismo departamento
+    if (usuario?.rol === 'jefe_area') {
+      if (s.firma_1_id === usuario.id) return true;
+      if (s.usuarios?.departamento_id && s.usuarios.departamento_id === usuario.departamento_id) return true;
     }
-  };
+
+    // Si es Gerente
+    if (s.firma_2_id === usuario?.id) return true;
+
+    return false;
+  });
+
+  // Separar en Pendientes vs Historial
+  const solicitudesPendientes = solicitudesDelUsuario.filter(s => {
+    if (s.estado_general === 'rechazado' || s.estado_general === 'autorizado') return false;
+
+    const esJefeDepto = usuario?.rol === 'jefe_area' && (s.firma_1_id === usuario.id || s.usuarios?.departamento_id === usuario.departamento_id);
+    const esGerente = s.firma_2_id === usuario?.id;
+    const esRH = s.firma_3_id === usuario?.id || usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh';
+
+    if (esJefeDepto && s.firma_1_estado === 'pendiente') return true;
+    if (esGerente && s.firma_2_estado === 'pendiente') return true;
+    if (esRH && s.firma_3_estado === 'pendiente') return true;
+
+    return false;
+  });
+
+  const solicitudesHistorial = solicitudesDelUsuario.filter(s => !solicitudesPendientes.some(p => p.id === s.id));
+  const listadoActual = tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesHistorial;
 
   return (
-    <div style={styles.contenedorPadre}>
-      <header style={styles.header}>
-        <div>
-          <h1 style={styles.tituloHeader}>PANEL DE APROBACIONES</h1>
-          <p style={styles.subtituloHeader}>{usuario?.nombre}</p>
+    <div className="aprobaciones-container">
+      <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+
+      {/* PESTAÑAS: PENDIENTES VS HISTORIAL */}
+      <div className="tabs-aprobacion-bar">
+        <button
+          onClick={() => setTabActiva('pendientes')}
+          className={`tab-btn ${tabActiva === 'pendientes' ? 'active' : ''}`}
+        >
+          <Clock size={14} />
+          <span>Pendientes de mi firma</span>
+          {solicitudesPendientes.length > 0 && (
+            <span style={{ background: c.accent, color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px' }}>
+              {solicitudesPendientes.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setTabActiva('historial')}
+          className={`tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
+        >
+          <CheckCircle2 size={14} />
+          <span>Historial de Aprobadas / Rechazadas</span>
+        </button>
+      </div>
+
+      {/* LISTADO DE SOLICITUDES */}
+      {cargando ? (
+        <div style={{ textAlign: 'center', padding: '30px', color: c.textMuted, fontSize: '12px' }}>
+          Cargando solicitudes...
         </div>
-        <button onClick={cerrarSesion} style={styles.botonSalir}>SALIR</button>
-      </header>
-
-      <main style={styles.contenido}>
-        <div style={notifActivadas ? styles.alertaActiva : styles.alertaNotificacion}>
-          <p style={{ margin: 0, fontSize: '13px', fontWeight: 'bold' }}>
-            {notifActivadas 
-              ? "🟢 PERMISOS DEL NAVEGADOR ACTIVOS" 
-              : "⚠️ ACTIVAR NOTIFICACIONES PUSH EN ESTE TELÉFONO"}
-          </p>
-          <button 
-            onClick={() => activarNotificacionesWeb(true)} 
-            disabled={guardandoPush}
-            style={styles.botonNotificacion}
-          >
-            {guardandoPush ? "VINCULANDO..." : "VINCULAR / RE-SINCRONIZAR DISPOSITIVO"}
-          </button>
+      ) : listadoActual.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '13px' }}>
+          {tabActiva === 'pendientes' ? 'No tienes solicitudes pendientes de firma.' : 'No hay historial de pases revisados.'}
         </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {listadoActual.map(solicitud => (
+            <TarjetaAprobacion
+              key={solicitud.id}
+              solicitud={solicitud}
+              esPendiente={tabActiva === 'pendientes'}
+              onAprobar={(sol) => setSolicitudAprobar(sol)}
+              onRechazar={(sol) => setSolicitudRechazar(sol)}
+              c={c}
+              modoOscuro={modoOscuro}
+            />
+          ))}
+        </div>
+      )}
 
-        <h2 style={styles.subtitulo}>SOLICITUDES DE PERMISOS</h2>
+      {/* MODAL DE DICTAMEN DE PAGO (AL APROBAR) */}
+      <ModalDictamenAprobar
+        solicitud={solicitudAprobar}
+        usuarioFirmante={usuario}
+        onClose={() => setSolicitudAprobar(null)}
+        onConfirmarAprobacion={ejecutarAprobacion}
+        procesando={procesando}
+        c={c}
+        modoOscuro={modoOscuro}
+      />
 
-        {cargando ? (
-          <p style={styles.textoVacio}>Cargando...</p>
-        ) : solicitudes.length === 0 ? (
-          <p style={styles.textoVacio}>No hay solicitudes.</p>
-        ) : (
-          <div style={styles.lista}>
-            {solicitudes.map((p) => {
-              const badge = obtenerEtiquetaEstado(p.estado);
-              const esPendiente = p.estado && p.estado.startsWith('pendiente');
-
-              return (
-                <div key={p.id} style={styles.tarjeta}>
-                  <div style={styles.headerTarjeta}>
-                    <div>
-                      <span style={styles.folio}>FOLIO #{p.id}</span>
-                      <h3 style={styles.nombreEmpleado}>{p.usuarios?.nombre || 'Empleado'}</h3>
-                    </div>
-                    <span style={{ ...styles.badge, color: badge.color, backgroundColor: badge.bg }}>
-                      {badge.texto}
-                    </span>
-                  </div>
-
-                  <div style={styles.detalles}>
-                    <p style={styles.infoTexto}><strong>Fecha:</strong> {p.fecha_permiso}</p>
-                    <p style={styles.infoTexto}><strong>Horario:</strong> {p.hora_inicio} a {p.hora_fin}</p>
-                    <p style={styles.infoTexto}><strong>Motivo:</strong> {p.motivo}</p>
-                  </div>
-
-                  {esPendiente && (
-                    <div style={styles.acciones}>
-                      <button 
-                        onClick={() => responderSolicitud(p.id, 'aprobado', p.empleado_id)} 
-                        disabled={procesandoId === p.id} 
-                        style={styles.botonAprobar}
-                      >
-                        {procesandoId === p.id ? 'GUARDANDO...' : 'APROBAR'}
-                      </button>
-                      <button 
-                        onClick={() => responderSolicitud(p.id, 'rechazado', p.empleado_id)} 
-                        disabled={procesandoId === p.id} 
-                        style={styles.botonRechazar}
-                      >
-                        RECHAZAR
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
+      {/* MODAL DE RECHAZO CON MOTIVO OBLIGATORIO */}
+      <ModalRechazoPermiso
+        solicitud={solicitudRechazar}
+        onClose={() => setSolicitudRechazar(null)}
+        onConfirmarRechazo={ejecutarRechazo}
+        procesando={procesando}
+        c={c}
+      />
     </div>
   );
 }
-
-const styles = {
-  contenedorPadre: { minHeight: '100vh', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '2px solid #f0f0f0', maxWidth: '900px', margin: '0 auto' },
-  tituloHeader: { fontSize: '18px', fontWeight: '900', letterSpacing: '2px', margin: 0 },
-  subtituloHeader: { fontSize: '12px', color: '#888', margin: '4px 0 0 0', letterSpacing: '1px' },
-  botonSalir: { padding: '10px 18px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' },
-  contenido: { maxWidth: '900px', margin: '0 auto', padding: '20px' },
-  alertaNotificacion: { backgroundColor: '#fef3c7', border: '2px solid #fde68a', padding: '15px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' },
-  botonNotificacion: { backgroundColor: '#000', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', textAlign: 'center' },
-  alertaActiva: { backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', padding: '15px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' },
-  subtitulo: { fontSize: '13px', letterSpacing: '3px', color: '#888', marginBottom: '20px', fontWeight: '900' },
-  lista: { display: 'flex', flexDirection: 'column', gap: '15px' },
-  tarjeta: { padding: '20px', border: '2px solid #f0f0f0', borderRadius: '15px', backgroundColor: '#fafafa' },
-  headerTarjeta: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' },
-  folio: { fontSize: '11px', fontWeight: '800', color: '#888', letterSpacing: '1px' },
-  nombreEmpleado: { fontSize: '16px', fontWeight: '900', margin: '2px 0 0 0', letterSpacing: '0.5px' },
-  badge: { padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' },
-  detalles: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '15px' },
-  infoTexto: { fontSize: '13px', color: '#444', margin: 0 },
-  acciones: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eaeaea' },
-  botonAprobar: { padding: '14px', backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: '900', cursor: 'pointer' },
-  botonRechazar: { padding: '14px', backgroundColor: '#fff', color: '#b91c1c', border: '2px solid #fee2e2', borderRadius: '10px', fontSize: '13px', fontWeight: '900', cursor: 'pointer' },
-  textoVacio: { color: '#aaa', fontSize: '13px', letterSpacing: '1px' }
-};

@@ -2,35 +2,60 @@ import React, { useState } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import { 
   Send, Clock, Calendar, AlertTriangle, Briefcase, 
-  ShieldAlert, CheckCircle2 
+  ShieldAlert
 } from 'lucide-react';
 
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, modoOscuro }) {
   const sesionActual = JSON.parse(localStorage.getItem("permisos_sesion") || '{}');
 
-  const [tipoPermiso, setTipoPermiso] = useState('salida'); // 'salida' | 'retardo' | 'falta' | 'vacaciones' | 'comision'
+  // Variable unificada con la columna de Supabase
+  const [tipoPermiso, setTipoPermiso] = useState('salida');
   const [naturaleza, setNaturaleza] = useState('Personal');
-  const [fechaPermiso, setFechaPermiso] = useState(new Date().toISOString().split('T')[0]);
-  const [fechaFin, setFechaFin] = useState('');
-  const [horaInicio, setHoraInicio] = useState('07:00');
-  const [horaFin, setHoraFin] = useState('08:00');
+
+  const fechaHoy = new Date().toISOString().split('T')[0];
+  const [fechaPermiso, setFechaPermiso] = useState(fechaHoy);
+  const [fechaFinVacaciones, setFechaFinVacaciones] = useState('');
+
+  // Horarios
+  const [horaSalida, setHoraSalida] = useState('14:00');
+  const [regresaMismoDia, setRegresaMismoDia] = useState(false);
+  const [horaRegreso, setHoraRegreso] = useState('16:00');
+  const [horaLlegadaRetardo, setHoraLlegadaRetardo] = useState('07:30');
+
   const [motivo, setMotivo] = useState('');
-  const [requiereCaseta, setRequiereCaseta] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Cálculo automático de horas
+  // Cálculo de horas
   const calcularHoras = () => {
     if (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') return 8;
-    if (!horaInicio || !horaFin) return 0;
-    const [h1, m1] = horaInicio.split(':');
-    const [h2, m2] = horaFin.split(':');
-    const d1 = new Date(2000, 0, 1, h1, m1);
-    const d2 = new Date(2000, 0, 1, h2, m2);
-    const diff = (d2 - d1) / 3600000;
-    return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
+
+    if (tipoPermiso === 'retardo') {
+      const [h, m] = (horaLlegadaRetardo || '07:30').split(':');
+      const dInicio = new Date(2000, 0, 1, 7, 0);
+      const dLlegada = new Date(2000, 0, 1, parseInt(h, 10), parseInt(m, 10));
+      const diff = (dLlegada - dInicio) / 3600000;
+      return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
+    }
+
+    if (tipoPermiso === 'salida') {
+      if (regresaMismoDia) {
+        const [h1, m1] = (horaSalida || '14:00').split(':');
+        const [h2, m2] = (horaRegreso || '16:00').split(':');
+        const d1 = new Date(2000, 0, 1, parseInt(h1, 10), parseInt(m1, 10));
+        const d2 = new Date(2000, 0, 1, parseInt(h2, 10), parseInt(m2, 10));
+        const diff = (d2 - d1) / 3600000;
+        return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
+      } else {
+        const [h1, m1] = (horaSalida || '14:00').split(':');
+        const d1 = new Date(2000, 0, 1, parseInt(h1, 10), parseInt(m1, 10));
+        const dFinTurno = new Date(2000, 0, 1, 17, 0);
+        const diff = (dFinTurno - d1) / 3600000;
+        return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
+      }
+    }
+    return 0;
   };
 
-  // Generador consecutivo oficial de Folio: P-26-0001, A-26-0018, O-26-0001
   const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
     const patron = `${prefijoLetra}-${anio2Digitos}-%`;
     const { data } = await supabase
@@ -53,7 +78,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!motivo.trim()) return alert("Por favor escribe la justificación o motivo.");
+    if (!motivo.trim()) return alert("Por favor escribe la justificación del pase.");
 
     const userId = usuario?.id || sesionActual.id;
     const deptoId = usuario?.departamento_id || sesionActual.departamento_id;
@@ -64,16 +89,31 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
     setGuardando(true);
     try {
-      // 1. Obtener jerarquía del departamento
       const { data: depto, error: errD } = await supabase
         .from('departamentos')
         .select('nombre, clasificacion, jefe_id, gerente_id, rh_id')
         .eq('id', deptoId)
         .single();
 
-      if (errD) throw new Error("No se encontró el departamento del usuario.");
+      if (errD) throw new Error("No se encontró el departamento del colaborador.");
 
-      // 2. Determinar serie: P (Producción), A (Administración), O (Obra)
+// BLINDAJE REAL: Si el departamento no tiene jefe_id asignado, busca al jefe de área en usuarios
+      let jefeFinalId = depto.jefe_id;
+      if (!jefeFinalId) {
+        const { data: jefeEncontrado } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('departamento_id', deptoId)
+          .eq('rol', 'jefe_area')
+          .limit(1)
+          .maybeSingle();
+
+        if (jefeEncontrado) {
+          jefeFinalId = jefeEncontrado.id;
+        }
+      }
+
+
       const clasif = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
       let letra = 'P';
       if (clasif.includes('admin')) letra = 'A';
@@ -81,66 +121,52 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       const anio = new Date().getFullYear().toString().slice(-2);
       const folioFinal = await generarFolioOficial(letra, anio);
-      const totalHoras = calcularHoras();
 
-      // 3. Guardar en Supabase usando exactamente las columnas reales de tu tabla
-      const { data: nuevoPermiso, error: errInsert } = await supabase
+      let detalleHorarioTexto = '';
+      if (tipoPermiso === 'salida') {
+        detalleHorarioTexto = regresaMismoDia 
+          ? `Salida: ${horaSalida} hrs | Regreso: ${horaRegreso} hrs`
+          : `Salida definitiva: ${horaSalida} hrs`;
+      } else if (tipoPermiso === 'retardo') {
+        detalleHorarioTexto = `Llegada estimada: ${horaLlegadaRetardo} hrs`;
+      } else if (tipoPermiso === 'vacaciones') {
+        detalleHorarioTexto = `Vacaciones: Del ${fechaPermiso} al ${fechaFinVacaciones || fechaPermiso}`;
+      } else {
+        detalleHorarioTexto = `Falta programada día completo: ${fechaPermiso}`;
+      }
+
+      // Caseta automática según departamento
+      const requiereCasetaAuto = clasif.includes('prod') || tipoPermiso === 'salida' || tipoPermiso === 'retardo';
+
+      const { error: errInsert } = await supabase
         .from('permisos')
         .insert([{
           folio: folioFinal,
           usuario_id: userId,
+          fecha_elaboracion: fechaHoy,
           fecha_permiso: fechaPermiso,
-          fecha_fin: (tipoPermiso === 'vacaciones' || tipoPermiso === 'falta') ? (fechaFin || fechaPermiso) : null,
+          fecha_fin: tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : null,
           tipo_permiso: tipoPermiso,
-          pago: 'Pendiente de dictamen', // Dictaminado posteriormente por Jefe y RH
+          pago: 'Pendiente de dictamen',
           asunto_motivo: `[${naturaleza.toUpperCase()}] ${motivo.trim()}`,
-          total_horas: totalHoras,
-          observaciones: (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones')
-            ? `Día completo solicitado`
-            : `Horario: ${horaInicio} a ${horaFin} hrs.`,
+          total_horas: calcularHoras(),
+          observaciones: detalleHorarioTexto,
           firma_empleado: true,
-          firma_1_id: depto.jefe_id,
+firma_1_id: jefeFinalId, // <-- USA EL ID REAL ENCONTRADO
           firma_1_estado: 'pendiente',
           firma_2_id: depto.gerente_id,
           firma_2_estado: 'pendiente',
           firma_3_id: depto.rh_id,
           firma_3_estado: 'pendiente',
-          requiere_caseta: requiereCaseta,
+          requiere_caseta: requiereCasetaAuto,
           estado_general: 'en_firmas'
-        }])
-        .select()
-        .single();
+        }]);
 
       if (errInsert) throw errInsert;
 
-      // 4. Notificación push al jefe de área si tiene suscripción
-      if (depto.jefe_id) {
-        try {
-          const { data: subs } = await supabase
-            .from('suscripciones_push')
-            .select('subscription')
-            .eq('usuario_id', depto.jefe_id);
-
-          if (subs && subs.length > 0) {
-            subs.forEach(async (item) => {
-              try {
-                await fetch('/api/notificar', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    subscription: item.subscription,
-                    titulo: '⚠️ NUEVO PASE POR AUTORIZAR',
-                    mensaje: `${sesionActual.nombre_completo || 'Un colaborador'} solicitó permiso (Folio: ${folioFinal}).`
-                  })
-                });
-              } catch (_) {}
-            });
-          }
-        } catch (_) {}
-      }
-
-      alert(`✅ Solicitud registrada con éxito.\nFolio Oficial: ${folioFinal}`);
+      alert(`✅ Solicitud enviada correctamente.\nFolio Oficial: ${folioFinal}`);
       setMotivo('');
+      setRegresaMismoDia(false);
       if (onSolicitudCreada) onSolicitudCreada();
     } catch (err) {
       alert("Error al enviar solicitud: " + err.message);
@@ -151,27 +177,34 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
   return (
     <div className="permiso-card-box">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
+      
+      {/* CABECERA */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: `1px solid ${c.borderSubtle}`, paddingBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
         <div>
-          <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>SOLICITUD DE PASE O PERMISO</div>
-          <div style={{ fontSize: '11px', color: c.textMuted }}>
+          <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>NUEVA SOLICITUD DE PASE</div>
+          <div style={{ fontSize: '11.5px', color: c.textMuted }}>
             {sesionActual.nombre_completo || usuario?.nombre_completo} (#{sesionActual.numero_empleado || usuario?.numero_empleado})
           </div>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '10px', fontWeight: '700', color: c.textMuted, textTransform: 'uppercase' }}>Elaboración</div>
+          <div style={{ fontSize: '12px', fontWeight: '800', color: c.text }}>{fechaHoy}</div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         
-        {/* 1. SELECCIÓN DEL TIPO DE PERMISO */}
+        {/* 1. TIPO DE PERMISO */}
         <div>
-          <label className="clean-label-permiso">1. Tipo de Incidencia / Movimiento</label>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <label className="label-permiso">1. Tipo de Movimiento / Permiso</label>
+          <div className="grid-tipo-pase">
             {[
               { key: 'salida', label: 'Salida Anticipada', icon: Clock },
-              { key: 'retardo', label: 'Llegada Tarde (Retardo)', icon: AlertTriangle },
+              { key: 'retardo', label: 'Llegada Tarde', icon: AlertTriangle },
               { key: 'falta', label: 'Falta Programada', icon: Calendar },
               { key: 'vacaciones', label: 'Vacaciones', icon: Calendar },
-              { key: 'comision', label: 'Comisión / Trabajo', icon: Briefcase }
+              { key: 'comision', label: 'Comisión Trabajo', icon: Briefcase }
             ].map(t => {
               const Icono = t.icon;
               const activo = tipoPermiso === t.key;
@@ -182,7 +215,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                   onClick={() => setTipoPermiso(t.key)}
                   className={`pill-movimiento ${activo ? 'active' : ''}`}
                 >
-                  <Icono size={13} />
+                  <Icono size={16} />
                   <span>{t.label}</span>
                 </button>
               );
@@ -190,35 +223,36 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           </div>
         </div>
 
-        {/* ALERTA DE TOLERANCIA SI ES RETARDO */}
+        {/* ALERTA DE TOLERANCIA */}
         {tipoPermiso === 'retardo' && (
           <div style={{
             padding: '10px 12px', borderRadius: '8px', background: c.warningSoft,
-            border: `1px solid ${c.warning}`, fontSize: '11.5px', color: c.warning,
+            border: `1.5px solid ${c.warning}`, fontSize: '11.5px', color: c.text,
             display: 'flex', alignItems: 'center', gap: '8px'
           }}>
-            <ShieldAlert size={16} style={{ flexShrink: 0 }} />
+            <ShieldAlert size={18} color={c.warning} style={{ flexShrink: 0 }} />
             <span>
-              <strong>Límite de entrada: 07:10 AM.</strong> Después de esa hora, tu Jefe de Área determinará el acceso operativo en planta y Recursos Humanos dictaminará la deducción o reposición de tiempo correspondiente.
+              <strong>Entrada oficial: 07:00 AM (Límite 07:10 AM).</strong> Se registrará tu hora estimada para autorización de tu Jefe y dictamen de Recursos Humanos.
             </span>
           </div>
         )}
 
-        {/* 2. NATURALEZA DEL ASUNTO */}
+        {/* 2. NATURALEZA */}
         <div>
-          <label className="clean-label-permiso">2. Naturaleza del Asunto</label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['Personal / Familiar', 'Cita Médica', 'Asunto de Trabajo / Obra'].map(nat => (
+          <label className="label-permiso">2. Naturaleza del Asunto</label>
+          <div className="grid-naturaleza">
+            {['Personal / Familiar', 'Cita Médica', 'Asunto de Trabajo'].map(nat => (
               <button
                 key={nat}
                 type="button"
                 onClick={() => setNaturaleza(nat)}
                 style={{
-                  flex: 1, padding: '8px', borderRadius: '6px',
-                  border: `1px solid ${naturaleza === nat ? c.accent : c.border}`,
+                  padding: '9px 6px', borderRadius: '6px',
+                  border: `1.5px solid ${naturaleza === nat ? c.accent : c.border}`,
                   background: naturaleza === nat ? c.accentSoft : 'transparent',
                   color: naturaleza === nat ? c.accent : c.textMuted,
-                  fontSize: '11.5px', fontWeight: '700', cursor: 'pointer'
+                  fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
+                  textAlign: 'center'
                 }}
               >
                 {nat}
@@ -227,11 +261,11 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           </div>
         </div>
 
-        {/* 3. FECHAS Y HORARIOS */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+        {/* 3. FECHAS Y HORAS RESPONSIVAS */}
+        <div className="grid-fechas-horas">
           <div>
-            <label className="clean-label-permiso">
-              {tipoPermiso === 'vacaciones' ? 'Fecha Inicio' : 'Fecha del Permiso'}
+            <label className="label-permiso">
+              {tipoPermiso === 'vacaciones' ? 'Fecha Inicio' : 'Fecha en que aplica el pase *'}
             </label>
             <input 
               type="date" required className="input-permiso"
@@ -239,67 +273,81 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
             />
           </div>
 
-          {(tipoPermiso === 'vacaciones' || tipoPermiso === 'falta') && (
+          {tipoPermiso === 'vacaciones' && (
             <div>
-              <label className="clean-label-permiso">Fecha Fin</label>
+              <label className="label-permiso">Fecha Fin *</label>
               <input 
-                type="date" className="input-permiso"
-                value={fechaFin} onChange={e => setFechaFin(e.target.value)} 
+                type="date" required className="input-permiso"
+                value={fechaFinVacaciones} onChange={e => setFechaFinVacaciones(e.target.value)} 
               />
             </div>
           )}
 
-          {tipoPermiso !== 'falta' && tipoPermiso !== 'vacaciones' && (
-            <>
-              <div>
-                <label className="clean-label-permiso">Hora Inicio</label>
-                <input 
-                  type="time" required className="input-permiso"
-                  value={horaInicio} onChange={e => setHoraInicio(e.target.value)} 
-                />
-              </div>
-              <div>
-                <label className="clean-label-permiso">Hora Fin</label>
-                <input 
-                  type="time" required className="input-permiso"
-                  value={horaFin} onChange={e => setHoraFin(e.target.value)} 
-                />
-              </div>
-            </>
+          {tipoPermiso === 'retardo' && (
+            <div>
+              <label className="label-permiso">Hora Estimada de Llegada *</label>
+              <input 
+                type="time" required className="input-permiso"
+                value={horaLlegadaRetardo} onChange={e => setHoraLlegadaRetardo(e.target.value)} 
+              />
+            </div>
+          )}
+
+          {tipoPermiso === 'salida' && (
+            <div>
+              <label className="label-permiso">Hora en que te retiras *</label>
+              <input 
+                type="time" required className="input-permiso"
+                value={horaSalida} onChange={e => setHoraSalida(e.target.value)} 
+              />
+            </div>
           )}
         </div>
 
-        {/* PREGUNTA PARA VIGILANCIA EN SANTA CATARINA */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '10px 12px', borderRadius: '8px',
-          background: c.surface, border: `1px solid ${c.border}`
-        }}>
-          <input 
-            type="checkbox" id="checkCaseta"
-            checked={requiereCaseta} onChange={e => setRequiereCaseta(e.target.checked)}
-            style={{ width: '15px', height: '15px', accentColor: c.accent, cursor: 'pointer' }}
-          />
-          <label htmlFor="checkCaseta" style={{ fontSize: '11.5px', color: c.text, cursor: 'pointer', fontWeight: '500' }}>
-            ¿Requiere chequeo de entrada o salida física en la <strong>Caseta de Vigilancia de Santa Catarina</strong>?
-          </label>
-        </div>
+        {/* SALIDA: PREGUNTA SI REGRESA EN EL TURNO */}
+        {tipoPermiso === 'salida' && (
+          <div style={{
+            padding: '10px 12px', borderRadius: '8px',
+            background: c.surface, border: `1px solid ${c.border}`,
+            display: 'flex', flexDirection: 'column', gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="checkbox" id="checkRegresa"
+                checked={regresaMismoDia} onChange={e => setRegresaMismoDia(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: c.accent, cursor: 'pointer' }}
+              />
+              <label htmlFor="checkRegresa" style={{ fontSize: '12px', color: c.text, cursor: 'pointer', fontWeight: '700' }}>
+                ¿Regresas a laborar en el mismo turno? (Salida y reingreso)
+              </label>
+            </div>
+
+            {regresaMismoDia && (
+              <div style={{ marginTop: '4px' }}>
+                <label className="label-permiso">Hora estimada de retorno al puesto *</label>
+                <input 
+                  type="time" required className="input-permiso"
+                  value={horaRegreso} onChange={e => setHoraRegreso(e.target.value)} 
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* MOTIVO */}
         <div>
-          <label className="clean-label-permiso">Motivo o Justificación Detallada *</label>
+          <label className="label-permiso">Motivo / Justificación *</label>
           <textarea 
             required rows={3}
-            placeholder="Explica detalladamente la situación que origina este pase..."
+            placeholder="Explica la razón de tu solicitud..."
             value={motivo} onChange={e => setMotivo(e.target.value)}
             className="input-permiso"
-            style={{ height: 'auto', padding: '10px', resize: 'vertical' }}
+            style={{ height: 'auto', padding: '10px 12px', resize: 'vertical' }}
           />
         </div>
 
-        {/* NOTA INSTITUCIONAL */}
-        <div style={{ fontSize: '11px', color: c.textMuted, fontStyle: 'italic' }}>
-          * Nota: El dictamen final de goce de sueldo, descuento por hora o reposición de tiempo será determinado por tu Jefatura de Área y formalizado por Recursos Humanos.
+        <div style={{ fontSize: '10.5px', color: c.textMuted, fontStyle: 'italic' }}>
+          * El goce de sueldo, descuento o reposición de tiempo será dictaminado por Jefatura y formalizado por Recursos Humanos.
         </div>
 
         <button 
@@ -311,7 +359,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
           }}
         >
-          <Send size={14} /> {guardando ? 'Registrando solicitud...' : 'Enviar Solicitud con Firma Digital'}
+          <Send size={15} /> {guardando ? 'Registrando...' : 'Firmar y Enviar Solicitud'}
         </button>
       </form>
     </div>

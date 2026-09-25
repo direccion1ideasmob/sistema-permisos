@@ -44,9 +44,9 @@ const { data: listSedes } = await supabase
 
 if (listSedes) setSedes(listSedes);
     // 1. Traer usuarios
-    const { data: listUsuarios, error: errU } = await supabase
+   const { data: listUsuarios, error: errU } = await supabase
       .from('usuarios')
-      .select('id, numero_empleado, nombre_completo, usuario_login, puesto, area, rol, tipo_personal, foto_url, activo, departamento_id, fecha_ingreso, celular, telefono, correo')
+      .select('id, numero_empleado, nombre_completo, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, fecha_ingreso, celular, telefono, correo')
       .order('nombre_completo', { ascending: true });
 
     if (errU) console.error("Error usuarios:", errU);

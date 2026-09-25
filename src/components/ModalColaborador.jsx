@@ -37,7 +37,7 @@ export default function ModalColaborador({
     label: modoOscuro ? '#a1a1aa' : '#52525b',
     inputBg: modoOscuro ? '#121214' : '#ffffff',
     inputBorder: modoOscuro ? '#3f3f46' : '#cbd5e1',
-    accent: '#10b981', // Esmeralda elegante
+    accent: '#10b981',
     accentGlow: 'rgba(16, 185, 129, 0.15)',
     danger: '#ef4444'
   };
@@ -104,6 +104,7 @@ export default function ModalColaborador({
 
     setGuardando(true);
     try {
+      // 1. REGISTRO EN AUTH
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.correo.toLowerCase(), 
         password: formData.pin, 
@@ -111,6 +112,7 @@ export default function ModalColaborador({
       });
       if (authError) throw authError;
 
+      // 2. SUBIDA DE FOTO COMPRIMIDA
       let fotoUrl = null;
       if (fotoArchivo) {
         const fileName = `perfil_${authData.user.id}.jpg`;
@@ -118,8 +120,10 @@ export default function ModalColaborador({
         fotoUrl = `${supabase.storage.from('fotos_usuarios').getPublicUrl(fileName).data.publicUrl}?t=${Date.now()}`;
       }
 
+      // 3. GUARDADO EN TABLA USUARIOS
+      const nuevoUsuarioId = authData.user.id;
       const { error: dbError } = await supabase.from('usuarios').upsert([{
-        id: authData.user.id, 
+        id: nuevoUsuarioId, 
         numero_empleado: formData.numero_empleado.toUpperCase(), 
         nombre_completo: formData.nombre_completo,
         fecha_ingreso: formData.fecha_ingreso || null,
@@ -139,9 +143,37 @@ export default function ModalColaborador({
       }]);
 
       if (dbError) throw dbError;
+
+      // =========================================================================
+      // 4. VINCULACIÓN REAL EN LA TABLA DEPARTAMENTOS:
+      // Si el usuario registrado tiene rol de liderazgo, se asigna como titular o suplente
+      // =========================================================================
+      const actualizacionDepto = {};
+
+      if (formData.rol === 'jefe_area') {
+        actualizacionDepto.jefe_id = nuevoUsuarioId;
+      } else if (formData.rol === 'encargado') {
+        actualizacionDepto.encargado_id = nuevoUsuarioId;
+      } else if (formData.rol === 'gerente') {
+        actualizacionDepto.gerente_id = nuevoUsuarioId;
+      }
+
+      // Si tiene rol de mando, actualiza la tabla departamentos en Supabase en el acto
+      if (Object.keys(actualizacionDepto).length > 0 && deptoFinalId) {
+        const { error: errDeptoLider } = await supabase
+          .from('departamentos')
+          .update(actualizacionDepto)
+          .eq('id', deptoFinalId);
+
+        if (errDeptoLider) {
+          console.error("Error vinculando liderazgo al departamento:", errDeptoLider);
+        }
+      }
+
+      alert(`✅ Colaborador registrado con éxito.\nUsuario: ${formData.usuario_login}`);
       onSuccess();
     } catch (err) {
-      alert("Error: " + err.message);
+      alert("Error al registrar: " + err.message);
     } finally {
       setGuardando(false);
     }
@@ -207,7 +239,7 @@ export default function ModalColaborador({
           display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
         }
 
-        /* FLUID GRIDS (Responsivo sin Media Queries complejos) */
+        /* FLUID GRIDS */
         .form-grid {
           display: grid;
           grid-template-columns: 1fr;

@@ -1,23 +1,34 @@
-import React, { useRef } from 'react';
+import React, { useState, useRef } from 'react';
+import { supabase } from '../../services/supabaseClient';
+import imageCompression from 'browser-image-compression';
 import { 
   X, Camera, Save, Briefcase, Phone, ShieldCheck, 
-  Key, UserX, UserCheck, Mail, Calendar, MessageCircle, Eye
+  Key, UserX, UserCheck, Mail, Calendar, MessageCircle, Eye, PenTool
 } from 'lucide-react';
+import { estandarizar } from '../../utils/directorioHelpers';
 
 export default function DossierLateral({
   colaborador, abierto, onClose, editando, datosEdit, setDatosEdit,
-  departamentos = [], sedes = [], subiendoFoto, onCambiarFoto, onGuardar, guardando,
-  onRestablecerPin, onAbrirBaja, onReactivar, setFotoZoom, c
+  departamentos = [], sedes = [], areas = [], puestos = [], subiendoFoto, onCambiarFoto,
+  recargarDatos, onRestablecerPin, onAbrirBaja, onReactivar, setFotoZoom, c
 }) {
   const fileInputRef = useRef(null);
+  const firmaInputRef = useRef(null);
+
+  const [guardando, setGuardando] = useState(false);
+  const [subiendoFirma, setSubiendoFirma] = useState(false);
+
+  // Estados para creación "sobre la marcha" al editar
+  const [creandoNuevo, setCreandoNuevo] = useState({ sede: false, depto: false });
+  const [textosNuevos, setTextosNuevos] = useState({ sede: '', depto: '' });
 
   if (!colaborador || !abierto) return null;
 
   const urlFoto = (editando ? datosEdit.foto_url : colaborador.foto_url) || 
     `https://ui-avatars.com/api/?name=${encodeURIComponent(colaborador.nombre_completo)}&background=16a34a&color=fff&bold=true`;
+  const urlFirma = editando ? datosEdit.firma_url : colaborador.firma_url;
   const sedeNombre = sedes.find(s => s.id === (editando ? datosEdit.sede_id : colaborador.sede_id))?.nombre || 'Sin Sede';
 
-  // FUNCIÓN PARA VER FOTO COMPLETA
   const abrirFotoGrande = (e) => {
     if (e) e.stopPropagation();
     if (setFotoZoom) {
@@ -29,13 +40,116 @@ export default function DossierLateral({
     }
   };
 
+  // SUBIDA Y COMPRESIÓN DE FIRMA
+  const handleCambiarFirma = async (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo || !colaborador.id) return;
+
+    setSubiendoFirma(true);
+    try {
+      const options = { maxSizeMB: 0.2, maxWidthOrHeight: 700, useWebWorker: true };
+      const comp = await imageCompression(archivo, options);
+      const fileName = `firma_${colaborador.id}.png`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('fotos_usuarios')
+        .upload(fileName, comp, { contentType: comp.type, upsert: true });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage.from('fotos_usuarios').getPublicUrl(fileName);
+      const urlFinal = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      setDatosEdit(prev => ({ ...prev, firma_url: urlFinal }));
+      alert("Firma cargada correctamente en vista previa. Recuerda presionar Guardar Cambios para confirmar.");
+    } catch (err) {
+      alert("Error al subir la firma: " + err.message);
+    } finally {
+      setSubiendoFirma(false);
+    }
+  };
+
+  // GUARDADO COMPLETO
+  const handleGuardarExpediente = async () => {
+    if (!datosEdit.numero_empleado?.trim() || !datosEdit.nombre_completo?.trim()) {
+      return alert("El número de empleado y el nombre son obligatorios.");
+    }
+
+    setGuardando(true);
+    let sedeFinalId = datosEdit.sede_id;
+    let deptoFinalId = datosEdit.departamento_id;
+
+    try {
+      // 1. Sede nueva sobre la marcha
+      if (creandoNuevo.sede && textosNuevos.sede.trim()) {
+        const nomSede = estandarizar(textosNuevos.sede);
+        const { data: nuevaSede, error: errSede } = await supabase
+          .from('sedes')
+          .insert([{ nombre: nomSede }])
+          .select()
+          .single();
+        if (errSede) throw new Error("Error creando nueva sede: " + errSede.message);
+        sedeFinalId = nuevaSede.id;
+      }
+
+      // 2. Departamento nuevo sobre la marcha
+      if (creandoNuevo.depto && textosNuevos.depto.trim()) {
+        const nomDepto = estandarizar(textosNuevos.depto);
+        const { data: nuevoDepto, error: errDepto } = await supabase
+          .from('departamentos')
+          .insert([{ 
+            nombre: nomDepto,
+            clasificacion: datosEdit.tipo_personal || 'produccion'
+          }])
+          .select()
+          .single();
+        if (errDepto) throw new Error("Error creando nuevo departamento: " + errDepto.message);
+        deptoFinalId = nuevoDepto.id;
+      }
+
+      // 3. Actualizar usuario en Supabase (INCLUYE firma_url)
+      const { error: errUpdate } = await supabase
+        .from('usuarios')
+        .update({
+          numero_empleado: datosEdit.numero_empleado.trim().toUpperCase(),
+          nombre_completo: datosEdit.nombre_completo.trim().toUpperCase(),
+          sede_id: sedeFinalId || null,
+          departamento_id: deptoFinalId || null,
+          area: (datosEdit.area || '').trim().toUpperCase(),
+          puesto: datosEdit.puesto ? datosEdit.puesto.trim().toUpperCase() : null,
+          tipo_personal: datosEdit.tipo_personal,
+          rol: datosEdit.rol,
+          celular: datosEdit.celular ? datosEdit.celular.trim() : null,
+          telefono: datosEdit.telefono ? datosEdit.telefono.trim() : null,
+          correo: datosEdit.correo.trim().toLowerCase(),
+          usuario_login: datosEdit.usuario_login.trim().toLowerCase(),
+          pin: datosEdit.pin.trim(),
+          fecha_ingreso: datosEdit.fecha_ingreso || null,
+          foto_url: datosEdit.foto_url,
+          firma_url: datosEdit.firma_url || null
+        })
+        .eq('id', colaborador.id);
+
+      if (errUpdate) throw errUpdate;
+
+      setCreandoNuevo({ sede: false, depto: false });
+      setTextosNuevos({ sede: '', depto: '' });
+      onClose();
+      if (recargarDatos) await recargarDatos();
+    } catch (err) {
+      alert("Error al actualizar colaborador: " + err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   return (
     <div className="dossier-overlay" onClick={onClose}>
       <aside className="dossier-drawer" onClick={e => e.stopPropagation()}>
         
         {/* CABECERA */}
         <div style={{
-          padding: '14px 18px', borderBottom: `1px solid ${c.border}`,
+          padding: '16px 20px', borderBottom: `1px solid ${c.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: c.surface, flexShrink: 0
         }}>
@@ -59,9 +173,9 @@ export default function DossierLateral({
         {/* CUERPO DEL EXPEDIENTE */}
         <div className="dossier-body-scroll">
           
-          {/* HERO: FOTO Y NOMBRE */}
+          {/* FOTO Y NOMBRE */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: '14px',
+            display: 'flex', alignItems: 'center', gap: '16px',
             padding: '14px', background: c.surfaceCard, border: `1px solid ${c.border}`,
             borderRadius: '12px'
           }}>
@@ -112,7 +226,6 @@ export default function DossierLateral({
                 {colaborador.puesto || 'Sin puesto asignado'}
               </div>
 
-              {/* BOTÓN EXPLÍCITO PARA VER FOTO */}
               <button 
                 type="button" 
                 onClick={abrirFotoGrande}
@@ -120,7 +233,7 @@ export default function DossierLateral({
               >
                 <Eye size={12} /> Ver foto completa
               </button>
-              {subiendoFoto && <span style={{ fontSize: '10px', color: c.accent, display: 'block' }}>Actualizando foto en Supabase...</span>}
+              {subiendoFoto && <span style={{ fontSize: '10px', color: c.accent, display: 'block' }}>Subiendo foto...</span>}
             </div>
           </div>
 
@@ -151,8 +264,54 @@ export default function DossierLateral({
             </div>
           )}
 
-          {/* BLOQUE 1: ESTRUCTURA LABORAL */}
+          {/* =========================================================
+              RECUADRO: FIRMA DIGITALIZADA OFICIAL
+              ========================================================= */}
           <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <PenTool size={13} /> Firma Autógrafa Digitalizada
+              </div>
+
+              {editando && (
+                <label style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  padding: '4px 10px', borderRadius: '6px',
+                  background: c.accent, color: '#ffffff',
+                  fontSize: '11px', fontWeight: '700', cursor: 'pointer'
+                }}>
+                  <PenTool size={11} />
+                  <span>{urlFirma ? 'Cambiar Firma' : 'Cargar Firma'}</span>
+                  <input ref={firmaInputRef} type="file" accept="image/*" hidden onChange={handleCambiarFirma} />
+                </label>
+              )}
+            </div>
+
+            {/* LIENZO BLANCO PARA QUE LA TINTA SIEMPRE SE VEA NÍTIDA */}
+            <div style={{
+              width: '100%', height: '85px', borderRadius: '8px',
+              backgroundColor: '#ffffff', border: '1px dashed #cbd5e1',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden', position: 'relative'
+            }}>
+              {urlFirma ? (
+                <img 
+                  src={urlFirma} 
+                  alt="Firma del colaborador" 
+                  style={{ maxHeight: '75px', maxWidth: '90%', objectFit: 'contain' }} 
+                />
+              ) : (
+                <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center' }}>
+                  Sin firma digitalizada registrada
+                  {editando && <div style={{ fontSize: '10px', color: '#16a34a', fontWeight: '600', marginTop: '2px' }}>Toca arriba en "Cargar Firma" para subir una foto</div>}
+                </div>
+              )}
+            </div>
+            {subiendoFirma && <span style={{ fontSize: '10.5px', color: c.accent, display: 'block', marginTop: '4px' }}>Subiendo firma a Supabase...</span>}
+          </div>
+
+          {/* BLOQUE 1: ESTRUCTURA LABORAL */}
+          <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '14px' }}>
             <div style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Briefcase size={13} /> 1. Estructura y Puesto
             </div>
@@ -163,6 +322,7 @@ export default function DossierLateral({
                   <label className="touch-field-label">Nº Empleado</label>
                   <input className="touch-field-input mono-id" value={datosEdit.numero_empleado} onChange={e => setDatosEdit({ ...datosEdit, numero_empleado: e.target.value })} />
                 </div>
+
                 <div>
                   <label className="touch-field-label">Nómina</label>
                   <select className="touch-field-input" value={datosEdit.tipo_personal} onChange={e => setDatosEdit({ ...datosEdit, tipo_personal: e.target.value })}>
@@ -171,28 +331,99 @@ export default function DossierLateral({
                     <option value="obra">OBRA</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="touch-field-label">Sede</label>
-                  <select className="touch-field-input" value={datosEdit.sede_id} onChange={e => setDatosEdit({ ...datosEdit, sede_id: e.target.value })}>
-                    <option value="">Sin Sede</option>
-                    {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select>
+                  <label className="touch-field-label">Sede / Región</label>
+                  {!creandoNuevo.sede ? (
+                    <select 
+                      className="touch-field-input" 
+                      value={datosEdit.sede_id} 
+                      onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, sede: true }) : setDatosEdit({ ...datosEdit, sede_id: e.target.value })}
+                    >
+                      <option value="">Sin Sede</option>
+                      {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                      <option value="NEW" style={{ color: c.accent, fontWeight: '700' }}>+ Crear Nueva Sede...</option>
+                    </select>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <input 
+                        type="text" autoFocus
+                        className="touch-field-input" 
+                        placeholder="Nueva Sede..." 
+                        value={textosNuevos.sede} 
+                        onChange={e => setTextosNuevos({ ...textosNuevos, sede: e.target.value })} 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setCreandoNuevo({ ...creandoNuevo, sede: false })}
+                        style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <label className="touch-field-label">Departamento</label>
-                  <select className="touch-field-input" value={datosEdit.departamento_id} onChange={e => setDatosEdit({ ...datosEdit, departamento_id: e.target.value })}>
-                    <option value="">Sin Depto</option>
-                    {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                  </select>
+                  {!creandoNuevo.depto ? (
+                    <select 
+                      className="touch-field-input" 
+                      value={datosEdit.departamento_id} 
+                      onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, depto: true }) : setDatosEdit({ ...datosEdit, departamento_id: e.target.value })}
+                    >
+                      <option value="">Sin Depto</option>
+                      {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                      <option value="NEW" style={{ color: c.accent, fontWeight: '700' }}>+ Crear Nuevo Depto...</option>
+                    </select>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <input 
+                        type="text" autoFocus
+                        className="touch-field-input" 
+                        placeholder="Nuevo Depto..." 
+                        value={textosNuevos.depto} 
+                        onChange={e => setTextosNuevos({ ...textosNuevos, depto: e.target.value })} 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setCreandoNuevo({ ...creandoNuevo, depto: false })}
+                        style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <label className="touch-field-label">Área Física</label>
-                  <input className="touch-field-input" value={datosEdit.area} onChange={e => setDatosEdit({ ...datosEdit, area: e.target.value })} />
+                  <input 
+                    list="lista-areas-sugeridas"
+                    className="touch-field-input" 
+                    placeholder="Escribe o selecciona..."
+                    value={datosEdit.area} 
+                    onChange={e => setDatosEdit({ ...datosEdit, area: e.target.value })} 
+                  />
+                  <datalist id="lista-areas-sugeridas">
+                    {areas.map(a => <option key={a} value={a} />)}
+                  </datalist>
                 </div>
+
                 <div>
                   <label className="touch-field-label">Puesto Real</label>
-                  <input className="touch-field-input" value={datosEdit.puesto} onChange={e => setDatosEdit({ ...datosEdit, puesto: e.target.value })} />
+                  <input 
+                    list="lista-puestos-sugeridos"
+                    className="touch-field-input" 
+                    placeholder="Escribe o selecciona..."
+                    value={datosEdit.puesto} 
+                    onChange={e => setDatosEdit({ ...datosEdit, puesto: e.target.value })} 
+                  />
+                  <datalist id="lista-puestos-sugeridos">
+                    {puestos.map(p => <option key={p} value={p} />)}
+                  </datalist>
                 </div>
+
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="touch-field-label">Fecha de Ingreso</label>
                   <input type="date" className="touch-field-input" value={datosEdit.fecha_ingreso} onChange={e => setDatosEdit({ ...datosEdit, fecha_ingreso: e.target.value })} />
@@ -271,7 +502,6 @@ export default function DossierLateral({
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: c.textMuted }}>Usuario ERP:</span><strong style={{ color: c.accent }}>@{colaborador.usuario_login}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: c.textMuted }}>Rol:</span><strong style={{ textTransform: 'capitalize' }}>{colaborador.rol?.replace('_', ' ')}</strong></div>
                 
-                {/* GESTIÓN EXCLUSIVA DEL PIN */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '8px', borderTop: `1px solid ${c.borderDivider}` }}>
                   <span style={{ fontSize: '11px', color: c.textMuted }}>PIN: • • • • • •</span>
                   <button onClick={() => onRestablecerPin(colaborador.id, colaborador.nombre_completo)} style={{ background: 'transparent', border: `1px solid ${c.border}`, color: c.text, padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
@@ -282,7 +512,7 @@ export default function DossierLateral({
             )}
           </div>
 
-          {/* BLOQUE 3: PROTOCOLO DE BAJA O REACTIVACIÓN */}
+          {/* BLOQUE 3: PROTOCOLO DE BAJA */}
           {!editando && (
             <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div>
@@ -326,7 +556,7 @@ export default function DossierLateral({
               Cancelar
             </button>
             <button 
-              onClick={onGuardar}
+              onClick={handleGuardarExpediente}
               disabled={guardando}
               style={{
                 padding: '8px 18px', borderRadius: '6px', border: 'none',
