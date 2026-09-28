@@ -75,131 +75,56 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
     return `${prefijoLetra}-${anio2Digitos}-${String(consecutivo).padStart(4, '0')}`;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!motivo.trim()) return alert("Por favor escribe la justificación del pase.");
-
-    const userId = usuario?.id || sesionActual.id;
-    const deptoId = usuario?.departamento_id || sesionActual.departamento_id;
-
-    if (!userId || !deptoId) {
-      return alert("Error: Sesión incompleta. Vuelve a iniciar sesión.");
-    }
-
-    setGuardando(true);
-    try {
-      // 1. Obtener datos del departamento
-      const { data: depto, error: errD } = await supabase
-        .from('departamentos')
-        .select('nombre, clasificacion, jefe_id, gerente_id, rh_id')
-        .eq('id', deptoId)
-        .single();
-
-      if (errD) throw new Error("No se encontró el departamento del colaborador.");
-
-      // BLINDAJE REAL: Si jefe_id viene en null en departamentos, busca al jefe de área en usuarios
-      let jefeFinalId = depto.jefe_id;
-      if (!jefeFinalId) {
-        const { data: jefeEncontrado } = await supabase
-          .from('usuarios')
-          .select('id')
-          .eq('departamento_id', deptoId)
-          .eq('rol', 'jefe_area')
-          .limit(1)
-          .maybeSingle();
-
-        if (jefeEncontrado) {
-          jefeFinalId = jefeEncontrado.id;
-        }
-      }
-
-      const clasif = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
-      let letra = 'P';
-      if (clasif.includes('admin')) letra = 'A';
-      else if (clasif.includes('obra')) letra = 'O';
-
-      const anio = new Date().getFullYear().toString().slice(-2);
-      const folioFinal = await generarFolioOficial(letra, anio);
-
-      let detalleHorarioTexto = '';
-      if (tipoPermiso === 'salida') {
-        detalleHorarioTexto = regresaMismoDia 
-          ? `Salida: ${horaSalida} hrs | Regreso: ${horaRegreso} hrs`
-          : `Salida definitiva: ${horaSalida} hrs`;
-      } else if (tipoPermiso === 'retardo') {
-        detalleHorarioTexto = `Llegada estimada: ${horaLlegadaRetardo} hrs`;
-      } else if (tipoPermiso === 'vacaciones') {
-        detalleHorarioTexto = `Vacaciones: Del ${fechaPermiso} al ${fechaFinVacaciones || fechaPermiso}`;
-      } else {
-        detalleHorarioTexto = `Falta programada día completo: ${fechaPermiso}`;
-      }
-
-      const requiereCasetaAuto = clasif.includes('prod') || tipoPermiso === 'salida' || tipoPermiso === 'retardo';
-
-      // 2. Guardar permiso con jefeFinalId asegurado
-      const { error: errInsert } = await supabase
-        .from('permisos')
-        .insert([{
-          folio: folioFinal,
-          usuario_id: userId,
-          fecha_elaboracion: fechaHoy,
-          fecha_permiso: fechaPermiso,
-          fecha_fin: tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : null,
-          tipo_permiso: tipoPermiso,
-          pago: 'Pendiente de dictamen',
-          asunto_motivo: `[${naturaleza.toUpperCase()}] ${motivo.trim()}`,
-          total_horas: calcularHoras(),
-          observaciones: detalleHorarioTexto,
-          firma_empleado: true,
-          firma_1_id: jefeFinalId, // ID REAL VINCULADO
-          firma_1_estado: 'pendiente',
-          firma_2_id: depto.gerente_id,
-          firma_2_estado: 'pendiente',
-          firma_3_id: depto.rh_id,
-          firma_3_estado: 'pendiente',
-          requiere_caseta: requiereCasetaAuto,
-          estado_general: 'en_firmas'
-        }]);
-
-      if (errInsert) throw errInsert;
-
-      // 3. Notificación Push directa al Jefe
+ // =========================================================================
+      // ENVÍO DE NOTIFICACIONES RESTAURADO CON Promise.allSettled (TU CÓDIGO ORIGINAL)
+      // Espera a que la conexión con Vercel termine antes de lanzar el alert
+      // =========================================================================
       if (jefeFinalId) {
         try {
-          const { data: subs } = await supabase
+          const { data: suscripcionesJefe, error: errSub } = await supabase
             .from('suscripciones_push')
             .select('subscription')
             .eq('usuario_id', jefeFinalId);
 
-          if (subs && subs.length > 0) {
-            subs.forEach(async (item) => {
+          if (errSub) {
+            console.error("❌ Error al consultar suscripción del jefe:", errSub);
+          }
+
+          if (suscripcionesJefe && suscripcionesJefe.length > 0) {
+            const envios = suscripcionesJefe.map(async (item) => {
               try {
-                await fetch('/api/notificar', {
+                const res = await fetch('/api/notificar', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     subscription: item.subscription,
-                    titulo: '⚠️ NUEVO PASE POR AUTORIZAR',
-                    mensaje: `${sesionActual.nombre_completo || 'Un colaborador'} solicitó permiso (${folioFinal}).`
+                    titulo: '⚠️ NUEVO PASE POR FIRMAR',
+                    mensaje: `${sesionActual.nombre_completo || 'Un colaborador'} ha solicitado un permiso (Folio: ${folioFinal}).`
                   })
                 });
-              } catch (_) {}
+                const resJson = await res.json();
+                console.log("📡 Respuesta notificación:", resJson);
+              } catch (errFetch) {
+                console.error("❌ Error en el fetch Push:", errFetch);
+              }
             });
+
+            // ESPERA OBLIGATORIA: no avanza hasta que Vercel y Google confirmen
+            await Promise.allSettled(envios);
+          } else {
+            console.warn("⚠️ No se encontraron suscripciones activas para el jefe:", jefeFinalId);
           }
-        } catch (_) {}
+        } catch (errNotif) {
+          console.error("❌ Error en el proceso de notificación:", errNotif);
+        }
       }
 
-      alert(`✅ Solicitud enviada correctamente.\nFolio Oficial: ${folioFinal}`);
+      // Solo después de que se enviaron las alertas por red, sale el alert
+      alert(`✅ Solicitud enviada con éxito.\nFolio Oficial: ${folioFinal}`);
       setMotivo('');
       setRegresaMismoDia(false);
       if (onSolicitudCreada) onSolicitudCreada();
-    } catch (err) {
-      alert("Error al enviar solicitud: " + err.message);
-    } finally {
-      setGuardando(false);
-    }
-  };
-
+      
   return (
     <div className="permiso-card-box">
       
