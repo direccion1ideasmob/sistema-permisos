@@ -4,13 +4,16 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title || 'Mobiliarium Permisos';
   
-  // Apuntamos a tu logo verde
-  const logoUrl = `${self.location.origin}/LogoVerde-removebg-preview.png`;
+  // Apuntamos al logo principal para el cuadro grande
+  const iconoPrincipal = `${self.location.origin}/LogoVerde-removebg-preview.png`;
+  
+  // Apuntamos al nuevo archivo badge.png que acabas de colocar en public para eliminar la campana
+  const iconoBadge = `${self.location.origin}/badge.png`;
 
   const options = {
     body: payload.body || 'Tienes una nueva notificación.',
-    icon: logoUrl, // Logo principal grande
-    // Omitimos el 'badge' problemático para que Android no ponga la campana genérica
+    icon: iconoPrincipal, // Logo grande a la derecha
+    badge: iconoBadge,    // Insignia pequeña arriba a la izquierda (adiós a la campana)
     vibrate: [200, 100, 200],
     data: {
       url: (payload.data && payload.data.url) ? payload.data.url : '/aprobaciones'
