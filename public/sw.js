@@ -1,15 +1,16 @@
-// Este es el archivo sw.js
+// Service Worker para notificaciones Push de la PWA
 self.addEventListener('push', (event) => {
   const payload = event.data ? event.data.json() : {};
 
   const title = payload.title || 'Mobiliarium Permisos';
   
-  // Aquí le decimos al sistema que busque tu logo verde usando la dirección web actual
-  const logoDeTuApp = `${self.location.origin}/LogoVerde-removebg-preview.png`;
+  // Apuntamos a tu logo verde
+  const logoUrl = `${self.location.origin}/LogoVerde-removebg-preview.png`;
 
   const options = {
     body: payload.body || 'Tienes una nueva notificación.',
-    icon: logoDeTuApp, // Este es el logo que aparecerá en la notificación
+    icon: logoUrl, // Logo principal grande
+    // Omitimos el 'badge' problemático para que Android no ponga la campana genérica
     vibrate: [200, 100, 200],
     data: {
       url: (payload.data && payload.data.url) ? payload.data.url : '/aprobaciones'
@@ -21,7 +22,7 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Esto sirve para que al hacer clic en la notificación se abra tu app
+// Registrar clic en la notificación para abrir la app en la ruta correcta
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
