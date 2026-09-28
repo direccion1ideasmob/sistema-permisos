@@ -8,6 +8,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Recibimos la fotoUrl junto con los demás datos
     const { subscription, titulo, mensaje, fotoUrl } = req.body || {};
 
     if (!subscription) {
@@ -47,13 +48,13 @@ export default async function handler(req, res) {
 
     const domain = 'https://sistema-permisos-blond.vercel.app';
 
-    // Si el usuario tiene foto registrada, usamos su foto. Si no, usamos el logotipo verde por defecto.
-    const iconoFinal = fotoUrl ? fotoUrl : `${domain}/LogoVerde-removebg-preview.png`;
+    // BLINDAJE: Si hay foto del usuario la usa; si no, pone el logotipo verde por defecto
+    const iconoFinal = (fotoUrl && fotoUrl.startsWith('http')) ? fotoUrl : `${domain}/LogoVerde-removebg-preview.png`;
 
     const payload = JSON.stringify({
       title: titulo || 'Mobiliarium Permisos',
       body: mensaje || 'Nueva notificación',
-      icon: iconoFinal, // Aquí viaja la foto del empleado o el logo de respaldo
+      icon: iconoFinal, // Aquí se pinta la foto del usuario o el logo de respaldo
       data: { url: '/aprobaciones' }
     });
 

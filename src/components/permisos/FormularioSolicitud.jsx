@@ -164,18 +164,14 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-// 3. Envío de Notificación Push con Promise.allSettled y datos detallados (Foto y Motivo)
+// Dentro de tu handleSubmit, busca el bloque 3 de notificación y déjalo así:
+
+      // 3. Envío de Notificación Push ultra seguro con motivo y foto opcional de sesión
       if (jefeFinalId) {
         try {
-          // Obtenemos los datos del empleado que solicita (incluyendo su foto_url)
-          const { data: datosColaborador } = await supabase
-            .from('usuarios')
-            .select('nombre_completo, foto_url')
-            .eq('id', userId)
-            .single();
-
-          const nombreSolicitante = datosColaborador?.nombre_completo || usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
-          const fotoSolicitante = datosColaborador?.foto_url || null;
+          // Extraemos la foto de la sesión activa de forma segura (sin consultas pesadas)
+          const fotoSolicitante = usuario?.foto_url || sesionActual?.foto_url || null;
+          const nombreSolicitante = usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
 
           const { data: subs, error: errSub } = await supabase
             .from('suscripciones_push')
@@ -199,7 +195,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                     subscription: subLimpia,
                     titulo: '⚠️ NUEVO PASE POR FIRMAR',
                     mensaje: `${nombreSolicitante} solicita [${tipoPermiso.toUpperCase()}]: "${motivo.trim()}" (Folio: ${folioFinal})`,
-                    fotoUrl: fotoSolicitante // Mandamos la foto del usuario
+                    fotoUrl: fotoSolicitante // Mandamos la foto de forma limpia
                   })
                 });
                 return await res.json();
