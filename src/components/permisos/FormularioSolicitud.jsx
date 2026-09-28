@@ -164,20 +164,27 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-// 3. Envío de Notificación Push con Promise.allSettled (IDÉNTICO A TU ORIGINAL)
+// 3. Envío de Notificación Push con Promise.allSettled y datos detallados (Foto y Motivo)
       if (jefeFinalId) {
         try {
+          // Obtenemos los datos del empleado que solicita (incluyendo su foto_url)
+          const { data: datosColaborador } = await supabase
+            .from('usuarios')
+            .select('nombre_completo, foto_url')
+            .eq('id', userId)
+            .single();
+
+          const nombreSolicitante = datosColaborador?.nombre_completo || usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
+          const fotoSolicitante = datosColaborador?.foto_url || null;
+
           const { data: subs, error: errSub } = await supabase
             .from('suscripciones_push')
             .select('subscription')
             .eq('usuario_id', jefeFinalId);
 
           if (!errSub && subs && subs.length > 0) {
-            const nombreSolicitante = usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
-
             const envios = subs.map(async (item) => {
               try {
-                // PARSEO SEGURO: Si en Supabase está guardado como string escapado, lo volvemos objeto limpio
                 let subLimpia = item.subscription;
                 if (typeof subLimpia === 'string') {
                   try {
@@ -191,7 +198,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                   body: JSON.stringify({
                     subscription: subLimpia,
                     titulo: '⚠️ NUEVO PASE POR FIRMAR',
-                    mensaje: `${nombreSolicitante} ha solicitado un permiso (Folio: ${folioFinal}).`
+                    mensaje: `${nombreSolicitante} solicita [${tipoPermiso.toUpperCase()}]: "${motivo.trim()}" (Folio: ${folioFinal})`,
+                    fotoUrl: fotoSolicitante // Mandamos la foto del usuario
                   })
                 });
                 return await res.json();
@@ -200,7 +208,6 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
               }
             });
 
-            // Espera obligatoria como en tu código original
             await Promise.allSettled(envios);
           }
         } catch (errNotif) {

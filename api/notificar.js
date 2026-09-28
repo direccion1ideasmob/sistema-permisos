@@ -8,19 +8,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { subscription, titulo, mensaje } = req.body || {};
+    const { subscription, titulo, mensaje, fotoUrl } = req.body || {};
 
     if (!subscription) {
-      return res.status(200).json({ success: false, error: 'La suscripción venía vacía (null o undefined)' });
+      return res.status(200).json({ success: false, error: 'La suscripción venía vacía' });
     }
 
-    // Desenrollar si viene como string desde Supabase
     let subObj = subscription;
     while (typeof subObj === 'string') {
       try {
         subObj = JSON.parse(subObj);
       } catch (e) {
-        return res.status(200).json({ success: false, error: 'La suscripción en BD es un string corrupto' });
+        return res.status(200).json({ success: false, error: 'Suscripción string corrupto' });
       }
     }
 
@@ -28,7 +27,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: false, error: 'Suscripción inválida' });
     }
 
-    // LECTURA Y LIMPIEZA DENTRO DE LA FUNCIÓN
     const limpiarVapid = (k) => k ? k.trim().replace(/^["']|["']$/g, '').replace(/=/g, '').replace(/\s+/g, '') : '';
     
     const rawPublicKey = process.env.VITE_VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -38,7 +36,7 @@ export default async function handler(req, res) {
     const privateKey = limpiarVapid(rawPrivateKey);
 
     if (!publicKey || !privateKey) {
-      return res.status(200).json({ success: false, error: 'Variables VAPID no leídas en Vercel' });
+      return res.status(200).json({ success: false, error: 'Variables VAPID no leídas' });
     }
 
     webpush.setVapidDetails(
@@ -49,11 +47,13 @@ export default async function handler(req, res) {
 
     const domain = 'https://sistema-permisos-blond.vercel.app';
 
+    // Si el usuario tiene foto registrada, usamos su foto. Si no, usamos el logotipo verde por defecto.
+    const iconoFinal = fotoUrl ? fotoUrl : `${domain}/LogoVerde-removebg-preview.png`;
+
     const payload = JSON.stringify({
       title: titulo || 'Mobiliarium Permisos',
       body: mensaje || 'Nueva notificación',
-      icon: `${domain}/LogoVerde-removebg-preview.png`,
-      badge: `${domain}/badge.jpg`,
+      icon: iconoFinal, // Aquí viaja la foto del empleado o el logo de respaldo
       data: { url: '/aprobaciones' }
     });
 
@@ -64,8 +64,7 @@ export default async function handler(req, res) {
     console.error("Fallo interno Push:", err);
     return res.status(200).json({
       success: false,
-      error: err.message || String(err),
-      statusCode: err.statusCode || 'DESCONOCIDO'
+      error: err.message || String(err)
     });
   }
 }
