@@ -30,6 +30,7 @@ export default function Aprobaciones() {
 
   // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
  // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
+ // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
   const vincularDispositivoManual = async () => {
     try {
       if ('serviceWorker' in navigator) {
@@ -43,17 +44,21 @@ export default function Aprobaciones() {
         return;
       }
 
-      // CORRECCIÓN CLAVE: Estructuramos plano el endpoint y la suscripción para que el upsert no falle
+      // 1. LIMPIEZA OBLIGATORIA: Borramos cualquier rastro previo de este usuario en Supabase
+      // Esto garantiza que NUNCA se acumulen filas duplicadas, sin importar si borraste caché 20 veces.
+      await supabase
+        .from('suscripciones_push')
+        .delete()
+        .eq('usuario_id', usuario.id);
+
+      // 2. INSERCIÓN NUEVA: Guardamos la suscripción fresca y actual del celular
       const { error } = await supabase
         .from('suscripciones_push')
-        .upsert(
-          { 
-            usuario_id: usuario.id, 
-            subscription: sub, 
-            endpoint: sub.endpoint // Requisito estricto para que el Unique Index lo detecte y sobrescriba
-          },
-          { onConflict: 'endpoint' }
-        );
+        .insert({ 
+          usuario_id: usuario.id, 
+          subscription: sub, 
+          endpoint: sub.endpoint 
+        });
 
       if (error) throw error;
 
