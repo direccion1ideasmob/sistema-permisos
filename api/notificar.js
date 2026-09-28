@@ -1,3 +1,13 @@
+// Limpieza estricta: quita comillas, espacios en blanco, saltos de línea y signos '='
+    const limpiarVapid = (k) => k ? k.trim().replace(/^["']|["']$/g, '').replace(/=/g, '').replace(/\s+/g, '') : '';
+
+    const rawPublicKey = process.env.VITE_VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const rawPrivateKey = process.env.VAPID_PRIVATE_KEY;
+
+    const publicKey = limpiarVapid(rawPublicKey);
+    const privateKey = limpiarVapid(rawPrivateKey);
+
+
 import webpush from 'web-push';
 
 export default async function handler(req, res) {
