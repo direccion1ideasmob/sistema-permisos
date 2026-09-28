@@ -1,17 +1,17 @@
-// Service Worker para notificaciones Push de la PWA
+// Este es el archivo sw.js
 self.addEventListener('push', (event) => {
   const payload = event.data ? event.data.json() : {};
-  const baseUrl = self.location.origin;
 
   const title = payload.title || 'Mobiliarium Permisos';
   
+  // Aquí le decimos al sistema que busque tu logo verde usando la dirección web actual
+  const logoDeTuApp = `${self.location.origin}/LogoVerde-removebg-preview.png`;
+
   const options = {
     body: payload.body || 'Tienes una nueva notificación.',
-    icon: payload.icon || `${baseUrl}/LogoVerde-removebg-preview.png`,
-    // Quitamos el badge.jpg para que Android no ponga el cuadro blanco
+    icon: logoDeTuApp, // Este es el logo que aparecerá en la notificación
     vibrate: [200, 100, 200],
     data: {
-      // AQUÍ ESTABA EL ERROR: Ahora lee la URL dinámica (ej. /aprobaciones) o usa la raíz de respaldo
       url: (payload.data && payload.data.url) ? payload.data.url : '/aprobaciones'
     }
   };
@@ -21,7 +21,7 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Registrar clic en la notificación para abrir la app en la ruta correcta
+// Esto sirve para que al hacer clic en la notificación se abra tu app
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
@@ -29,13 +29,11 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Si la app ya está abierta en el fondo, la enfoca y cambia a la pestaña correcta
       if (windowClients.length > 0) {
         const client = windowClients[0];
         client.navigate(urlToOpen);
         return client.focus();
       }
-      // Si la app estaba cerrada por completo, abre una ventana nueva en esa ruta
       return clients.openWindow(urlToOpen);
     })
   );

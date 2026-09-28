@@ -29,6 +29,7 @@ export default function Aprobaciones() {
   const c = obtenerTemaAprobaciones(modoOscuro);
 
   // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
+ // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
   const vincularDispositivoManual = async () => {
     try {
       if ('serviceWorker' in navigator) {
@@ -42,10 +43,15 @@ export default function Aprobaciones() {
         return;
       }
 
+      // CORRECCIÓN CLAVE: Estructuramos plano el endpoint y la suscripción para que el upsert no falle
       const { error } = await supabase
         .from('suscripciones_push')
         .upsert(
-          [{ usuario_id: usuario.id, subscription: sub, endpoint: sub.endpoint }],
+          { 
+            usuario_id: usuario.id, 
+            subscription: sub, 
+            endpoint: sub.endpoint // Requisito estricto para que el Unique Index lo detecte y sobrescriba
+          },
           { onConflict: 'endpoint' }
         );
 

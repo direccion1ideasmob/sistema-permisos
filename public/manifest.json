@@ -3,13 +3,13 @@
   "name": "Mobiliarium Permisos",
   "icons": [
     {
-      "src": "/LogoNegro.png",
+      "src": "/LogoVerde-removebg-preview.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/LogoNegro.png",
+      "src": "/LogoVerde-removebg-preview.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
