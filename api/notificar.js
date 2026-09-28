@@ -15,10 +15,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: false, error: 'La suscripción venía vacía (null o undefined)' });
     }
 
+    // Manejo robusto: desenrolla si viene doblemente serializado como string desde la BD
     let subObj = subscription;
-    if (typeof subscription === 'string') {
+    while (typeof subObj === 'string') {
       try {
-        subObj = JSON.parse(subscription);
+        subObj = JSON.parse(subObj);
       } catch (e) {
         return res.status(200).json({ success: false, error: 'La suscripción en BD es un string corrupto' });
       }
@@ -42,21 +43,24 @@ export default async function handler(req, res) {
       privateKey
     );
 
-    const domain = 'https://sistema-permisos-beta.vercel.app';
+    // CORREGIDO: Dominio real de tu despliegue en Vercel
+    const domain = 'https://sistema-permisos-blond.vercel.app';
 
-   const payload = JSON.stringify({
+    const payload = JSON.stringify({
       title: titulo || 'Mobiliarium Permisos',
       body: mensaje || 'Tienes una nueva notificación.',
-      icon: `${domain}/LogoNegro.png`,
-      badge: `${domain}/badge.png` 
+      icon: `${domain}/LogoNegro-removebg-preview.png`,
+      badge: `${domain}/badge.jpg`,
+      data: {
+        url: '/aprobaciones'
+      }
     });
 
-    // 3. Intento de envío Push
+    // 3. Envío real a Google FCM / Apple
     await webpush.sendNotification(subObj, payload);
     return res.status(200).json({ success: true });
 
   } catch (err) {
-    // Captura CUALQUIER excepción de Node.js o Google sin crashear Vercel
     console.error("Fallo interno Push:", err);
     return res.status(200).json({
       success: false,

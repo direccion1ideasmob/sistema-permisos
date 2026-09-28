@@ -164,7 +164,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-      // 3. Envío de Notificación Push con Promise.allSettled (IDÉNTICO A TU ORIGINAL)
+// 3. Envío de Notificación Push con Promise.allSettled (IDÉNTICO A TU ORIGINAL)
       if (jefeFinalId) {
         try {
           const { data: subs, error: errSub } = await supabase
@@ -177,12 +177,20 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
             const envios = subs.map(async (item) => {
               try {
+                // PARSEO SEGURO: Si en Supabase está guardado como string escapado, lo volvemos objeto limpio
+                let subLimpia = item.subscription;
+                if (typeof subLimpia === 'string') {
+                  try {
+                    subLimpia = JSON.parse(subLimpia);
+                  } catch (_) {}
+                }
+
                 const res = await fetch('/api/notificar', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    subscription: item.subscription,
-                    titulo: '⚠️ NUEVO PASE POR AUTORIZAR',
+                    subscription: subLimpia,
+                    titulo: '⚠️ NUEVO PASE POR FIRMAR',
                     mensaje: `${nombreSolicitante} ha solicitado un permiso (Folio: ${folioFinal}).`
                   })
                 });
