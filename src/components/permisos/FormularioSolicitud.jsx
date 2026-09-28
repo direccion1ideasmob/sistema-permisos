@@ -164,7 +164,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-      // 3. Envío de Notificación Push limpio con ciclo for...of (Cero errores de async/await)
+      // 3. Envío de Notificación Push con Promise.allSettled (IDÉNTICO A TU ORIGINAL)
       if (jefeFinalId) {
         try {
           const { data: subs, error: errSub } = await supabase
@@ -173,24 +173,30 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
             .eq('usuario_id', jefeFinalId);
 
           if (!errSub && subs && subs.length > 0) {
-            for (const item of subs) {
+            const nombreSolicitante = usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
+
+            const envios = subs.map(async (item) => {
               try {
-                await fetch('/api/notificar', {
+                const res = await fetch('/api/notificar', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     subscription: item.subscription,
                     titulo: '⚠️ NUEVO PASE POR AUTORIZAR',
-                    mensaje: `${sesionActual.nombre_completo || 'Un colaborador'} solicitó permiso (${folioFinal}).`
+                    mensaje: `${nombreSolicitante} ha solicitado un permiso (Folio: ${folioFinal}).`
                   })
                 });
+                return await res.json();
               } catch (errFetch) {
-                console.error("Error en petición push:", errFetch);
+                console.error("❌ Error en el fetch Push:", errFetch);
               }
-            }
+            });
+
+            // Espera obligatoria como en tu código original
+            await Promise.allSettled(envios);
           }
         } catch (errNotif) {
-          console.error("Error en proceso de notificación:", errNotif);
+          console.error("❌ Error en proceso de notificación:", errNotif);
         }
       }
 
