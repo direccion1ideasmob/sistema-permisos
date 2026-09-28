@@ -20,12 +20,8 @@ export default function Aprobaciones() {
   const [solicitudAprobar, setSolicitudAprobar] = useState(null);
   const [solicitudRechazar, setSolicitudRechazar] = useState(null);
 
-  // CORRECCIÓN: Forzamos a que el botón aparezca si el permiso NO está concedido formalmente
-  const [dispositivoVinculado, setDispositivoVinculado] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    if (!('Notification' in window)) return true;
-    return Notification.permission === 'granted';
-  });
+    const [dispositivoVinculado, setDispositivoVinculado] = useState(false);
+
 
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);

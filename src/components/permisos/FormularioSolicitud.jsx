@@ -164,12 +164,11 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-// Dentro de tu handleSubmit, busca el bloque 3 de notificación y déjalo así:
 
-      // 3. Envío de Notificación Push ultra seguro con motivo y foto opcional de sesión
+     // 3. Envío de Notificación Push estable con motivo detallado y foto de sesión
       if (jefeFinalId) {
         try {
-          // Extraemos la foto de la sesión activa de forma segura (sin consultas pesadas)
+          // Extraemos la foto y el nombre directamente de la sesión activa de forma segura
           const fotoSolicitante = usuario?.foto_url || sesionActual?.foto_url || null;
           const nombreSolicitante = usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
 
@@ -195,7 +194,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                     subscription: subLimpia,
                     titulo: '⚠️ NUEVO PASE POR FIRMAR',
                     mensaje: `${nombreSolicitante} solicita [${tipoPermiso.toUpperCase()}]: "${motivo.trim()}" (Folio: ${folioFinal})`,
-                    fotoUrl: fotoSolicitante // Mandamos la foto de forma limpia
+                    fotoUrl: fotoSolicitante // Mandamos la foto limpia de la sesión
                   })
                 });
                 return await res.json();

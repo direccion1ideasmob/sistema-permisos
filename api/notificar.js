@@ -8,11 +8,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Recibimos la fotoUrl junto con los demás datos
     const { subscription, titulo, mensaje, fotoUrl } = req.body || {};
 
     if (!subscription) {
-      return res.status(200).json({ success: false, error: 'La suscripción venía vacía' });
+      return res.status(200).json({ success: false, error: 'La suscripción venía vacía (null o undefined)' });
     }
 
     let subObj = subscription;
@@ -20,7 +19,7 @@ export default async function handler(req, res) {
       try {
         subObj = JSON.parse(subObj);
       } catch (e) {
-        return res.status(200).json({ success: false, error: 'Suscripción string corrupto' });
+        return res.status(200).json({ success: false, error: 'La suscripción en BD es un string corrupto' });
       }
     }
 
@@ -37,7 +36,7 @@ export default async function handler(req, res) {
     const privateKey = limpiarVapid(rawPrivateKey);
 
     if (!publicKey || !privateKey) {
-      return res.status(200).json({ success: false, error: 'Variables VAPID no leídas' });
+      return res.status(200).json({ success: false, error: 'Variables VAPID no leídas en Vercel' });
     }
 
     webpush.setVapidDetails(
@@ -48,13 +47,13 @@ export default async function handler(req, res) {
 
     const domain = 'https://sistema-permisos-blond.vercel.app';
 
-    // BLINDAJE: Si hay foto del usuario la usa; si no, pone el logotipo verde por defecto
-    const iconoFinal = (fotoUrl && fotoUrl.startsWith('http')) ? fotoUrl : `${domain}/LogoVerde-removebg-preview.png`;
+    // LÓGICA ESTABLE: Si el usuario tiene foto en su sesión, se usa; si no, se usa el logotipo verde por defecto
+    const iconoFinal = (fotoUrl && fotoUrl.trim() !== '') ? fotoUrl : `${domain}/LogoVerde-removebg-preview.png`;
 
     const payload = JSON.stringify({
       title: titulo || 'Mobiliarium Permisos',
       body: mensaje || 'Nueva notificación',
-      icon: iconoFinal, // Aquí se pinta la foto del usuario o el logo de respaldo
+      icon: iconoFinal, // Aquí se pinta la foto del usuario o el logotipo de respaldo
       data: { url: '/aprobaciones' }
     });
 
@@ -65,7 +64,8 @@ export default async function handler(req, res) {
     console.error("Fallo interno Push:", err);
     return res.status(200).json({
       success: false,
-      error: err.message || String(err)
+      error: err.message || String(err),
+      statusCode: err.statusCode || 'DESCONOCIDO'
     });
   }
 }
