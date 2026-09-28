@@ -20,17 +20,17 @@ export default function Aprobaciones() {
   const [solicitudAprobar, setSolicitudAprobar] = useState(null);
   const [solicitudRechazar, setSolicitudRechazar] = useState(null);
 
-  // Detecta si este navegador/celular ya tiene permiso concedido (si ya tiene, el botón se oculta)
+  // CORRECCIÓN: Forzamos a que el botón aparezca si el permiso NO está concedido formalmente
   const [dispositivoVinculado, setDispositivoVinculado] = useState(() => {
-    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+    if (typeof window === 'undefined') return true;
+    if (!('Notification' in window)) return true;
+    return Notification.permission === 'granted';
   });
 
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);
 
   // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
- // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
- // Vinculación manual táctil (Obligatoria para que Chrome móvil no bloquee el aviso)
   const vincularDispositivoManual = async () => {
     try {
       if ('serviceWorker' in navigator) {
@@ -45,7 +45,7 @@ export default function Aprobaciones() {
       }
 
       // 1. LIMPIEZA OBLIGATORIA: Borramos cualquier rastro previo de este usuario en Supabase
-      // Esto garantiza que NUNCA se acumulen filas duplicadas, sin importar si borraste caché 20 veces.
+      // Esto garantiza que NUNCA se acumulen filas duplicadas, sin importar si borraste caché.
       await supabase
         .from('suscripciones_push')
         .delete()
@@ -251,7 +251,7 @@ export default function Aprobaciones() {
     <div className="aprobaciones-container">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
 
-      {/* BOTÓN DISCRETO QUE SE OCULTA SOLO EN CUANTO EL CELULAR SE VINCULA */}
+      {/* BOTÓN DE ACTIVACIÓN: Aparecerá siempre que el celular no tenga el permiso concedido */}
       {!dispositivoVinculado && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
           <button
