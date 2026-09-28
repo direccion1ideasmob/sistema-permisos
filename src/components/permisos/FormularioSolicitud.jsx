@@ -165,10 +165,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
       if (errInsert) throw errInsert;
 
 
-     // 3. Envío de Notificación Push estable con motivo detallado y foto de sesión
+    // 3. Envío de Notificación Push con formato limpio y foto de sesión
       if (jefeFinalId) {
         try {
-          // Extraemos la foto y el nombre directamente de la sesión activa de forma segura
           const fotoSolicitante = usuario?.foto_url || sesionActual?.foto_url || null;
           const nombreSolicitante = usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
 
@@ -182,10 +181,15 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
               try {
                 let subLimpia = item.subscription;
                 if (typeof subLimpia === 'string') {
-                  try {
-                    subLimpia = JSON.parse(subLimpia);
-                  } catch (_) {}
+                  try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
                 }
+
+                // FORMATO ORDENADO Y LIMPIO (Adiós al texto amontonado)
+                const mensajeFormateado = 
+                  `👤 Solicitante: ${nombreSolicitante}\n` +
+                  `📋 Tipo: ${tipoPermiso.toUpperCase()}\n` +
+                  `💬 Motivo: "${motivo.trim()}"\n` +
+                  `🔖 Folio: ${folioFinal}`;
 
                 const res = await fetch('/api/notificar', {
                   method: 'POST',
@@ -193,8 +197,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                   body: JSON.stringify({
                     subscription: subLimpia,
                     titulo: '⚠️ NUEVO PASE POR FIRMAR',
-                    mensaje: `${nombreSolicitante} solicita [${tipoPermiso.toUpperCase()}]: "${motivo.trim()}" (Folio: ${folioFinal})`,
-                    fotoUrl: fotoSolicitante // Mandamos la foto limpia de la sesión
+                    mensaje: mensajeFormateado,
+                    fotoUrl: fotoSolicitante // Mandamos la foto para que sea el icono visual
                   })
                 });
                 return await res.json();
