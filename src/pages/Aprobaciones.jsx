@@ -185,18 +185,36 @@ export default function Aprobaciones() {
   const ejecutarRechazo = async (solicitud, motivoRechazo) => {
     setProcesando(true);
     try {
+      const esJefeDepto = usuario.rol === 'jefe_area' && (solicitud.firma_1_id === usuario.id || solicitud.usuarios?.departamento_id === usuario.departamento_id);
+      const esGerente = solicitud.firma_2_id === usuario.id;
+      const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
+
+      const updates = {
+        estado_general: 'rechazado',
+        observaciones: `${solicitud.observaciones || ''} | RECHAZO: ${motivoRechazo}`
+      };
+
+      // Identificamos quién está rechazando para marcar SU firma específica como rechazada
+      if (esRH && solicitud.firma_3_estado === 'pendiente') {
+        updates.firma_3_estado = 'rechazado';
+        if (!solicitud.firma_3_id) updates.firma_3_id = usuario.id;
+      } else if (esGerente && solicitud.firma_2_estado === 'pendiente') {
+        updates.firma_2_estado = 'rechazado';
+      } else if (esJefeDepto && solicitud.firma_1_estado === 'pendiente') {
+        updates.firma_1_estado = 'rechazado';
+        if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
+      } else {
+        // Fallback por seguridad
+        updates.firma_1_estado = 'rechazado';
+      }
+
       const { error } = await supabase
         .from('permisos')
-        .update({
-          firma_1_estado: 'rechazado',
-          estado_general: 'rechazado',
-          observaciones: `${solicitud.observaciones || ''} | RECHAZO: ${motivoRechazo}`
-        })
+        .update(updates)
         .eq('id', solicitud.id);
 
       if (error) throw error;
 
-      // Disparar push al empleado
       await notificarEmpleado(
         solicitud.usuario_id,
         '❌ PERMISO RECHAZADO',

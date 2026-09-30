@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   ClipboardList, PenLine, FileBarChart, Users, ShieldCheck, 
   LogOut, Menu, X, Camera, Image as ImageIcon, Sun, Moon,
-  Settings, Lock, Key
+  Settings, Lock, Key, FilePlus
 } from 'lucide-react';
 
 export default function Layout() {
@@ -280,6 +280,17 @@ export default function Layout() {
 
           {/* 4. NAVEGACIÓN */}
           <nav style={s.nav}>
+            {!esCaseta && (
+              <Link 
+                to="/solicitar" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <FilePlus size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Solicitar Pase</span>
+              </Link>
+            )}
+
             {!esCaseta && (
               <Link 
                 to="/mis-permisos" 
