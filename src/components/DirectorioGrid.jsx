@@ -31,8 +31,7 @@ export default function DirectorioGrid({
   const [filtroSede, setFiltroSede] = useState('ALL');
   const [filtroNomina, setFiltroNomina] = useState('ALL');
   const [filtroDepto, setFiltroDepto] = useState('ALL');
-  const [filtroEstatus, setFiltroEstatus] = useState('ALL');
-
+const [filtroEstatus, setFiltroEstatus] = useState('activos');
   // ORDENAMIENTO
   const [columnaOrden, setColumnaOrden] = useState('numero_empleado');
   const [direccionOrden, setDireccionOrden] = useState('asc');
@@ -60,11 +59,10 @@ export default function DirectorioGrid({
     setFiltroSede('ALL');
     setFiltroNomina('ALL');
     setFiltroDepto('ALL');
-    setFiltroEstatus('ALL');
+    setFiltroEstatus('activos'); // <-- Aquí el cambio
   };
 
-  const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== 'ALL' || filtroDepto !== 'ALL' || filtroEstatus !== 'ALL';
-
+const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== 'ALL' || filtroDepto !== 'ALL' || filtroEstatus !== 'activos';
   // FILTRADO
   const usuariosFiltrados = useMemo(() => {
     return [...usuarios]
@@ -129,7 +127,8 @@ export default function DirectorioGrid({
       usuario_login: user.usuario_login || '',
       pin: user.pin || '',
       fecha_ingreso: user.fecha_ingreso || '',
-      foto_url: user.foto_url || null
+      foto_url: user.foto_url || null,
+      firma_url: user.firma_url || null // <--- ESTO FALTABA. POR ESO LA FIRMA SE BORRABA AL EDITAR.
     });
     setDossierAbierto(true);
   };

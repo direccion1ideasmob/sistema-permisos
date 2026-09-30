@@ -44,9 +44,10 @@ const { data: listSedes } = await supabase
 
 if (listSedes) setSedes(listSedes);
     // 1. Traer usuarios
+   // 1. Traer usuarios
    const { data: listUsuarios, error: errU } = await supabase
       .from('usuarios')
-      .select('id, numero_empleado, nombre_completo, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, fecha_ingreso, celular, telefono, correo')
+      .select('id, numero_empleado, nombre_completo, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, sede_id, pin, fecha_ingreso, celular, telefono, correo')
       .order('nombre_completo', { ascending: true });
 
     if (errU) console.error("Error usuarios:", errU);
@@ -337,13 +338,14 @@ if (listSedes) setSedes(listSedes);
 
         {modalAbierto && (
           <ModalColaborador 
-            departamentos={departamentos} 
-            areas={areasUnicas} 
-            puestos={puestosUnicos}
-            onClose={() => setModalAbierto(false)} 
-            onSuccess={() => { setModalAbierto(false); cargarDatos(); }}
-            modoOscuro={modoOscuro}
-          />
+  onClose={() => setModalAbierto(false)} 
+  onSuccess={() => { setModalAbierto(false); cargarDatos(); }}
+  departamentos={departamentos} 
+  areas={areasUnicas} 
+  puestos={puestosUnicos} 
+  sedes={sedes} /* <--- ¡ESTA ES LA LÍNEA QUE TE FALTA EN TU ARCHIVO PRINCIPAL! */
+  modoOscuro={modoOscuro}
+/>
         )}
       </div>
     </>

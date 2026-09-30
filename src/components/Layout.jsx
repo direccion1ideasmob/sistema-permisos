@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 
 import { 
   ClipboardList, PenLine, FileBarChart, Users, ShieldCheck, 
-  LogOut, Menu, X, Camera, Image as ImageIcon, Sun, Moon 
+  LogOut, Menu, X, Camera, Image as ImageIcon, Sun, Moon,
+  Settings, Lock, Key
 } from 'lucide-react';
 
 export default function Layout() {
@@ -28,6 +29,12 @@ export default function Layout() {
   const [usuarioLogueado, setUsuarioLogueado] = useState(usuario);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState(usuario?.nombre_completo || "");
+
+  // === NUEVOS ESTADOS PARA MODAL DE SEGURIDAD (CAMBIO DE PIN) ===
+  const [modalSeguridad, setModalSeguridad] = useState(false);
+  const [nuevoPin, setNuevoPin] = useState('');
+  const [confirmarPin, setConfirmarPin] = useState('');
+  const [guardandoPin, setGuardandoPin] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('tema_sistema', modoOscuro ? 'oscuro' : 'claro');
@@ -102,6 +109,33 @@ export default function Layout() {
     setLoading(false);
   };
 
+  // === LÓGICA PARA CAMBIAR PIN DE ACCESO ===
+  const handleCambiarPin = async (e) => {
+    e.preventDefault();
+    if (nuevoPin.length < 6) return alert("El nuevo PIN debe tener al menos 6 dígitos numéricos.");
+    if (nuevoPin !== confirmarPin) return alert("Los PINes no coinciden. Intenta de nuevo.");
+
+    setGuardandoPin(true);
+    try {
+      // Como tu Login es manual, SOLO actualizamos el PIN en la tabla 'usuarios'
+      const { error: dbError } = await supabase
+        .from('usuarios')
+        .update({ pin: nuevoPin })
+        .eq('id', usuarioLogueado.id);
+        
+      if (dbError) throw dbError;
+
+      alert("✅ Tu PIN de seguridad se ha actualizado con éxito.");
+      setModalSeguridad(false);
+      setNuevoPin('');
+      setConfirmarPin('');
+    } catch (err) {
+      alert("Error al actualizar PIN: " + err.message);
+    } finally {
+      setGuardandoPin(false);
+    }
+  };
+
   // En móvil cierra el menú al navegar; en computadora permanece como lo dejó el usuario
   const cerrarMenuMovil = () => { if (isMobile) setMenuAbierto(false); };
 
@@ -119,6 +153,7 @@ export default function Layout() {
     border: modoOscuro ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
     textPrimary: modoOscuro ? '#ffffff' : '#09090b',
     textSecondary: modoOscuro ? '#a1a1aa' : '#71717a',
+    inputBg: modoOscuro ? '#121214' : '#f8fafc',
     accent: '#16a34a',
     navActiveBg: modoOscuro ? 'rgba(22, 163, 74, 0.16)' : 'rgba(22, 163, 74, 0.1)',
     navActiveText: modoOscuro ? '#4ade80' : '#15803d',
@@ -225,9 +260,21 @@ export default function Layout() {
                   {usuarioLogueado?.nombre_completo || 'Usuario'}
                 </span>
               )}
-              <span style={{ ...s.userRole, color: tema.textSecondary }}>
-                {rol.replace(/_/g, ' ')}
-              </span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ ...s.userRole, color: tema.textSecondary }}>
+                  {rol.replace(/_/g, ' ')}
+                </span>
+                
+                {/* === NUEVO BOTÓN DE ENGRANAJE (SEGURIDAD) === */}
+                <button 
+                  onClick={() => setModalSeguridad(true)}
+                  style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
+                  title="Seguridad y PIN"
+                >
+                  <Settings size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -329,6 +376,93 @@ export default function Layout() {
         </main>
 
       </div>
+
+      {/* =========================================================
+          MODAL: SEGURIDAD Y CAMBIO DE PIN 
+          ========================================================= */}
+      {modalSeguridad && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px'
+        }} onClick={() => setModalSeguridad(false)}>
+          
+          <div style={{
+            backgroundColor: tema.sidebarBg, border: `1px solid ${tema.border}`, borderRadius: '24px',
+            width: '100%', maxWidth: '360px', padding: '28px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+            position: 'relative'
+          }} onClick={e => e.stopPropagation()}>
+            
+            {/* ENCABEZADO DEL MODAL */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ background: 'rgba(22, 163, 74, 0.1)', padding: '10px', borderRadius: '12px', color: tema.accent }}>
+                  <Lock size={20} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: tema.textPrimary, letterSpacing: '-0.01em' }}>Seguridad</div>
+                  <div style={{ fontSize: '12px', color: tema.textSecondary, marginTop: '2px' }}>Cambia tu PIN de acceso</div>
+                </div>
+              </div>
+              <button onClick={() => setModalSeguridad(false)} style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', padding: '4px' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* FORMULARIO */}
+            <form onSubmit={handleCambiarPin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: tema.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                  Nuevo PIN (Mínimo 6 dígitos)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Key size={14} color={tema.textSecondary} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input 
+                    type="password" required minLength={6} maxLength={10} placeholder="••••••"
+                    value={nuevoPin} onChange={e => setNuevoPin(e.target.value.replace(/\D/g, ''))} // Solo permite números
+                    style={{
+                      width: '100%', padding: '12px 14px 12px 34px', borderRadius: '10px', border: `1px solid ${tema.border}`,
+                      background: tema.inputBg, color: tema.textPrimary, fontSize: '16px', fontFamily: 'monospace',
+                      letterSpacing: '4px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: tema.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                  Confirmar Nuevo PIN
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Key size={14} color={tema.textSecondary} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input 
+                    type="password" required minLength={6} maxLength={10} placeholder="••••••"
+                    value={confirmarPin} onChange={e => setConfirmarPin(e.target.value.replace(/\D/g, ''))}
+                    style={{
+                      width: '100%', padding: '12px 14px 12px 34px', borderRadius: '10px', border: `1px solid ${tema.border}`,
+                      background: tema.inputBg, color: tema.textPrimary, fontSize: '16px', fontFamily: 'monospace',
+                      letterSpacing: '4px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ fontSize: '11px', color: tema.textSecondary, background: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '10px', borderRadius: '8px', lineHeight: '1.4' }}>
+                <strong>Nota:</strong> Si olvidas tu PIN en el futuro, no podrás entrar al sistema y deberás solicitar una restauración al departamento de RH.
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setModalSeguridad(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${tema.border}`, background: 'transparent', color: tema.textPrimary, fontSize: '13px', fontWeight: '700', cursor: 'pointer', transition: 'background 0.2s' }}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={guardandoPin} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', background: tema.accent, color: '#ffffff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)', transition: 'transform 0.1s', opacity: guardandoPin ? 0.7 : 1 }}>
+                  {guardandoPin ? 'Guardando...' : 'Actualizar PIN'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -390,7 +524,7 @@ const s = {
     userSelect: 'none',
     transition: 'opacity 0.3s ease'
   },
-overlay: { 
+  overlay: { 
     position: 'fixed', 
     top: 0, 
     left: 0, 

@@ -46,6 +46,12 @@ export default function Login({ alEntrar }) {
     }
   };
 
+  const solicitarAyudaRH = () => {
+    const msj = encodeURIComponent(`Hola RH, solicito apoyo para restaurar mi PIN de acceso al sistema ERP.`);
+    // Cambia el número de teléfono por el real de tu área de RH (ej. 525551234567)
+    window.open(`https://wa.me/?text=${msj}`, '_blank');
+  };
+
   return (
     <div style={styles.fondo}>
       <div style={styles.contenedor}>
@@ -56,7 +62,7 @@ export default function Login({ alEntrar }) {
         <form onSubmit={entrar} style={styles.form}>
           <input 
             style={styles.input} 
-            placeholder="USUARIO" 
+            placeholder="USUARIO LOGIN" 
             autoCapitalize="none"
             value={idUsuario}
             onChange={(e) => setIdUsuario(e.target.value)}
@@ -64,7 +70,7 @@ export default function Login({ alEntrar }) {
           <input 
             style={styles.input} 
             type="password" 
-            placeholder="PIN / CONTRASEÑA" 
+            placeholder="PIN DE SEGURIDAD" 
             value={pass}
             onChange={(e) => setPass(e.target.value)}
           />
@@ -73,6 +79,10 @@ export default function Login({ alEntrar }) {
           </button>
         </form>
         
+        <button type="button" onClick={solicitarAyudaRH} style={styles.btnOlvidado}>
+          ¿Olvidaste tu PIN?
+        </button>
+
         <p style={styles.footer}>ALEJANDRO VALENZO © 2026</p>
       </div>
     </div>
@@ -130,7 +140,9 @@ const styles = {
     outline: 'none',
     backgroundColor: '#fafafa',
     transition: '0.3s',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    fontFamily: 'monospace',
+    letterSpacing: '1px'
   },
   boton: { 
     width: '100%',
@@ -145,6 +157,17 @@ const styles = {
     marginTop: '10px',
     letterSpacing: '2px',
     boxSizing: 'border-box'
+  },
+  btnOlvidado: {
+    background: 'none',
+    border: 'none',
+    color: '#888',
+    fontSize: '12px',
+    fontWeight: '600',
+    marginTop: '24px',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    letterSpacing: '1px'
   },
   footer: {
     marginTop: '40px',
