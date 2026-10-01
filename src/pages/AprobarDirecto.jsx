@@ -36,7 +36,8 @@ export default function AprobarDirecto() {
               body: JSON.stringify({
                 subscription: item.subscription,
                 titulo,
-                mensaje
+                mensaje,
+                urlDestino: '/mis-permisos' // <-- ESTO MANDA AL EMPLEADO A VER SU PASE
               })
             });
           } catch (_) {}

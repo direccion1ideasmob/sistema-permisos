@@ -38,7 +38,6 @@ export default function TarjetaAprobacion({
     if (!textoCrudo) return { etiqueta: 'SIN CATEGORÍA', redaccion: 'No se ingresaron detalles.' };
     
     const txt = String(textoCrudo).trim();
-    // Extrae lo que esté entre [] o {} y deja el resto en otro grupo
     const match = txt.match(/^([\[\{])(.*?)([\]\}])\s*([\s\S]*)$/);
     
     if (match) {
@@ -61,142 +60,164 @@ export default function TarjetaAprobacion({
     return { color: c.accent, bg: c.accentSoft, border: c.border, text: t.toUpperCase() };
   };
   const estilo = getEstiloTipo(solicitud.tipo_permiso);
-
-  // Limpiar la palabra "Nota:" si viene en las observaciones
   const observacionesLimpias = solicitud.observaciones ? solicitud.observaciones.replace(/Nota:\s*/i, '').trim() : '';
 
   return (
-    <div style={{
-      background: c.surfaceCard, border: `1px solid ${c.border}`,
-      borderRadius: '20px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px',
-      boxShadow: modoOscuro ? '0 8px 30px rgba(0,0,0,0.4)' : '0 4px 15px rgba(0,0,0,0.04)'
-    }}>
-      
-      {/* 1. CABECERA: PERFIL Y ETIQUETA TIPO */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-          <img src={urlFoto} alt="" style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', border: `1px solid ${c.border}` }} />
-          <div>
-            <div style={{ fontSize: '16px', fontWeight: '800', color: c.text, letterSpacing: '-0.01em' }}>
-              {u.nombre_completo || 'Colaborador'}
-            </div>
-            <div style={{ fontSize: '12px', color: c.textMuted, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-              <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '2px 6px', borderRadius: '4px' }}>
-                {solicitud.folio}
-              </span>
-              <span>•</span>
-              <span style={{ fontWeight: '600' }}>#{u.numero_empleado}</span>
-              <span>•</span>
-              <span>{u.departamentos?.nombre || 'Área general'}</span>
-            </div>
-          </div>
-        </div>
+    <>
+      {/* MAGIA RESPONSIVA DE LA TARJETA */}
+      <style>{`
+        .tarjeta-wrapper { padding: 20px; border-radius: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .tarjeta-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .fechas-container { display: flex; gap: 30px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid ${c.borderDivider}; }
+        .footer-container { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
+        .footer-buttons { display: flex; gap: 10px; }
         
-        {/* Píldora del Tipo de Permiso */}
-        <span style={{ 
-          fontSize: '11.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg, 
-          border: `1px solid ${estilo.border}`, padding: '6px 12px', borderRadius: '10px', textTransform: 'uppercase', letterSpacing: '0.02em'
-        }}>
-          {estilo.text}
-        </span>
-      </div>
+        /* CUANDO ES UN CELULAR (max 480px) */
+        @media (max-width: 480px) {
+          .tarjeta-wrapper { padding: 16px !important; border-radius: 16px !important; gap: 16px !important; }
+          .tarjeta-header { flex-direction: column !important; gap: 12px !important; }
+          .header-pill { align-self: flex-start !important; }
+          
+          .fechas-container { flex-direction: column !important; gap: 14px !important; }
+          
+          .footer-container { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+          .footer-buttons { width: 100% !important; justify-content: space-between !important; }
+          .footer-buttons button { flex: 1 !important; justify-content: center !important; padding: 12px 10px !important; }
+          .estado-firma { width: 100% !important; justify-content: center !important; }
+        }
+      `}</style>
 
-      {/* 2. ALERTAS (Solo si hay urgencia o reincidencia) */}
-      {(esUrgente || reincidencias > 0) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {esUrgente && (
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: c.dangerSoft, color: c.danger, border: `1px solid rgba(239, 68, 68, 0.3)`, padding: '12px 14px', borderRadius: '12px', fontSize: '12px' }}>
-              <ShieldAlert size={18} /> 
-              <span><strong style={{ fontWeight: '800' }}>Urgente:</strong> Solicitado el mismo día después de las 6:00 AM.</span>
-            </div>
-          )}
-          {reincidencias > 0 && (
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: c.warningSoft, color: c.warning, border: `1px solid rgba(245, 158, 11, 0.3)`, padding: '12px 14px', borderRadius: '12px', fontSize: '12px' }}>
-              <AlertTriangle size={18} /> 
-              <span><strong style={{ fontWeight: '800' }}>Reincidencia:</strong> {reincidencias} retardo(s) en los últimos 15 días.</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 3. BLOQUE CENTRAL DE INFORMACIÓN (Grid Elegante) */}
-      <div style={{ background: c.surface, border: `1px solid ${c.borderDivider}`, borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="tarjeta-wrapper" style={{
+        background: c.surfaceCard, border: `1px solid ${c.border}`,
+        boxShadow: modoOscuro ? '0 8px 30px rgba(0,0,0,0.4)' : '0 4px 15px rgba(0,0,0,0.04)'
+      }}>
         
-        {/* Fila 1: Fechas y Horas */}
-        <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', paddingBottom: '16px', borderBottom: `1px solid ${c.borderDivider}` }}>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Calendar size={18} color={c.textMuted} /></div>
+        {/* 1. CABECERA: PERFIL Y ETIQUETA TIPO */}
+        <div className="tarjeta-header">
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+            <img src={urlFoto} alt="" style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', border: `1px solid ${c.border}`, flexShrink: 0 }} />
             <div>
-              <div style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha Programada</div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: c.text, marginTop: '2px' }}>{solicitud.fecha_permiso} {solicitud.fecha_fin && `al ${solicitud.fecha_fin}`}</div>
+              <div style={{ fontSize: '16px', fontWeight: '800', color: c.text, letterSpacing: '-0.01em', lineHeight: '1.2' }}>
+                {u.nombre_completo || 'Colaborador'}
+              </div>
+              <div style={{ fontSize: '12px', color: c.textMuted, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '2px 6px', borderRadius: '4px' }}>
+                  {solicitud.folio}
+                </span>
+                <span>•</span>
+                <span style={{ fontWeight: '600' }}>#{u.numero_empleado}</span>
+                <span>•</span>
+                <span>{u.departamentos?.nombre || 'Área general'}</span>
+              </div>
             </div>
           </div>
           
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Clock size={18} color={c.textMuted} /></div>
-            <div>
-              <div style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tiempo Solicitado</div>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: c.text, marginTop: '2px' }}>{solicitud.total_horas ? `${solicitud.total_horas} hr(s)` : 'Jornada Completa'}</div>
-            </div>
-          </div>
+          {/* Píldora del Tipo de Permiso */}
+          <span className="header-pill" style={{ 
+            fontSize: '11.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg, 
+            border: `1px solid ${estilo.border}`, padding: '6px 12px', borderRadius: '10px', textTransform: 'uppercase', letterSpacing: '0.02em'
+          }}>
+            {estilo.text}
+          </span>
         </div>
 
-        {/* Fila 2: El Motivo Limpio */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <MessageSquare size={14} color={c.accent} />
-            <span style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              {etiqueta}
+        {/* 2. ALERTAS */}
+        {(esUrgente || reincidencias > 0) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {esUrgente && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: c.dangerSoft, color: c.danger, border: `1px solid rgba(239, 68, 68, 0.3)`, padding: '12px 14px', borderRadius: '12px', fontSize: '12px' }}>
+                <ShieldAlert size={18} style={{ flexShrink: 0 }} /> 
+                <span><strong style={{ fontWeight: '800' }}>Urgente:</strong> Solicitado el mismo día después de las 6:00 AM.</span>
+              </div>
+            )}
+            {reincidencias > 0 && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: c.warningSoft, color: c.warning, border: `1px solid rgba(245, 158, 11, 0.3)`, padding: '12px 14px', borderRadius: '12px', fontSize: '12px' }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0 }} /> 
+                <span><strong style={{ fontWeight: '800' }}>Reincidencia:</strong> {reincidencias} retardo(s) en los últimos 15 días.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. BLOQUE CENTRAL DE INFORMACIÓN */}
+        <div style={{ background: c.surface, border: `1px solid ${c.borderDivider}`, borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          {/* Fechas y Horas */}
+          <div className="fechas-container">
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Calendar size={18} color={c.textMuted} /></div>
+              <div>
+                <div style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha Programada</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: c.text, marginTop: '2px' }}>{solicitud.fecha_permiso} {solicitud.fecha_fin && `al ${solicitud.fecha_fin}`}</div>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Clock size={18} color={c.textMuted} /></div>
+              <div>
+                <div style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tiempo Solicitado</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: c.text, marginTop: '2px' }}>{solicitud.total_horas ? `${solicitud.total_horas} hr(s)` : 'Jornada Completa'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* El Motivo Limpio */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <MessageSquare size={14} color={c.accent} />
+              <span style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {etiqueta}
+              </span>
+            </div>
+            <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.5', fontWeight: '500', paddingLeft: '20px' }}>
+              {redaccion}
+            </div>
+          </div>
+
+          {/* Observaciones Extra */}
+          {observacionesLimpias && (
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: c.bg, padding: '12px 14px', borderRadius: '10px', border: `1px solid ${c.border}`, marginTop: '4px' }}>
+              <Info size={16} color={c.textSubtle} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ fontSize: '12.5px', color: c.textSubtle, lineHeight: '1.4', fontWeight: '500' }}>
+                {observacionesLimpias}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4. PIE DE TARJETA: ESTADO Y BOTONES */}
+        <div className="footer-container">
+          
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dictamen de Nómina</span>
+            <span style={{ fontSize: '14px', fontWeight: '900', color: solicitud.pago === 'Pendiente' ? '#f59e0b' : c.text, marginTop: '2px' }}>
+              {solicitud.pago || 'Pendiente de resolución'}
             </span>
           </div>
-          <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.5', fontWeight: '500', paddingLeft: '20px' }}>
-            {redaccion}
-          </div>
-        </div>
 
-        {/* Fila 3: Observaciones Extra (Si aplica) */}
-        {observacionesLimpias && (
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: c.bg, padding: '12px 14px', borderRadius: '10px', border: `1px solid ${c.border}`, marginTop: '4px' }}>
-            <Info size={16} color={c.textSubtle} style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ fontSize: '12.5px', color: c.textSubtle, lineHeight: '1.4', fontWeight: '500' }}>
-              {observacionesLimpias}
+          {esPendiente ? (
+            <div className="footer-buttons">
+              <button 
+                onClick={() => onRechazar(solicitud)} 
+                style={{ padding: '10px 16px', borderRadius: '10px', border: `1px solid ${c.border}`, background: 'transparent', color: c.danger, fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'background 0.2s' }}
+              >
+                <X size={16} /> Rechazar
+              </button>
+              <button 
+                onClick={() => onAprobar(solicitud)} 
+                style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: `0 4px 12px rgba(22, 163, 74, 0.3)` }}
+              >
+                <Check size={16} /> Evaluar
+              </button>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* 4. PIE DE TARJETA: ESTADO Y BOTONES */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '4px' }}>
-        
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dictamen de Nómina</span>
-          <span style={{ fontSize: '14px', fontWeight: '900', color: solicitud.pago === 'Pendiente' ? '#f59e0b' : c.text, marginTop: '2px' }}>
-            {solicitud.pago || 'Pendiente de resolución'}
-          </span>
+          ) : (
+            <span className="estado-firma" style={{ fontSize: '13px', fontWeight: '800', color: c.accent, display: 'flex', alignItems: 'center', gap: '6px', background: c.accentSoft, padding: '8px 14px', borderRadius: '10px' }}>
+              <Check size={16} /> Firma registrada
+            </span>
+          )}
         </div>
 
-        {esPendiente ? (
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button 
-              onClick={() => onRechazar(solicitud)} 
-              style={{ padding: '10px 16px', borderRadius: '10px', border: `1px solid ${c.border}`, background: 'transparent', color: c.danger, fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'background 0.2s' }}
-            >
-              <X size={16} /> Rechazar
-            </button>
-            <button 
-              onClick={() => onAprobar(solicitud)} 
-              style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: `0 4px 12px rgba(22, 163, 74, 0.3)` }}
-            >
-              <Check size={16} /> Evaluar
-            </button>
-          </div>
-        ) : (
-          <span style={{ fontSize: '13px', fontWeight: '800', color: c.accent, display: 'flex', alignItems: 'center', gap: '6px', background: c.accentSoft, padding: '8px 14px', borderRadius: '10px' }}>
-            <Check size={16} /> Firma registrada
-          </span>
-        )}
       </div>
-
-    </div>
+    </>
   );
 }

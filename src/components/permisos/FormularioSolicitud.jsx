@@ -242,7 +242,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                   subscription: subLimpia,
                   titulo: tituloNotif,
                   mensaje: `👤 ${nombreSolicitante}\n📋 ${tipoPermiso.toUpperCase()}\n💬 "${motivo.trim()}"\n🔖 Folio: ${folioFinal}`,
-                  fotoUrl: fotoSolicitante
+                  fotoUrl: fotoSolicitante,
+                  urlDestino: '/aprobaciones' // <-- ¡ESTA ES LA LÍNEA QUE TE FALTABA!
                 })
               });
               return res.json();
