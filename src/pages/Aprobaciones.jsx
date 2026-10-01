@@ -40,21 +40,20 @@ export default function Aprobaciones() {
         return;
       }
 
-      // 1. LIMPIEZA OBLIGATORIA: Borramos cualquier rastro previo de este usuario en Supabase
-      // Esto garantiza que NUNCA se acumulen filas duplicadas, sin importar si borraste caché.
-      await supabase
-        .from('suscripciones_push')
-        .delete()
-        .eq('usuario_id', usuario.id);
+     // 1. OMITIMOS EL DELETE. Ya no borramos el historial del usuario.
 
-      // 2. INSERCIÓN NUEVA: Guardamos la suscripción fresca y actual del celular
+      // 2. USAMOS UPSERT: Si el dispositivo es nuevo, lo guarda. 
+      // Si el dispositivo ya existía (mismo endpoint), solo lo actualiza sin duplicarlo.
       const { error } = await supabase
         .from('suscripciones_push')
-        .insert({ 
-          usuario_id: usuario.id, 
-          subscription: sub, 
-          endpoint: sub.endpoint 
-        });
+        .upsert(
+          { 
+            usuario_id: usuario.id, 
+            subscription: sub, 
+            endpoint: sub.endpoint 
+          }, 
+          { onConflict: 'endpoint' } // <- Este es el truco gracias a tu tabla
+        );
 
       if (error) throw error;
 
@@ -66,7 +65,7 @@ export default function Aprobaciones() {
     }
   };
 
-  // Notificar al empleado por Push a su celular
+// Notificar al empleado por Push a su celular
   const notificarEmpleado = async (empleadoId, titulo, mensaje) => {
     try {
       const { data: subs } = await supabase
@@ -83,7 +82,8 @@ export default function Aprobaciones() {
               body: JSON.stringify({
                 subscription: item.subscription,
                 titulo,
-                mensaje
+                mensaje,
+                urlDestino: '/mis-permisos' // <-- LA PIEZA CLAVE
               })
             });
           } catch (_) {}

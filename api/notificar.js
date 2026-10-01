@@ -8,7 +8,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { subscription, titulo, mensaje, fotoUrl } = req.body || {};
+    // 1. ACEPTAMOS LA VARIABLE urlDestino
+    const { subscription, titulo, mensaje, fotoUrl, urlDestino } = req.body || {};
 
     if (!subscription) {
       return res.status(200).json({ success: false, error: 'La suscripción venía vacía' });
@@ -44,15 +45,14 @@ export default async function handler(req, res) {
     );
 
     const domain = 'https://sistema-permisos-blond.vercel.app';
-
-    // Si hay foto del usuario la usa como icono principal; si no, pone el logotipo verde
     const iconoFinal = (fotoUrl && fotoUrl.startsWith('http')) ? fotoUrl : `${domain}/LogoVerde-removebg-preview.png`;
 
     const payload = JSON.stringify({
       title: titulo || 'Mobiliarium Permisos',
       body: mensaje || 'Nueva notificación',
-      icon: iconoFinal, // Foto del usuario o logotipo de respaldo
-      data: { url: '/aprobaciones' }
+      icon: iconoFinal,
+      // 2. INYECTAMOS LA URL DINÁMICA (Si no viene, por defecto lo manda al Home)
+      data: { url: urlDestino || '/' } 
     });
 
     await webpush.sendNotification(subObj, payload);
