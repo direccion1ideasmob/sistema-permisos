@@ -140,11 +140,15 @@ export default function Layout() {
   const cerrarMenuMovil = () => { if (isMobile) setMenuAbierto(false); };
 
   const rol = usuarioLogueado?.rol || 'empleado';
-  const puedeAprobar = ['jefe_area', 'gerente', 'gerente_rh'].includes(rol);
-  const esNominas = rol === 'rh_nominas';
+  
+  // Aquí están todos los roles nuevos que tienen permiso para ver "Aprobaciones"
+  const puedeAprobar = ['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin'].includes(rol);
+  
+  // Roles que pueden ver el Kardex y Directorio
+  const esNominas = ['rh_nominas', 'gerente_rh', 'superadmin'].includes(rol);
+  
   const esCaseta = rol === 'caseta';
   const miFoto = usuarioLogueado?.foto_url || `https://ui-avatars.com/api/?name=${usuarioLogueado?.nombre_completo}&background=16a34a&color=fff&bold=true&size=200`;
-
   // === PALETA MINIMALISTA ===
   const tema = {
     bgApp: modoOscuro ? '#000000' : '#f8fafc',
