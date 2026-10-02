@@ -285,13 +285,13 @@ if (listSedes) setSedes(listSedes);
                 onClick={() => setVista('arbol')}
                 className={`switch-btn ${vista === 'arbol' ? 'active' : ''}`}
               >
-                <LayoutGrid size={15} /> <span className="hide-mobile">Estructura</span>
+                <LayoutGrid size={15} /> <span className="hide-mobile">Empresa</span>
               </button>
               <button 
                 onClick={() => setVista('excel')}
                 className={`switch-btn ${vista === 'excel' ? 'active' : ''}`}
               >
-                <TableProperties size={15} /> <span className="hide-mobile">DataGrid</span>
+                <TableProperties size={15} /> <span className="hide-mobile">Colaboradores</span>
               </button>
             </div>
 

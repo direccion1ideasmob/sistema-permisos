@@ -19,25 +19,29 @@ export default function AprobarDirecto() {
   const [modoRechazo, setModoRechazo] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState('');
 
-  // Notificar al empleado por Push
-  const notificarEmpleado = async (empleadoId, titulo, mensaje) => {
+  // Notificar por Push (Reutilizable)
+  const notificarUsuarioPush = async (usuarioId, titulo, mensaje, urlDestino) => {
     try {
       const { data: subs } = await supabase
         .from('suscripciones_push')
         .select('subscription')
-        .eq('usuario_id', empleadoId);
+        .eq('usuario_id', usuarioId);
 
       if (subs && subs.length > 0) {
         subs.forEach(async (item) => {
           try {
+            let subLimpia = item.subscription;
+            if (typeof subLimpia === 'string') {
+              try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+            }
             await fetch('/api/notificar', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                subscription: item.subscription,
+                subscription: subLimpia,
                 titulo,
                 mensaje,
-                urlDestino: '/mis-permisos' // <-- ESTO MANDA AL EMPLEADO A VER SU PASE
+                urlDestino
               })
             });
           } catch (_) {}
@@ -59,7 +63,7 @@ export default function AprobarDirecto() {
 
     setCargando(true);
     try {
-      // CONSULTA BLINDADA: No hace join directo entre permisos y departamentos para evitar PGRST200
+      // CONSULTA BLINDADA
       const { data, error } = await supabase
         .from('permisos')
         .select(`
@@ -85,7 +89,7 @@ export default function AprobarDirecto() {
       if (data.firma_1_estado === 'autorizado') {
         setMensajeResultado({
           tipo: 'info',
-          texto: `Esta solicitud (${data.folio}) ya fue autorizada previamente con dictamen: "${data.pago}".`
+          texto: `Esta solicitud (${data.folio}) ya fue autorizada por Jefatura.`
         });
       } else if (data.estado_general === 'rechazado' || data.firma_1_estado === 'rechazado') {
         setMensajeResultado({
@@ -102,7 +106,7 @@ export default function AprobarDirecto() {
     }
   };
 
-  // AUTORIZACIÓN CON DICTAMEN DE PAGO EN 1 TOQUE
+  // AUTORIZACIÓN CON DICTAMEN DE PAGO EN 1 TOQUE (EFECTO DOMINÓ)
   const resolverAprobacion = async (dictamenPago) => {
     setProcesando(true);
     try {
@@ -116,16 +120,28 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      // Disparar push al empleado
-      await notificarEmpleado(
+      // 1. Disparar push al empleado informando que avanzó
+      await notificarUsuarioPush(
         permiso.usuario_id,
-        '✅ PERMISO AUTORIZADO',
-        `Tu solicitud (${permiso.folio}) fue autorizada con dictamen: "${dictamenPago}".`
+        '⏳ PERMISO EN PROCESO',
+        `Tu solicitud (${permiso.folio}) fue autorizada por tu Jefatura y pasó a Gerencia.`,
+        '/mis-permisos'
       );
+
+      // 2. EFECTO DOMINÓ: Disparar push al Gerente (Firma 2)
+      if (permiso.firma_2_id) {
+        const nombreSolicitante = permiso.usuarios?.nombre_completo || 'Un colaborador';
+        await notificarUsuarioPush(
+          permiso.firma_2_id,
+          '⚠️ PASE LIBERADO - TE TOCA FIRMAR',
+          `👤 ${nombreSolicitante}\n📋 ${permiso.tipo_permiso.toUpperCase()}\n🔖 Jefatura acaba de aprobar este pase. Es tu turno de autorizar.`,
+          '/aprobaciones'
+        );
+      }
 
       setMensajeResultado({
         tipo: 'exito',
-        texto: `¡Pase ${permiso.folio} autorizado con éxito! Dictamen: ${dictamenPago}.`
+        texto: `¡Pase ${permiso.folio} autorizado con éxito! Notificación enviada a Gerencia.`
       });
     } catch (err) {
       alert("Error al autorizar: " + err.message);
@@ -152,11 +168,12 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      // Disparar push al empleado
-      await notificarEmpleado(
+      // Disparar push al empleado informando el rechazo total
+      await notificarUsuarioPush(
         permiso.usuario_id,
         '❌ PERMISO RECHAZADO',
-        `Tu solicitud (${permiso.folio}) fue rechazada por Jefatura. Motivo: ${motivoRechazo}`
+        `Tu solicitud (${permiso.folio}) fue rechazada por Jefatura. Motivo: ${motivoRechazo}`,
+        '/mis-permisos'
       );
 
       setMensajeResultado({

@@ -131,7 +131,7 @@ export default function Aprobaciones() {
     }
   }, [usuario?.id, cargarSolicitudes]);
 
-  // AUTORIZAR PERMISO CON DICTAMEN DE PAGO
+  // AUTORIZAR PERMISO CON DICTAMEN DE PAGO (EFECTO DOMINÓ)
   const ejecutarAprobacion = async (solicitud, dictamenPago, comentarios) => {
     setProcesando(true);
     try {
@@ -140,18 +140,37 @@ export default function Aprobaciones() {
       const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
       const updates = { pago: dictamenPago };
+      let siguientesEnFirmar = []; // Array de IDs a los que notificar
 
       if (esJefeDepto) {
         updates.firma_1_estado = 'autorizado';
         if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
+        
+        // EFECTO DOMINÓ 1: Jefe aprueba -> Notifica al Gerente
+        if (solicitud.firma_2_id) siguientesEnFirmar.push(solicitud.firma_2_id);
       }
       if (esGerente) {
         updates.firma_2_estado = 'autorizado';
+        
+        // EFECTO DOMINÓ 2: Gerente aprueba -> Notifica a Recursos Humanos
+        if (solicitud.firma_3_id) {
+            siguientesEnFirmar.push(solicitud.firma_3_id);
+        } else {
+            // Si por alguna razón no tiene firma_3_id asignado, buscamos a los de RH genéricos
+            const { data: rhUsers } = await supabase
+                .from('usuarios')
+                .select('id')
+                .in('rol', ['gerente_rh', 'rh_nominas']);
+            if (rhUsers) {
+                siguientesEnFirmar = [...siguientesEnFirmar, ...rhUsers.map(u => u.id)];
+            }
+        }
       }
       if (esRH) {
         updates.firma_3_estado = 'autorizado';
         updates.estado_general = 'autorizado';
         if (!solicitud.firma_3_id) updates.firma_3_id = usuario.id;
+        // RH es el último eslabón, no notifica a nadie más hacia arriba.
       }
 
       if (comentarios && comentarios.trim()) {
@@ -165,12 +184,52 @@ export default function Aprobaciones() {
 
       if (error) throw error;
 
-      // Disparar push al empleado
+      // 1. Notificar al Empleado (Siempre)
+      let mensajeEmpleado = `Tu solicitud (${solicitud.folio}) avanzó un nivel.`;
+      if (esRH) mensajeEmpleado = `Tu solicitud (${solicitud.folio}) fue AUTORIZADA FINALMENTE con dictamen: "${dictamenPago}".`;
+
       await notificarEmpleado(
         solicitud.usuario_id,
-        '✅ PERMISO AUTORIZADO',
-        `Tu solicitud (${solicitud.folio}) fue autorizada con dictamen: "${dictamenPago}".`
+        esRH ? '✅ PERMISO AUTORIZADO' : '⏳ PERMISO EN PROCESO',
+        mensajeEmpleado
       );
+
+      // 2. Disparar notificaciones en cadena al siguiente jefe (Efecto Dominó)
+      if (siguientesEnFirmar.length > 0) {
+        try {
+            const { data: subs } = await supabase
+                .from('suscripciones_push')
+                .select('subscription')
+                .in('usuario_id', siguientesEnFirmar);
+
+            if (subs && subs.length > 0) {
+                const nombreSolicitante = solicitud.usuarios?.nombre_completo || 'Un colaborador';
+                const fotoSolicitante = solicitud.usuarios?.foto_url || null;
+
+                const envios = subs.map(async (item) => {
+                    let subLimpia = item.subscription;
+                    if (typeof subLimpia === 'string') {
+                        try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+                    }
+                    const res = await fetch('/api/notificar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subscription: subLimpia,
+                            titulo: '⚠️ PASE LIBERADO - TE TOCA FIRMAR',
+                            mensaje: `👤 ${nombreSolicitante}\n📋 ${solicitud.tipo_permiso.toUpperCase()}\n🔖 El eslabón anterior ya aprobó. Es tu turno.`,
+                            fotoUrl: fotoSolicitante,
+                            urlDestino: '/aprobaciones'
+                        })
+                    });
+                    return res.json();
+                });
+                await Promise.allSettled(envios);
+            }
+        } catch (errPush) {
+            console.error("Error lanzando notificaciones en cadena:", errPush);
+        }
+      }
 
       setSolicitudAprobar(null);
       await cargarSolicitudes();
@@ -180,7 +239,7 @@ export default function Aprobaciones() {
       setProcesando(false);
     }
   };
-
+  
   // RECHAZAR PERMISO CON MOTIVO OBLIGATORIO
   const ejecutarRechazo = async (solicitud, motivoRechazo) => {
     setProcesando(true);

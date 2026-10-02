@@ -79,7 +79,7 @@ export default function DossierLateral({
     }
   };
 
-  // GUARDADO COMPLETO Y BLINDADO
+  // GUARDADO COMPLETO Y BLINDADO (AHORA CON ANTI-DUPLICADOS)
   const handleGuardarExpediente = async () => {
     if (!datosEdit.numero_empleado?.trim() || !datosEdit.nombre_completo?.trim() || !datosEdit.correo?.trim() || !datosEdit.area?.trim()) {
       return alert("Faltan campos obligatorios: Número de empleado, Nombre, Correo y Área no pueden estar vacíos.");
@@ -91,18 +91,30 @@ export default function DossierLateral({
     let deptoFinalId = datosEdit.departamento_id && datosEdit.departamento_id !== "" ? datosEdit.departamento_id : null;
 
     try {
+      // BLINDAJE ANTI-DUPLICADOS: SEDE
       if (creandoNuevo.sede && textosNuevos.sede.trim()) {
-        const nomSede = estandarizar(textosNuevos.sede);
-        const { data: nuevaSede, error: errSede } = await supabase.from('sedes').insert([{ nombre: nomSede }]).select().single();
-        if (errSede) throw new Error("Error creando nueva sede: " + errSede.message);
-        sedeFinalId = nuevaSede.id;
+        const nomSede = estandarizar(textosNuevos.sede.toUpperCase());
+        const existente = sedes.find(s => s.nombre === nomSede);
+        if (existente) {
+          sedeFinalId = existente.id; // Reutiliza la existente
+        } else {
+          const { data: nuevaSede, error: errSede } = await supabase.from('sedes').insert([{ nombre: nomSede }]).select().single();
+          if (errSede) throw new Error("Error creando nueva sede: " + errSede.message);
+          sedeFinalId = nuevaSede.id;
+        }
       }
 
+      // BLINDAJE ANTI-DUPLICADOS: DEPARTAMENTO
       if (creandoNuevo.depto && textosNuevos.depto.trim()) {
-        const nomDepto = estandarizar(textosNuevos.depto);
-        const { data: nuevoDepto, error: errDepto } = await supabase.from('departamentos').insert([{ nombre: nomDepto, clasificacion: datosEdit.tipo_personal || 'produccion' }]).select().single();
-        if (errDepto) throw new Error("Error creando nuevo departamento: " + errDepto.message);
-        deptoFinalId = nuevoDepto.id;
+        const nomDepto = estandarizar(textosNuevos.depto.toUpperCase());
+        const existente = departamentos.find(d => d.nombre === nomDepto);
+        if (existente) {
+          deptoFinalId = existente.id; // Reutiliza el existente
+        } else {
+          const { data: nuevoDepto, error: errDepto } = await supabase.from('departamentos').insert([{ nombre: nomDepto, clasificacion: datosEdit.tipo_personal || 'produccion' }]).select().single();
+          if (errDepto) throw new Error("Error creando nuevo departamento: " + errDepto.message);
+          deptoFinalId = nuevoDepto.id;
+        }
       }
 
       const { error: errUpdate } = await supabase
@@ -340,8 +352,16 @@ export default function DossierLateral({
                 <div><label className="touch-field-label">PIN</label><input className="touch-field-input mono-id" placeholder="****" value={datosEdit.pin || ''} onChange={e => setDatosEdit({ ...datosEdit, pin: e.target.value })} /></div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="touch-field-label">Rol en ERP</label>
+                  {/* AQUÍ EL NUEVO CATÁLOGO OFICIAL DE 7 ROLES */}
                   <select className="touch-field-input" value={datosEdit.rol || 'empleado'} onChange={e => setDatosEdit({ ...datosEdit, rol: e.target.value })}>
-                    <option value="empleado">EMPLEADO</option><option value="encargado">ENCARGADO</option><option value="jefe_area">JEFE DE ÁREA</option><option value="gerente">GERENTE</option><option value="rh_nominas">RH / NÓMINAS</option><option value="caseta">CASETA</option>
+                    <option value="empleado">EMPLEADO (OPERATIVO)</option>
+                    <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
+                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (PLANTA)</option>
+                    <option value="gerente_admin">GERENTE ADMINISTRATIVO (OFICINA)</option>
+                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                    <option value="rh_nominas">RH / NÓMINAS (OPERATIVO)</option>
+                    <option value="caseta">CASETA / VIGILANCIA</option>
+                    <option value="superadmin">SUPER ADMINISTRADOR</option>
                   </select>
                 </div>
               </div>
@@ -369,7 +389,7 @@ export default function DossierLateral({
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Teléfono Fijo</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.telefono || 'No registrado'}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted, marginTop: '2px', flexShrink: 0 }}>Correo</span><strong style={{ color: c.text, textAlign: 'right', wordBreak: 'break-word', paddingLeft: '20px' }}>{colaborador.correo || 'No registrado'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Usuario ERP</span><strong style={{ color: '#6366f1' }}>{colaborador.usuario_login || 'Sin usuario'}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Permisos</span><strong style={{ color: c.text, textTransform: 'uppercase' }}>{colaborador.rol?.replace('_', ' ')}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Permisos</span><strong style={{ color: c.text, textTransform: 'uppercase' }}>{colaborador.rol?.replace(/_/g, ' ')}</strong></div>
               </div>
             )}
           </div>

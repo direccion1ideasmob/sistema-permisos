@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import imageCompression from 'browser-image-compression';
-import { X, Camera, Image, Eye, UserPlus, Info, MapPin, Shield, Briefcase, PenTool } from 'lucide-react';
+import { X, Camera, Image, Eye, UserPlus, Info, MapPin, Shield, Briefcase, PenTool, CheckCircle } from 'lucide-react';
 import { estandarizar } from '../utils/directorioHelpers';
 
 export default function ModalColaborador({ 
@@ -15,18 +15,16 @@ export default function ModalColaborador({
 
   const [fotoArchivo, setFotoArchivo] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
-  
-  // NUEVOS ESTADOS PARA LA FIRMA
   const [firmaArchivo, setFirmaArchivo] = useState(null);
   const [firmaPreview, setFirmaPreview] = useState(null);
+  
   const firmaInputRef = useRef(null);
+  const camaraInputRef = useRef(null);
+  const galeriaInputRef = useRef(null);
 
   const [guardando, setGuardando] = useState(false);
   const [mostrarSelectorFoto, setMostrarSelectorFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState(false);
-
-  const camaraInputRef = useRef(null);
-  const galeriaInputRef = useRef(null);
 
   const [creandoNuevo, setCreandoNuevo] = useState({ sede: false, depto: false, area: false, puesto: false });
   const [textosNuevos, setTextosNuevos] = useState({ sede: '', depto: '', area: '', puesto: '' });
@@ -53,7 +51,7 @@ export default function ModalColaborador({
     setFormData(prev => ({
       ...prev, 
       nombre_completo: nombre,
-      usuario_login: usuarioBase, // Se autogenera, pero ahora el input permite edición manual
+      usuario_login: usuarioBase, 
       correo: prev.correo.includes('@') && !prev.correo.includes('mobiliarium') ? prev.correo : `${usuarioBase}@mobiliarium.com`
     }));
   };
@@ -71,7 +69,6 @@ export default function ModalColaborador({
     setMostrarSelectorFoto(false);
   };
 
-  // NUEVA FUNCIÓN PARA SELECCIONAR FIRMA
   const handleSeleccionarFirma = async (e) => {
     const archivo = e.target.files[0];
     if (archivo) {
@@ -92,32 +89,56 @@ export default function ModalColaborador({
     let areaFinal = formData.area;
     let puestoFinal = formData.puesto;
 
-    if (creandoNuevo.sede && textosNuevos.sede.trim()) {
-      const nomLimpio = estandarizar(textosNuevos.sede);
-      const { data, error } = await supabase.from('sedes').insert([{ nombre: nomLimpio }]).select().single();
-      if (error) return alert("Error creando sede: " + error.message);
-      sedeFinalId = data.id;
-    }
-
-    if (creandoNuevo.depto && textosNuevos.depto.trim()) {
-      const nomLimpio = estandarizar(textosNuevos.depto);
-      const { data, error } = await supabase.from('departamentos').insert([{ 
-        nombre: nomLimpio, clasificacion: formData.tipo_personal
-      }]).select().single();
-      if (error) return alert("Error creando depto: " + error.message);
-      deptoFinalId = data.id;
-    }
-
-    if (creandoNuevo.area && textosNuevos.area.trim()) areaFinal = estandarizar(textosNuevos.area);
-    if (creandoNuevo.puesto && textosNuevos.puesto.trim()) puestoFinal = estandarizar(textosNuevos.puesto);
-
-    if (!formData.nombre_completo || !formData.numero_empleado || !formData.correo || !areaFinal || !deptoFinalId || !formData.usuario_login || !sedeFinalId) {
-      return alert("Faltan campos obligatorios. Revisa Sede, Departamento y Área.");
-    }
-    if (formData.pin.length < 6) return alert("El PIN requiere mínimo 6 dígitos.");
-
-    setGuardando(true);
     try {
+      setGuardando(true);
+
+      // VALIDACIÓN Y CREACIÓN DE SEDE (Con filtro Anti-Duplicados)
+      if (creandoNuevo.sede && textosNuevos.sede.trim()) {
+        const nomLimpio = estandarizar(textosNuevos.sede.toUpperCase());
+        const existente = sedes.find(s => s.nombre === nomLimpio);
+        if (existente) {
+          sedeFinalId = existente.id; // Reutiliza si ya existe
+        } else {
+          const { data, error } = await supabase.from('sedes').insert([{ nombre: nomLimpio }]).select().single();
+          if (error) throw new Error("Error creando sede: " + error.message);
+          sedeFinalId = data.id;
+        }
+      }
+
+      // VALIDACIÓN Y CREACIÓN DE DEPTO (Con filtro Anti-Duplicados)
+      if (creandoNuevo.depto && textosNuevos.depto.trim()) {
+        const nomLimpio = estandarizar(textosNuevos.depto.toUpperCase());
+        const existente = departamentos.find(d => d.nombre === nomLimpio);
+        if (existente) {
+          deptoFinalId = existente.id;
+        } else {
+          const { data, error } = await supabase.from('departamentos').insert([{ 
+            nombre: nomLimpio, clasificacion: formData.tipo_personal
+          }]).select().single();
+          if (error) throw new Error("Error creando departamento: " + error.message);
+          deptoFinalId = data.id;
+        }
+      }
+
+      // VALIDACIÓN DE ÁREA Y PUESTO
+      if (creandoNuevo.area && textosNuevos.area.trim()) {
+        const nomLimpio = estandarizar(textosNuevos.area.toUpperCase());
+        const existente = areas.find(a => a === nomLimpio);
+        areaFinal = existente || nomLimpio;
+      }
+      
+      if (creandoNuevo.puesto && textosNuevos.puesto.trim()) {
+        const nomLimpio = estandarizar(textosNuevos.puesto.toUpperCase());
+        const existente = puestos.find(p => p === nomLimpio);
+        puestoFinal = existente || nomLimpio;
+      }
+
+      if (!formData.nombre_completo || !formData.numero_empleado || !formData.correo || !areaFinal || !deptoFinalId || !formData.usuario_login || !sedeFinalId) {
+        throw new Error("Faltan campos obligatorios. Revisa Sede, Departamento y Área.");
+      }
+      if (formData.pin.length < 6) throw new Error("El PIN requiere mínimo 6 dígitos.");
+
+      // AUTENTICACIÓN
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.correo.toLowerCase(), 
         password: formData.pin, 
@@ -125,7 +146,7 @@ export default function ModalColaborador({
       });
       if (authError) throw authError;
 
-      // SUBIDA DE FOTO Y FIRMA
+      // SUBIDA DE IMÁGENES
       let fotoUrl = null;
       let firmaUrl = null;
 
@@ -141,11 +162,12 @@ export default function ModalColaborador({
         firmaUrl = `${supabase.storage.from('fotos_usuarios').getPublicUrl(fileFirmaName).data.publicUrl}?t=${Date.now()}`;
       }
 
+      // GUARDADO FINAL DE USUARIO
       const nuevoUsuarioId = authData.user.id;
       const { error: dbError } = await supabase.from('usuarios').upsert([{
         id: nuevoUsuarioId, 
         numero_empleado: formData.numero_empleado.toUpperCase(), 
-        nombre_completo: formData.nombre_completo,
+        nombre_completo: formData.nombre_completo.toUpperCase(),
         fecha_ingreso: formData.fecha_ingreso || null,
         celular: formData.celular || null,
         telefono: formData.telefono || null,
@@ -153,22 +175,23 @@ export default function ModalColaborador({
         tipo_personal: formData.tipo_personal,
         sede_id: sedeFinalId,
         departamento_id: deptoFinalId,
-        area: areaFinal,
-        puesto: puestoFinal || null,
+        area: areaFinal.toUpperCase(),
+        puesto: puestoFinal ? puestoFinal.toUpperCase() : null,
         rol: formData.rol,
         usuario_login: formData.usuario_login.toLowerCase(),
         pin: formData.pin,
         foto_url: fotoUrl, 
-        firma_url: firmaUrl, // SE GUARDA LA FIRMA AQUÍ
+        firma_url: firmaUrl,
         activo: true
       }]);
 
       if (dbError) throw dbError;
 
+      // ACTUALIZACIÓN DE JEFATURAS EN DEPTOS
       const actualizacionDepto = {};
       if (formData.rol === 'jefe_area') actualizacionDepto.jefe_id = nuevoUsuarioId;
-      else if (formData.rol === 'encargado') actualizacionDepto.encargado_id = nuevoUsuarioId;
-      else if (formData.rol === 'gerente') actualizacionDepto.gerente_id = nuevoUsuarioId;
+      else if (['gerente_produccion', 'gerente_admin'].includes(formData.rol)) actualizacionDepto.gerente_id = nuevoUsuarioId;
+      else if (['gerente_rh', 'rh_nominas'].includes(formData.rol)) actualizacionDepto.rh_id = nuevoUsuarioId;
 
       if (Object.keys(actualizacionDepto).length > 0 && deptoFinalId) {
         await supabase.from('departamentos').update(actualizacionDepto).eq('id', deptoFinalId);
@@ -177,10 +200,45 @@ export default function ModalColaborador({
       alert(`✅ Colaborador registrado con éxito.\nUsuario: ${formData.usuario_login}`);
       onSuccess();
     } catch (err) {
-      alert("Error al registrar: " + err.message);
+      alert("Error: " + err.message);
     } finally {
       setGuardando(false);
     }
+  };
+
+  // BUSCADOR DE SUGERENCIAS EN TIEMPO REAL
+  const buscarSugerencias = (texto, lista, tipo) => {
+    if (!texto.trim() || texto.length < 2) return null;
+    const busqueda = texto.toUpperCase();
+    
+    let coincidencias = [];
+    if (tipo === 'sede' || tipo === 'depto') {
+      coincidencias = lista.filter(item => item.nombre.toUpperCase().includes(busqueda));
+    } else {
+      coincidencias = lista.filter(item => item.toUpperCase().includes(busqueda));
+    }
+
+    if (coincidencias.length === 0) return null;
+
+    return (
+      <div style={{ marginTop: '6px', background: c.inputBg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={{ fontSize: '10px', color: c.label, paddingLeft: '6px', fontWeight: 'bold' }}>Sugerencias (Clic para seleccionar):</span>
+        {coincidencias.slice(0, 3).map((item, i) => (
+          <div 
+            key={i} 
+            onClick={() => {
+              if (tipo === 'sede') { setFormData({...formData, sede_id: item.id}); setCreandoNuevo({...creandoNuevo, sede: false}); }
+              else if (tipo === 'depto') { setFormData({...formData, departamento_id: item.id}); setCreandoNuevo({...creandoNuevo, depto: false}); }
+              else if (tipo === 'area') { setFormData({...formData, area: item}); setCreandoNuevo({...creandoNuevo, area: false}); }
+              else if (tipo === 'puesto') { setFormData({...formData, puesto: item}); setCreandoNuevo({...creandoNuevo, puesto: false}); }
+            }}
+            style={{ fontSize: '12px', padding: '6px 10px', background: c.bg, borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: c.text, fontWeight: '600' }}
+          >
+            <CheckCircle size={14} color={c.accent} /> {tipo === 'sede' || tipo === 'depto' ? item.nombre : item}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -231,15 +289,17 @@ export default function ModalColaborador({
         .clean-input {
           width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid ${c.inputBorder};
           background: ${c.inputBg}; color: ${c.text}; font-size: 13.5px; outline: none; transition: all 0.2s; box-sizing: border-box;
+          text-transform: uppercase; /* FORZADO VISUAL A MAYÚSCULAS */
         }
+        .clean-input.no-upper { text-transform: none; }
         .clean-input:focus { border-color: ${c.accent}; box-shadow: 0 0 0 3px ${c.accentGlow}; }
-        .clean-input::placeholder { color: ${modoOscuro ? '#52525b' : '#94a3b8'}; }
+        .clean-input::placeholder { color: ${modoOscuro ? '#52525b' : '#94a3b8'}; text-transform: none; }
         .clean-input option { background: ${c.bg}; color: ${c.text}; }
 
         .inline-create-box { display: flex; gap: 8px; align-items: center; }
         .btn-cancel-inline {
           padding: 12px; border-radius: 10px; background: transparent; color: ${c.label}; border: 1px solid ${c.border};
-          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .btn-cancel-inline:hover { background: ${c.border}; color: ${c.text}; }
 
@@ -267,8 +327,6 @@ export default function ModalColaborador({
           transition: border-color 0.2s;
         }
         .firma-box:hover { border-color: ${c.accent}; }
-
-
       `}</style>
 
       <input ref={camaraInputRef} type="file" accept="image/*" capture="environment" onChange={handleSeleccionarFoto} style={{ display: 'none' }} />
@@ -290,19 +348,18 @@ export default function ModalColaborador({
 
           <div className="modal-body">
             
-           {/* GALERÍA DE ARCHIVOS: FOTO Y FIRMA (IZQUIERDA Y DERECHA) */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               
-              {/* FOTO DE PERFIL (IZQUIERDA) */}
               <div className="avatar-squircle" onClick={() => setMostrarSelectorFoto(true)} title="Subir Foto de Perfil">
                 <img 
                   src={fotoPreview || `https://ui-avatars.com/api/?name=${formData.nombre_completo || 'N'}&background=10b981&color=fff`} 
                   alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                 />
-                <div className="avatar-overlay"><Camera size={24} color="#fff" /></div>
+                <div className="avatar-overlay" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', opacity: fotoPreview ? 0 : 1, transition: 'opacity 0.2s' }}>
+                  <Camera size={24} color="#fff" />
+                </div>
               </div>
 
-              {/* FIRMA DIGITAL (DERECHA) */}
               <div className="firma-box" onClick={() => firmaInputRef.current?.click()} title="Subir Firma Digital">
                 {firmaPreview ? (
                   <img src={firmaPreview} alt="Firma" style={{ width: '90%', height: '90%', objectFit: 'contain' }} />
@@ -315,7 +372,6 @@ export default function ModalColaborador({
                   </div>
                 )}
               </div>
-
             </div>
 
             {/* SECCIÓN 1: DATOS PERSONALES */}
@@ -327,11 +383,11 @@ export default function ModalColaborador({
               <div className="form-grid cols-2">
                 <div className="input-group">
                   <label className="clean-label">Núm. Empleado *</label>
-                  <input type="text" required className="clean-input" placeholder="Ej. 1001" style={{ textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '1px' }} value={formData.numero_empleado} onChange={e => setFormData({...formData, numero_empleado: e.target.value})} />
+                  <input type="text" required className="clean-input" placeholder="EJ. 1001" style={{ fontFamily: 'monospace', letterSpacing: '1px' }} value={formData.numero_empleado} onChange={e => setFormData({...formData, numero_empleado: e.target.value.toUpperCase()})} />
                 </div>
                 <div className="input-group">
                   <label className="clean-label">Nombre Completo *</label>
-                  <input type="text" required className="clean-input" placeholder="Nombre y apellidos" style={{ textTransform: 'uppercase' }} value={formData.nombre_completo} onChange={handleNombreChange} />
+                  <input type="text" required className="clean-input" placeholder="Nombre y apellidos" value={formData.nombre_completo} onChange={handleNombreChange} />
                 </div>
               </div>
               <div className="form-grid cols-3" style={{ marginTop: '20px' }}>
@@ -341,7 +397,7 @@ export default function ModalColaborador({
                 </div>
                 <div className="input-group">
                   <label className="clean-label">Celular</label>
-                  <input type="tel" className="clean-input" placeholder="10 dígitos" value={formData.celular} onChange={e => setFormData({...formData, celular: e.target.value})} />
+                  <input type="tel" className="clean-input" placeholder="10 DÍGITOS" value={formData.celular} onChange={e => setFormData({...formData, celular: e.target.value})} />
                 </div>
                 <div className="input-group">
                   <label className="clean-label">Teléfono Fijo</label>
@@ -367,16 +423,19 @@ export default function ModalColaborador({
                       <option value="NEW" style={{ color: c.accent, fontWeight: '700' }}>+ Crear Nueva Sede...</option>
                     </select>
                   ) : (
-                    <div className="inline-create-box">
-                      <input autoFocus type="text" className="clean-input" placeholder="Escribe la sede..." value={textosNuevos.sede} onChange={e => setTextosNuevos({...textosNuevos, sede: e.target.value})} />
-                      <button type="button" onClick={() => setCreandoNuevo({...creandoNuevo, sede: false})} className="btn-cancel-inline"><X size={16} /></button>
+                    <div>
+                      <div className="inline-create-box">
+                        <input autoFocus type="text" className="clean-input" placeholder="Nombre de la sede..." value={textosNuevos.sede} onChange={e => setTextosNuevos({...textosNuevos, sede: e.target.value.toUpperCase()})} />
+                        <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, sede: false}); setTextosNuevos({...textosNuevos, sede: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
+                      </div>
+                      {buscarSugerencias(textosNuevos.sede, sedes, 'sede')}
                     </div>
                   )}
                 </div>
                 <div className="input-group">
                   <label className="clean-label">Tipo de Nómina *</label>
                   <select className="clean-input" value={formData.tipo_personal} onChange={e => setFormData({...formData, tipo_personal: e.target.value})}>
-                    <option value="produccion">Producción</option><option value="administrativo">Administrativo</option><option value="obra">Obra</option>
+                    <option value="produccion">PRODUCCIÓN</option><option value="administrativo">ADMINISTRATIVO</option><option value="obra">OBRA</option>
                   </select>
                 </div>
               </div>
@@ -391,9 +450,12 @@ export default function ModalColaborador({
                       <option value="NEW" style={{ color: c.accent, fontWeight: '700' }}>+ Crear Nuevo Depto...</option>
                     </select>
                   ) : (
-                    <div className="inline-create-box">
-                      <input autoFocus type="text" className="clean-input" placeholder="Escribe el departamento..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value})} />
-                      <button type="button" onClick={() => setCreandoNuevo({...creandoNuevo, depto: false})} className="btn-cancel-inline"><X size={16} /></button>
+                    <div>
+                      <div className="inline-create-box">
+                        <input autoFocus type="text" className="clean-input" placeholder="Nombre del depto..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value.toUpperCase()})} />
+                        <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
+                      </div>
+                      {buscarSugerencias(textosNuevos.depto, departamentos, 'depto')}
                     </div>
                   )}
                 </div>
@@ -406,9 +468,12 @@ export default function ModalColaborador({
                       <option value="NEW" style={{ color: c.accent, fontWeight: '700' }}>+ Crear Nueva Área...</option>
                     </select>
                   ) : (
-                    <div className="inline-create-box">
-                      <input autoFocus type="text" className="clean-input" placeholder="Escribe el área..." value={textosNuevos.area} onChange={e => setTextosNuevos({...textosNuevos, area: e.target.value})} />
-                      <button type="button" onClick={() => setCreandoNuevo({...creandoNuevo, area: false})} className="btn-cancel-inline"><X size={16} /></button>
+                    <div>
+                      <div className="inline-create-box">
+                        <input autoFocus type="text" className="clean-input" placeholder="Nombre del área..." value={textosNuevos.area} onChange={e => setTextosNuevos({...textosNuevos, area: e.target.value.toUpperCase()})} />
+                        <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, area: false}); setTextosNuevos({...textosNuevos, area: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
+                      </div>
+                      {buscarSugerencias(textosNuevos.area, areas, 'area')}
                     </div>
                   )}
                 </div>
@@ -418,14 +483,17 @@ export default function ModalColaborador({
                 <label className="clean-label">Puesto Especifico (Opcional)</label>
                 {!creandoNuevo.puesto ? (
                   <select className="clean-input" value={formData.puesto} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, puesto: true}) : setFormData({...formData, puesto: e.target.value})}>
-                    <option value="">Sin puesto especificado</option>
+                    <option value="">SIN PUESTO ESPECIFICADO</option>
                     {puestos.map(p => <option key={p} value={p}>{p}</option>)}
                     <option value="NEW" style={{ color: c.accent, fontWeight: '700' }}>+ Crear Nuevo Puesto...</option>
                   </select>
                 ) : (
-                  <div className="inline-create-box">
-                    <input autoFocus type="text" className="clean-input" placeholder="Escribe el puesto..." value={textosNuevos.puesto} onChange={e => setTextosNuevos({...textosNuevos, puesto: e.target.value})} />
-                    <button type="button" onClick={() => setCreandoNuevo({...creandoNuevo, puesto: false})} className="btn-cancel-inline"><X size={16} /></button>
+                  <div>
+                    <div className="inline-create-box">
+                      <input autoFocus type="text" className="clean-input" placeholder="Nombre del puesto..." value={textosNuevos.puesto} onChange={e => setTextosNuevos({...textosNuevos, puesto: e.target.value.toUpperCase()})} />
+                      <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, puesto: false}); setTextosNuevos({...textosNuevos, puesto: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
+                    </div>
+                    {buscarSugerencias(textosNuevos.puesto, puestos, 'puesto')}
                   </div>
                 )}
               </div>
@@ -442,22 +510,29 @@ export default function ModalColaborador({
                 <div className="input-group">
                   <label className="clean-label">Rol en el Sistema *</label>
                   <select required className="clean-input" value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})}>
-                    <option value="empleado">Empleado (Operativo)</option><option value="encargado">Encargado (Sub-jefe / Supervisor)</option><option value="jefe_area">Jefe de Área (Responsable)</option><option value="gerente">Gerente (Dirección)</option><option value="rh_nominas">RH / Nóminas (Admin)</option><option value="caseta">Caseta (Vigilancia)</option>
+                    <option value="empleado">EMPLEADO (OPERATIVO)</option>
+                    <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
+                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (PLANTA)</option>
+                    <option value="gerente_admin">GERENTE ADMINISTRATIVO (OFICINA)</option>
+                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                    <option value="rh_nominas">RH / NÓMINAS (OPERATIVO)</option>
+                    <option value="caseta">CASETA / VIGILANCIA</option>
+                    <option value="superadmin">SUPER ADMINISTRADOR</option>
                   </select>
                 </div>
                 <div className="input-group">
                   <label className="clean-label">Correo Institucional *</label>
-                  <input type="email" required className="clean-input" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value})} />
+                  <input type="email" required className="clean-input no-upper" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value.toLowerCase()})} />
                 </div>
               </div>
               <div className="form-grid cols-2" style={{ marginTop: '20px' }}>
                 <div className="input-group">
                   <label className="clean-label">Usuario Login *</label>
-                  <input type="text" required className="clean-input" value={formData.usuario_login} onChange={e => setFormData({...formData, usuario_login: e.target.value.toLowerCase().replace(/\s+/g, '')})} title="Puedes editarlo manualmente" />
+                  <input type="text" required className="clean-input no-upper" value={formData.usuario_login} onChange={e => setFormData({...formData, usuario_login: e.target.value.toLowerCase().replace(/\s+/g, '')})} title="Puedes editarlo manualmente" />
                 </div>
                 <div className="input-group">
                   <label className="clean-label">PIN de Seguridad (Mín 6) *</label>
-                  <input type="text" minLength={6} maxLength={10} required className="clean-input" placeholder="Ej. 123456" style={{ fontFamily: 'monospace', letterSpacing: '2px', fontSize: '15px' }} value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value})} />
+                  <input type="text" minLength={6} maxLength={10} required className="clean-input no-upper" placeholder="Ej. 123456" style={{ fontFamily: 'monospace', letterSpacing: '2px', fontSize: '15px' }} value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value})} />
                 </div>
               </div>
             </div>

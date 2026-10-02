@@ -138,7 +138,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         .single();
       if (errD) throw new Error("No se encontró el departamento del colaborador.");
 
-      // Si no tiene jefe directo asignado, buscamos al jefe de área de ese depto
+      // Encontrar Jefe de Área si existe
       let jefeFinalId = depto.jefe_id;
       if (!jefeFinalId) {
         const { data: jefeEncontrado } = await supabase
@@ -151,25 +151,53 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         if (jefeEncontrado) jefeFinalId = jefeEncontrado.id;
       }
 
-      // 2. Consultar Sede Oficial (Opción B: La más robusta)
+      // ==========================================
+      // MOTOR DE RUTAS INTELIGENTES (GERENTE Y RH)
+      // ==========================================
+      const clasificacionDepto = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
+      const rolGerente = clasificacionDepto.includes('admin') ? 'gerente_admin' : 'gerente_produccion';
+      
+      // Buscar al Gerente exacto en base a su rol
+      const { data: gerenteData } = await supabase.from('usuarios').select('id').eq('rol', rolGerente).limit(1).maybeSingle();
+      const gerenteFinalId = gerenteData?.id || depto.gerente_id;
+
+      // Buscar a RH en base a su rol
+      const { data: rhData } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).limit(1).maybeSingle();
+      const rhFinalId = rhData?.id || depto.rh_id;
+
+      // Lógica de "Salto" (Bypass) de Jefatura y Selección de Destinatario Push
+      let estadoFirma1 = 'pendiente';
+      let notificarA = [];
+
+      if (tipoPermiso === 'retardo' || tipoPermiso === 'salida') {
+        // RUTA 1: Salta al jefe (Operativo rápido)
+        estadoFirma1 = 'omitido';
+        if (gerenteFinalId) notificarA = [gerenteFinalId];
+      } else {
+        // RUTA 2: Faltas y Vacaciones pasan por el Jefe de Área
+        if (jefeFinalId && jefeFinalId !== userId) {
+          estadoFirma1 = 'pendiente';
+          notificarA = [jefeFinalId];
+        } else {
+          // Si no tiene jefe (o él mismo es el jefe), se auto-aprueba o se omite
+          estadoFirma1 = jefeFinalId === userId ? 'auto_aprobado' : 'omitido';
+          if (gerenteFinalId) notificarA = [gerenteFinalId];
+        }
+      }
+
+      // 2. Consultar Sede Oficial
       let esSantaCatarina = false;
       if (sedeId) {
-        const { data: sedeData } = await supabase
-          .from('sedes')
-          .select('nombre')
-          .eq('id', sedeId)
-          .maybeSingle();
-        
+        const { data: sedeData } = await supabase.from('sedes').select('nombre').eq('id', sedeId).maybeSingle();
         if (sedeData && sedeData.nombre.toLowerCase().includes('catarina')) {
           esSantaCatarina = true;
         }
       }
 
       // Folio Automático
-      const clasif = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
       let letra = 'P';
-      if (clasif.includes('admin')) letra = 'A';
-      else if (clasif.includes('obra')) letra = 'O';
+      if (clasificacionDepto.includes('admin')) letra = 'A';
+      else if (clasificacionDepto.includes('obra')) letra = 'O';
       const anio = hoy.getFullYear().toString().slice(-2);
       const folioFinal = await generarFolioOficial(letra, anio);
 
@@ -187,10 +215,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         detalleHorarioTexto = `Falta programada día completo: ${fechaPermiso}`;
       }
 
-      // Evaluamos caseta cruzando tipo de permiso y Sede Oficial
       const requiereCasetaAuto = esSantaCatarina && (tipoPermiso === 'salida' || tipoPermiso === 'retardo');
 
-      // 3. Guardar permiso en DB
+      // 3. Guardar permiso en DB con los nuevos IDs inteligentes
       const { error: errInsert } = await supabase
         .from('permisos')
         .insert([{
@@ -206,10 +233,10 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           observaciones: detalleHorarioTexto,
           firma_empleado: true,
           firma_1_id: jefeFinalId,
-          firma_1_estado: (userId === jefeFinalId) ? 'auto_aprobado' : 'pendiente',
-          firma_2_id: depto.gerente_id,
+          firma_1_estado: estadoFirma1, // Puede ser 'omitido', 'pendiente' o 'auto_aprobado'
+          firma_2_id: gerenteFinalId,
           firma_2_estado: 'pendiente',
-          firma_3_id: depto.rh_id,
+          firma_3_id: rhFinalId,
           firma_3_estado: 'pendiente',
           requiere_caseta: requiereCasetaAuto,
           estado_general: 'en_firmas'
@@ -217,8 +244,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-      // 4. Notificaciones Push (Si no es autoaprobado)
-      if (jefeFinalId && userId !== jefeFinalId) {
+      // 4. Notificaciones Push a la Ruta Inteligente
+      if (notificarA.length > 0) {
         try {
           const fotoSolicitante = usuario?.foto_url || sesionActual?.foto_url || null;
           const nombreSolicitante = usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador';
@@ -226,7 +253,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           const { data: subs } = await supabase
             .from('suscripciones_push')
             .select('subscription')
-            .eq('usuario_id', jefeFinalId);
+            .in('usuario_id', notificarA);
 
           if (subs && subs.length > 0) {
             const tituloNotif = esRetardoUrgente ? '🚨 URGENTE: ACCESO EN PUERTA' : '⚠️ NUEVO PASE POR FIRMAR';
@@ -243,7 +270,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                   titulo: tituloNotif,
                   mensaje: `👤 ${nombreSolicitante}\n📋 ${tipoPermiso.toUpperCase()}\n💬 "${motivo.trim()}"\n🔖 Folio: ${folioFinal}`,
                   fotoUrl: fotoSolicitante,
-                  urlDestino: '/aprobaciones' // <-- ¡ESTA ES LA LÍNEA QUE TE FALTABA!
+                  urlDestino: '/aprobaciones'
                 })
               });
               return res.json();
@@ -311,7 +338,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           </div>
         </div>
 
-        {/* ALERTA DE REINCIDENCIA (Sutil para el empleado) */}
+        {/* ALERTA DE REINCIDENCIA */}
         {alertaReincidencia && tipoPermiso === 'retardo' && (
           <div style={{
             padding: '10px 12px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.1)',
@@ -325,7 +352,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           </div>
         )}
 
-        {/* ALERTA DE URGENCIA (Si es el mismo día y ya pasaron las 6 AM) */}
+        {/* ALERTA DE URGENCIA */}
         {esRetardoUrgente && (
           <div style={{
             padding: '12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)',
@@ -335,7 +362,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
             <ShieldAlert size={20} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
             <span>
               <strong>ALERTA DE ACCESO:</strong> Estás registrando un aviso de retardo de último momento. 
-              Al enviar, tu Jefe Directo recibirá una notificación urgente para dictaminar tu acceso o si debes regresar a casa.
+              Al enviar, el Gerente recibirá una notificación urgente para dictaminar tu acceso o si debes regresar a casa.
             </span>
           </div>
         )}
