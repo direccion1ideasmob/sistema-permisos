@@ -249,7 +249,15 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
             .in('usuario_id', notificarA);
 
           if (subs && subs.length > 0) {
-            const tituloNotif = esRetardoUrgente ? '🚨 URGENTE: ACCESO EN PUERTA' : '⚠️ NUEVO PASE POR FIRMAR';
+            // Formatear Título y Mensaje estilo WhatsApp
+            const tipoPase = tipoPermiso.charAt(0).toUpperCase() + tipoPermiso.slice(1);
+            const tituloNotif = tipoPermiso === 'vacaciones' ? 'Vacaciones' : `${tipoPase} (${naturaleza})`;
+            
+            let infoExtra = '';
+            if (tipoPermiso === 'retardo') infoExtra = ` (Llegada aprox: ${horaLlegadaRetardo})`;
+            else if (tipoPermiso === 'salida') infoExtra = ` (Aprox: ${horaSalida})`;
+            else if (tipoPermiso === 'vacaciones') infoExtra = ` (Del ${fechaPermiso} al ${fechaFinVacaciones || fechaPermiso})`;
+
             const envios = subs.map(async (item) => {
               let subLimpia = item.subscription;
               if (typeof subLimpia === 'string') {
@@ -261,7 +269,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                 body: JSON.stringify({
                   subscription: subLimpia,
                   titulo: tituloNotif,
-                  mensaje: `👤 ${nombreSolicitante}\n📋 ${tipoPermiso.toUpperCase()}\n💬 "${motivo.trim()}"\n🔖 Folio: ${folioFinal}`,
+                  mensaje: `${nombreSolicitante}: "${motivo.trim()}"${infoExtra}`,
                   fotoUrl: fotoSolicitante,
                   urlDestino: '/aprobaciones'
                 })

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
 import ModalColaborador from '../components/ModalColaborador';
 import VisorDirectorio from '../components/VisorDirectorio';
@@ -7,14 +7,15 @@ import { Search, Plus, LayoutGrid, TableProperties } from 'lucide-react';
 export default function AdminUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
-  const [areasUnicas, setAreasUnicas] = useState([]);
+  const [areasUnicas, setAreasUnicas] =  useState([]);
   const [puestosUnicos, setPuestosUnicos] = useState([]);
   
   const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [vista, setVista] = useState('arbol');
-const [sedes, setSedes] = useState([]);
+  const [sedes, setSedes] = useState([]);
+
   // === DETECCIÓN REACTIVA DEL TEMA (CLARO / OSCURO) ===
   const [modoOscuro, setModoOscuro] = useState(() => {
     return localStorage.getItem('tema_sistema') === 'oscuro';
@@ -25,7 +26,6 @@ const [sedes, setSedes] = useState([]);
       setModoOscuro(localStorage.getItem('tema_sistema') === 'oscuro');
     };
     window.addEventListener('storage', sincronizarTema);
-    // Intervalo ligero de respaldo por si cambia en la misma pestaña
     const intervalo = setInterval(sincronizarTema, 500);
     return () => {
       window.removeEventListener('storage', sincronizarTema);
@@ -33,19 +33,20 @@ const [sedes, setSedes] = useState([]);
     };
   }, []);
 
-const cargarDatos = async () => {
+  // Envolvemos en useCallback para que VS Code y React no se quejen
+  const cargarDatos = useCallback(async () => {
     setCargando(true);
     
     // Cargar sedes
-const { data: listSedes } = await supabase
-  .from('sedes')
-  .select('id, nombre')
-  .order('nombre', { ascending: true });
+    const { data: listSedes } = await supabase
+      .from('sedes')
+      .select('id, nombre')
+      .order('nombre', { ascending: true });
 
-if (listSedes) setSedes(listSedes);
+    if (listSedes) setSedes(listSedes);
+
     // 1. Traer usuarios
-   // 1. Traer usuarios
-   const { data: listUsuarios, error: errU } = await supabase
+    const { data: listUsuarios, error: errU } = await supabase
       .from('usuarios')
       .select('id, numero_empleado, nombre_completo, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, sede_id, pin, fecha_ingreso, celular, telefono, correo')
       .order('nombre_completo', { ascending: true });
@@ -61,7 +62,6 @@ if (listSedes) setSedes(listSedes);
     if (errD) console.error("Error deptos:", errD);
 
     if (listUsuarios && listDeptos) {
-      // Formatear departamentos conservando la clasificacion y las llaves de jefatura
       const deptosFormateados = listDeptos
         .map(d => ({ 
           ...d, 
@@ -74,7 +74,6 @@ if (listSedes) setSedes(listSedes);
         
       setDepartamentos(deptosFormateados);
 
-      // Cruzar datos vinculando la clasificación a cada usuario
       const usuariosCruzados = listUsuarios.map(user => {
         const deptoEncontrado = deptosFormateados.find(d => d.id === user.departamento_id);
         return {
@@ -96,9 +95,12 @@ if (listSedes) setSedes(listSedes);
       setPuestosUnicos([...new Set(listUsuarios.map(u => u.puesto ? estandar(u.puesto) : null).filter(Boolean))].sort());
     }
     setCargando(false);
-  };
+  }, []);
 
-  useEffect(() => { cargarDatos(); }, []);
+  // Ahora el useEffect está feliz
+  useEffect(() => { 
+    cargarDatos(); 
+  }, [cargarDatos]);
 
   const toggleEstado = async (id, actual) => {
     await supabase.from('usuarios').update({ activo: !actual }).eq('id', id);
@@ -116,15 +118,16 @@ if (listSedes) setSedes(listSedes);
     }
   };
 
+  // BUSCADOR BLINDADO: Convierte a String de forma segura antes de buscar
+  const termino = busqueda.toLowerCase();
   const usuariosFiltrados = usuarios.filter(u =>
-    u.nombre_completo?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    u.area?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    u.puesto?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    u.numero_empleado?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    u.correo?.toLowerCase().includes(busqueda.toLowerCase())
+    (u.nombre_completo || '').toLowerCase().includes(termino) ||
+    (u.area || '').toLowerCase().includes(termino) ||
+    (u.puesto || '').toLowerCase().includes(termino) ||
+    String(u.numero_empleado || '').toLowerCase().includes(termino) ||
+    (u.correo || '').toLowerCase().includes(termino)
   );
 
-  // === PALETA LOCAL BASADA EN EL MODO ===
   const t = {
     title: modoOscuro ? '#ffffff' : '#09090b',
     sub: modoOscuro ? '#a1a1aa' : '#71717a',
@@ -323,29 +326,29 @@ if (listSedes) setSedes(listSedes);
           </div>
         ) : (
           <VisorDirectorio 
-  usuarios={usuariosFiltrados} 
-  vista={vista} 
-  departamentos={departamentos}
-  sedes={sedes}
-  areas={areasUnicas}
-  puestos={puestosUnicos}
-  onToggleEstado={toggleEstado} 
-  onRestablecerPin={restablecerPin} 
-  recargarDatos={cargarDatos}
-  modoOscuro={modoOscuro}
-/>
+            usuarios={usuariosFiltrados} 
+            vista={vista} 
+            departamentos={departamentos}
+            sedes={sedes}
+            areas={areasUnicas}
+            puestos={puestosUnicos}
+            onToggleEstado={toggleEstado} 
+            onRestablecerPin={restablecerPin} 
+            recargarDatos={cargarDatos}
+            modoOscuro={modoOscuro}
+          />
         )}
 
         {modalAbierto && (
           <ModalColaborador 
-  onClose={() => setModalAbierto(false)} 
-  onSuccess={() => { setModalAbierto(false); cargarDatos(); }}
-  departamentos={departamentos} 
-  areas={areasUnicas} 
-  puestos={puestosUnicos} 
-  sedes={sedes} /* <--- ¡ESTA ES LA LÍNEA QUE TE FALTA EN TU ARCHIVO PRINCIPAL! */
-  modoOscuro={modoOscuro}
-/>
+            onClose={() => setModalAbierto(false)} 
+            onSuccess={() => { setModalAbierto(false); cargarDatos(); }}
+            departamentos={departamentos} 
+            areas={areasUnicas} 
+            puestos={puestosUnicos} 
+            sedes={sedes}
+            modoOscuro={modoOscuro}
+          />
         )}
       </div>
     </>

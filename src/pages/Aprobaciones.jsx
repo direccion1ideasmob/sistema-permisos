@@ -20,8 +20,7 @@ export default function Aprobaciones() {
   const [solicitudAprobar, setSolicitudAprobar] = useState(null);
   const [solicitudRechazar, setSolicitudRechazar] = useState(null);
 
-    const [dispositivoVinculado, setDispositivoVinculado] = useState(false);
-
+  const [dispositivoVinculado, setDispositivoVinculado] = useState(false);
 
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);
@@ -39,8 +38,6 @@ export default function Aprobaciones() {
         alert("No se otorgaron permisos de notificación en el navegador.");
         return;
       }
-
-     // 1. OMITIMOS EL DELETE. Ya no borramos el historial del usuario.
 
       // 2. USAMOS UPSERT: Si el dispositivo es nuevo, lo guarda. 
       // Si el dispositivo ya existía (mismo endpoint), solo lo actualiza sin duplicarlo.
@@ -65,7 +62,7 @@ export default function Aprobaciones() {
     }
   };
 
-// Notificar al empleado por Push a su celular
+  // Notificar al empleado por Push a su celular
   const notificarEmpleado = async (empleadoId, titulo, mensaje) => {
     try {
       const { data: subs } = await supabase
@@ -184,15 +181,15 @@ export default function Aprobaciones() {
 
       if (error) throw error;
 
-      // 1. Notificar al Empleado (Siempre)
-      let mensajeEmpleado = `Tu solicitud (${solicitud.folio}) avanzó un nivel.`;
-      if (esRH) mensajeEmpleado = `Tu solicitud (${solicitud.folio}) fue AUTORIZADA FINALMENTE con dictamen: "${dictamenPago}".`;
-
-      await notificarEmpleado(
-        solicitud.usuario_id,
-        esRH ? '✅ PERMISO AUTORIZADO' : '⏳ PERMISO EN PROCESO',
-        mensajeEmpleado
-      );
+      // 1. Notificar al Empleado (SOLO SI ES EL DICTAMEN FINAL DE RH)
+      if (esRH) {
+        const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
+        await notificarEmpleado(
+          solicitud.usuario_id,
+          `✅ ${tipoPase} Autorizado`,
+          `Dictamen: ${dictamenPago}`
+        );
+      }
 
       // 2. Disparar notificaciones en cadena al siguiente jefe (Efecto Dominó)
       if (siguientesEnFirmar.length > 0) {
@@ -206,6 +203,17 @@ export default function Aprobaciones() {
                 const nombreSolicitante = solicitud.usuarios?.nombre_completo || 'Un colaborador';
                 const fotoSolicitante = solicitud.usuarios?.foto_url || null;
 
+                // --- LÓGICA DE TEXTO LIMPIO ESTILO WHATSAPP ---
+                const asuntoRaw = solicitud.asunto_motivo || '';
+                const matchMotivo = asuntoRaw.match(/\[(.*?)\]\s*(.*)/);
+                const naturalezaClean = matchMotivo ? matchMotivo[1] : '';
+                const motivoLimpio = matchMotivo ? matchMotivo[2] : asuntoRaw;
+                const tipoClean = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
+
+                const tituloNotifDomino = solicitud.tipo_permiso === 'vacaciones' ? 'Vacaciones' : `${tipoClean} (${naturalezaClean})`;
+                const mensajeNotifDomino = `${nombreSolicitante}: "${motivoLimpio}"`;
+                // ----------------------------------------------
+
                 const envios = subs.map(async (item) => {
                     let subLimpia = item.subscription;
                     if (typeof subLimpia === 'string') {
@@ -216,8 +224,8 @@ export default function Aprobaciones() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             subscription: subLimpia,
-                            titulo: '⚠️ PASE LIBERADO - TE TOCA FIRMAR',
-                            mensaje: `👤 ${nombreSolicitante}\n📋 ${solicitud.tipo_permiso.toUpperCase()}\n🔖 El eslabón anterior ya aprobó. Es tu turno.`,
+                            titulo: tituloNotifDomino,
+                            mensaje: mensajeNotifDomino, 
                             fotoUrl: fotoSolicitante,
                             urlDestino: '/aprobaciones'
                         })
@@ -239,7 +247,7 @@ export default function Aprobaciones() {
       setProcesando(false);
     }
   };
-  
+
   // RECHAZAR PERMISO CON MOTIVO OBLIGATORIO
   const ejecutarRechazo = async (solicitud, motivoRechazo) => {
     setProcesando(true);
@@ -274,10 +282,12 @@ export default function Aprobaciones() {
 
       if (error) throw error;
 
+      // --- NOTIFICACIÓN DE RECHAZO AL EMPLEADO ---
+      const tipoPaseR = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
       await notificarEmpleado(
         solicitud.usuario_id,
-        '❌ PERMISO RECHAZADO',
-        `Tu solicitud (${solicitud.folio}) fue rechazada. Motivo: ${motivoRechazo}`
+        `❌ ${tipoPaseR} Rechazado`,
+        `Motivo: ${motivoRechazo}`
       );
 
       setSolicitudRechazar(null);

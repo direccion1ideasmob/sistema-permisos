@@ -120,21 +120,23 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      // 1. Disparar push al empleado informando que avanzó
-      await notificarUsuarioPush(
-        permiso.usuario_id,
-        '⏳ PERMISO EN PROCESO',
-        `Tu solicitud (${permiso.folio}) fue autorizada por tu Jefatura y pasó a Gerencia.`,
-        '/mis-permisos'
-      );
+      // ELIMINAMOS el push intermedio al empleado para no darle "spam"
 
-      // 2. EFECTO DOMINÓ: Disparar push al Gerente (Firma 2)
+      // 2. EFECTO DOMINÓ: Disparar push al Gerente (Firma 2) ESTILO WHATSAPP
       if (permiso.firma_2_id) {
         const nombreSolicitante = permiso.usuarios?.nombre_completo || 'Un colaborador';
+        
+        const asuntoRaw = permiso.asunto_motivo || '';
+        const matchMotivo = asuntoRaw.match(/\[(.*?)\]\s*(.*)/);
+        const natClean = matchMotivo ? matchMotivo[1] : '';
+        const motClean = matchMotivo ? matchMotivo[2] : asuntoRaw;
+        const tipoCapital = permiso.tipo_permiso.charAt(0).toUpperCase() + permiso.tipo_permiso.slice(1);
+        const titNotif = permiso.tipo_permiso === 'vacaciones' ? 'Vacaciones' : `${tipoCapital} (${natClean})`;
+
         await notificarUsuarioPush(
           permiso.firma_2_id,
-          '⚠️ PASE LIBERADO - TE TOCA FIRMAR',
-          `👤 ${nombreSolicitante}\n📋 ${permiso.tipo_permiso.toUpperCase()}\n🔖 Jefatura acaba de aprobar este pase. Es tu turno de autorizar.`,
+          titNotif,
+          `${nombreSolicitante}: "${motClean}"`,
           '/aprobaciones'
         );
       }
@@ -168,11 +170,12 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      // Disparar push al empleado informando el rechazo total
+      // Disparar push al empleado informando el rechazo total ESTILO WHATSAPP
+      const tipoPaseR = permiso.tipo_permiso.charAt(0).toUpperCase() + permiso.tipo_permiso.slice(1);
       await notificarUsuarioPush(
         permiso.usuario_id,
-        '❌ PERMISO RECHAZADO',
-        `Tu solicitud (${permiso.folio}) fue rechazada por Jefatura. Motivo: ${motivoRechazo}`,
+        `❌ ${tipoPaseR} Rechazado`,
+        `Motivo: ${motivoRechazo}`,
         '/mis-permisos'
       );
 
