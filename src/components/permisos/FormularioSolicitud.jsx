@@ -150,9 +150,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           .maybeSingle();
         if (jefeEncontrado) jefeFinalId = jefeEncontrado.id;
       }
-
-      // ==========================================
-      // MOTOR DE RUTAS INTELIGENTES (GERENTE Y RH)
+// ==========================================
+      // MOTOR DE RUTAS INTELIGENTES ESTRICTO
       // ==========================================
       const clasificacionDepto = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
       const rolGerente = clasificacionDepto.includes('admin') ? 'gerente_admin' : 'gerente_produccion';
@@ -165,24 +164,18 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
       const { data: rhData } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).limit(1).maybeSingle();
       const rhFinalId = rhData?.id || depto.rh_id;
 
-      // Lógica de "Salto" (Bypass) de Jefatura y Selección de Destinatario Push
+      // LÓGICA DE FIRMAS (ESTRICTAMENTE: JEFE -> GERENTE -> RH)
       let estadoFirma1 = 'pendiente';
       let notificarA = [];
 
-      if (tipoPermiso === 'retardo' || tipoPermiso === 'salida') {
-        // RUTA 1: Salta al jefe (Operativo rápido)
-        estadoFirma1 = 'omitido';
-        if (gerenteFinalId) notificarA = [gerenteFinalId];
+      if (jefeFinalId && jefeFinalId !== userId) {
+        // RUTA NORMAL: Todo pase le avisa obligatoriamente al Jefe primero
+        estadoFirma1 = 'pendiente';
+        notificarA = [jefeFinalId];
       } else {
-        // RUTA 2: Faltas y Vacaciones pasan por el Jefe de Área
-        if (jefeFinalId && jefeFinalId !== userId) {
-          estadoFirma1 = 'pendiente';
-          notificarA = [jefeFinalId];
-        } else {
-          // Si no tiene jefe (o él mismo es el jefe), se auto-aprueba o se omite
-          estadoFirma1 = jefeFinalId === userId ? 'auto_aprobado' : 'omitido';
-          if (gerenteFinalId) notificarA = [gerenteFinalId];
-        }
+        // Solo si el empleado NO tiene jefe (o él es el jefe), salta al Gerente
+        estadoFirma1 = jefeFinalId === userId ? 'auto_aprobado' : 'omitido';
+        if (gerenteFinalId) notificarA = [gerenteFinalId];
       }
 
       // 2. Consultar Sede Oficial
