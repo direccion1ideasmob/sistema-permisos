@@ -123,14 +123,13 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
     return `${prefijoLetra}-${anio2Digitos}-${String(consecutivo).padStart(4, '0')}`;
   };
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
     if (!motivo.trim()) return alert("Por favor escribe la justificación del pase.");
     if (!userId || !deptoId) return alert("Error: Sesión incompleta. Vuelve a iniciar sesión.");
 
     setGuardando(true);
     try {
-      // 1. Obtener datos del departamento
       const { data: depto, error: errD } = await supabase
         .from('departamentos')
         .select('nombre, clasificacion, jefe_id, gerente_id, rh_id')
@@ -138,7 +137,6 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         .single();
       if (errD) throw new Error("No se encontró el departamento del colaborador.");
 
-      // Encontrar Jefe de Área si existe
       let jefeFinalId = depto.jefe_id;
       if (!jefeFinalId) {
         const { data: jefeEncontrado } = await supabase
@@ -150,35 +148,27 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           .maybeSingle();
         if (jefeEncontrado) jefeFinalId = jefeEncontrado.id;
       }
-// ==========================================
-      // MOTOR DE RUTAS INTELIGENTES ESTRICTO
-      // ==========================================
+
       const clasificacionDepto = (depto.clasificacion || sesionActual.tipo_personal || 'produccion').toLowerCase();
       const rolGerente = clasificacionDepto.includes('admin') ? 'gerente_admin' : 'gerente_produccion';
       
-      // Buscar al Gerente exacto en base a su rol
       const { data: gerenteData } = await supabase.from('usuarios').select('id').eq('rol', rolGerente).limit(1).maybeSingle();
       const gerenteFinalId = gerenteData?.id || depto.gerente_id;
 
-      // Buscar a RH en base a su rol
       const { data: rhData } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).limit(1).maybeSingle();
       const rhFinalId = rhData?.id || depto.rh_id;
 
-      // LÓGICA DE FIRMAS (ESTRICTAMENTE: JEFE -> GERENTE -> RH)
       let estadoFirma1 = 'pendiente';
       let notificarA = [];
 
       if (jefeFinalId && jefeFinalId !== userId) {
-        // RUTA NORMAL: Todo pase le avisa obligatoriamente al Jefe primero
         estadoFirma1 = 'pendiente';
         notificarA = [jefeFinalId];
       } else {
-        // Solo si el empleado NO tiene jefe (o él es el jefe), salta al Gerente
         estadoFirma1 = jefeFinalId === userId ? 'auto_aprobado' : 'omitido';
         if (gerenteFinalId) notificarA = [gerenteFinalId];
       }
 
-      // 2. Consultar Sede Oficial
       let esSantaCatarina = false;
       if (sedeId) {
         const { data: sedeData } = await supabase.from('sedes').select('nombre').eq('id', sedeId).maybeSingle();
@@ -187,30 +177,28 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         }
       }
 
-      // Folio Automático
       let letra = 'P';
       if (clasificacionDepto.includes('admin')) letra = 'A';
       else if (clasificacionDepto.includes('obra')) letra = 'O';
       const anio = hoy.getFullYear().toString().slice(-2);
       const folioFinal = await generarFolioOficial(letra, anio);
 
-      // Texto de Horarios
+      // --- TEXTO DE HORARIOS CON EMOJIS ---
       let detalleHorarioTexto = '';
       if (tipoPermiso === 'salida') {
         detalleHorarioTexto = regresaMismoDia 
-          ? `Salida: ${horaSalida} hrs | Regreso: ${horaRegreso} hrs`
-          : `Salida definitiva: ${horaSalida} hrs`;
+          ? `🕒 Salida: ${horaSalida} hrs (Regresa: ${horaRegreso} hrs)`
+          : `🕒 Salida definitiva: ${horaSalida} hrs`;
       } else if (tipoPermiso === 'retardo') {
-        detalleHorarioTexto = `Llegada estimada: ${horaLlegadaRetardo} hrs`;
+        detalleHorarioTexto = `🕒 Llegada estimada: ${horaLlegadaRetardo} hrs`;
       } else if (tipoPermiso === 'vacaciones') {
-        detalleHorarioTexto = `Vacaciones: Del ${fechaPermiso} al ${fechaFinVacaciones || fechaPermiso}`;
+        detalleHorarioTexto = `📅 Del ${fechaPermiso} al ${fechaFinVacaciones || fechaPermiso}`;
       } else {
-        detalleHorarioTexto = `Falta programada día completo: ${fechaPermiso}`;
+        detalleHorarioTexto = `📅 Para el: ${fechaPermiso}`;
       }
 
       const requiereCasetaAuto = esSantaCatarina && (tipoPermiso === 'salida' || tipoPermiso === 'retardo');
 
-      // 3. Guardar permiso en DB con los nuevos IDs inteligentes
       const { error: errInsert } = await supabase
         .from('permisos')
         .insert([{
@@ -226,7 +214,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
           observaciones: detalleHorarioTexto,
           firma_empleado: true,
           firma_1_id: jefeFinalId,
-          firma_1_estado: estadoFirma1, // Puede ser 'omitido', 'pendiente' o 'auto_aprobado'
+          firma_1_estado: estadoFirma1,
           firma_2_id: gerenteFinalId,
           firma_2_estado: 'pendiente',
           firma_3_id: rhFinalId,
@@ -237,7 +225,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
 
       if (errInsert) throw errInsert;
 
-      // 4. Notificaciones Push a la Ruta Inteligente
+      // --- NOTIFICACIONES AL JEFE DIRECTO (FORMATO DEFINITIVO) ---
       if (notificarA.length > 0) {
         try {
           const fotoSolicitante = usuario?.foto_url || sesionActual?.foto_url || null;
@@ -249,14 +237,24 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
             .in('usuario_id', notificarA);
 
           if (subs && subs.length > 0) {
-            // Formatear Título y Mensaje estilo WhatsApp
-            const tipoPase = tipoPermiso.charAt(0).toUpperCase() + tipoPermiso.slice(1);
-            const tituloNotif = tipoPermiso === 'vacaciones' ? 'Vacaciones' : `${tipoPase} (${naturaleza})`;
             
-            let infoExtra = '';
-            if (tipoPermiso === 'retardo') infoExtra = ` (Llegada aprox: ${horaLlegadaRetardo})`;
-            else if (tipoPermiso === 'salida') infoExtra = ` (Aprox: ${horaSalida})`;
-            else if (tipoPermiso === 'vacaciones') infoExtra = ` (Del ${fechaPermiso} al ${fechaFinVacaciones || fechaPermiso})`;
+            // 1. TÍTULO EN MAYÚSCULAS
+            let tituloNotif = '';
+            if (tipoPermiso === 'salida') tituloNotif = 'SALIDA ANTICIPADA';
+            else if (tipoPermiso === 'retardo') tituloNotif = 'RETARDO';
+            else if (tipoPermiso === 'falta') tituloNotif = 'FALTA PROGRAMADA';
+            else if (tipoPermiso === 'vacaciones') tituloNotif = 'VACACIONES';
+            
+            // Si es urgente de última hora:
+            if (esRetardoUrgente) {
+              tituloNotif = `🚨 URGENTE: ${tituloNotif}`;
+            }
+
+            // 2. ETIQUETA VISUAL
+            let etiquetaNat = '🏠 PERSONAL / FAMILIAR';
+            if (naturaleza === 'Asunto de Trabajo') etiquetaNat = '💼 ASUNTO LABORAL';
+            else if (naturaleza === 'Cita Médica') etiquetaNat = '🏥 CITA MÉDICA';
+            else if (tipoPermiso === 'vacaciones') etiquetaNat = '🌴 PERIODO VACACIONAL';
 
             const envios = subs.map(async (item) => {
               let subLimpia = item.subscription;
@@ -269,7 +267,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
                 body: JSON.stringify({
                   subscription: subLimpia,
                   titulo: tituloNotif,
-                  mensaje: `${nombreSolicitante}: "${motivo.trim()}"${infoExtra}`,
+                  mensaje: `👤 ${nombreSolicitante}\n${etiquetaNat}\n${detalleHorarioTexto}\n💬 ${motivo.trim()}`,
                   fotoUrl: fotoSolicitante,
                   urlDestino: '/aprobaciones'
                 })
