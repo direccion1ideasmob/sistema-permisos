@@ -106,45 +106,50 @@ export default function AprobarDirecto() {
     }
   };
 
-  // AUTORIZACIÓN CON DICTAMEN DE PAGO EN 1 TOQUE (EFECTO DOMINÓ)
+  // AUTORIZACIÓN (EFECTO DOMINÓ HACIA EL GERENTE)
   const resolverAprobacion = async (dictamenPago) => {
     setProcesando(true);
     try {
       const { error } = await supabase
         .from('permisos')
-        .update({
-          firma_1_estado: 'autorizado',
-          pago: dictamenPago
-        })
+        .update({ firma_1_estado: 'autorizado', pago: dictamenPago })
         .eq('id', permiso.id);
 
       if (error) throw error;
 
-      // ELIMINAMOS el push intermedio al empleado para no darle "spam"
-
-      // 2. EFECTO DOMINÓ: Disparar push al Gerente (Firma 2) ESTILO WHATSAPP
       if (permiso.firma_2_id) {
         const nombreSolicitante = permiso.usuarios?.nombre_completo || 'Un colaborador';
         
         const asuntoRaw = permiso.asunto_motivo || '';
         const matchMotivo = asuntoRaw.match(/\[(.*?)\]\s*(.*)/);
-        const natClean = matchMotivo ? matchMotivo[1] : '';
+        const natClean = matchMotivo ? matchMotivo[1].toUpperCase() : '';
         const motClean = matchMotivo ? matchMotivo[2] : asuntoRaw;
-        const tipoCapital = permiso.tipo_permiso.charAt(0).toUpperCase() + permiso.tipo_permiso.slice(1);
-        const titNotif = permiso.tipo_permiso === 'vacaciones' ? 'Vacaciones' : `${tipoCapital} (${natClean})`;
+        
+        // 1. TÍTULO EN MAYÚSCULAS
+        let titNotif = '';
+        if (permiso.tipo_permiso === 'salida') titNotif = 'SALIDA ANTICIPADA';
+        else if (permiso.tipo_permiso === 'retardo') titNotif = 'RETARDO';
+        else if (permiso.tipo_permiso === 'falta') titNotif = 'FALTA PROGRAMADA';
+        else if (permiso.tipo_permiso === 'vacaciones') titNotif = 'VACACIONES';
+
+        // 2. ETIQUETA VISUAL
+        let etiquetaNaturaleza = '🏠 PERSONAL / FAMILIAR';
+        if (natClean === 'ASUNTO DE TRABAJO') etiquetaNaturaleza = '💼 ASUNTO LABORAL';
+        else if (natClean === 'CITA MÉDICA') etiquetaNaturaleza = '🏥 CITA MÉDICA';
+        else if (natClean === 'VACACIONES' || permiso.tipo_permiso === 'vacaciones') etiquetaNaturaleza = '🌴 PERIODO VACACIONAL';
+        else if (natClean) etiquetaNaturaleza = `🏠 ${natClean}`;
+
+        const horarioLimpio = (permiso.observaciones || '').split(' | ')[0];
 
         await notificarUsuarioPush(
           permiso.firma_2_id,
           titNotif,
-          `${nombreSolicitante}: "${motClean}"`,
+          `👤 ${nombreSolicitante}\n${etiquetaNaturaleza}\n${horarioLimpio}\n💬 ${motClean}`,
           '/aprobaciones'
         );
       }
 
-      setMensajeResultado({
-        tipo: 'exito',
-        texto: `¡Pase ${permiso.folio} autorizado con éxito! Notificación enviada a Gerencia.`
-      });
+      setMensajeResultado({ tipo: 'exito', texto: `¡Pase ${permiso.folio} autorizado con éxito! Notificación enviada a Gerencia.` });
     } catch (err) {
       alert("Error al autorizar: " + err.message);
     } finally {
@@ -152,7 +157,7 @@ export default function AprobarDirecto() {
     }
   };
 
-  // RECHAZO CON MOTIVO
+  // RECHAZO (AVISO DIRECTO AL EMPLEADO)
   const resolverRechazo = async (e) => {
     e.preventDefault();
     if (!motivoRechazo.trim()) return alert("Por favor escribe el motivo del rechazo.");
@@ -170,19 +175,21 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      // Disparar push al empleado informando el rechazo total ESTILO WHATSAPP
-      const tipoPaseR = permiso.tipo_permiso.charAt(0).toUpperCase() + permiso.tipo_permiso.slice(1);
+      // 1. TÍTULO DE RECHAZO FULMINANTE
+      let tipoPaseR = 'PASE';
+      if (permiso.tipo_permiso === 'salida') tipoPaseR = 'SALIDA RECHAZADA';
+      else if (permiso.tipo_permiso === 'retardo') tipoPaseR = 'RETARDO RECHAZADO';
+      else if (permiso.tipo_permiso === 'falta') tipoPaseR = 'FALTA RECHAZADA';
+      else if (permiso.tipo_permiso === 'vacaciones') tipoPaseR = 'VACACIONES RECHAZADAS';
+
       await notificarUsuarioPush(
         permiso.usuario_id,
-        `❌ ${tipoPaseR} Rechazado`,
-        `Motivo: ${motivoRechazo}`,
+        `❌ ${tipoPaseR}`,
+        `🚫 Motivo: ${motivoRechazo}`,
         '/mis-permisos'
       );
 
-      setMensajeResultado({
-        tipo: 'rechazado',
-        texto: `El pase ${permiso.folio} ha sido rechazado.`
-      });
+      setMensajeResultado({ tipo: 'rechazado', texto: `El pase ${permiso.folio} ha sido rechazado.` });
     } catch (err) {
       alert("Error al rechazar: " + err.message);
     } finally {
