@@ -31,7 +31,7 @@ export default function ControlCaseta({ c }) {
       // AQUÍ ESTÁ LA SOLUCIÓN DEL ERROR PGRST201: Se especifica la llave foránea exacta
       const { data: pasesData, error: pasesError } = await supabase
         .from('permisos')
-        .select(`id, folio, tipo_permiso, observaciones, hora_salida_caseta, hora_llegada_caseta, creado_por_vigilancia, firma_1_estado, firma_2_estado, estado_general, usuarios!permisos_usuario_id_fkey!inner ( id, nombre_completo, numero_empleado, foto_url, sede_id, departamentos ( nombre ) )`)
+.select(`id, folio, tipo_permiso, observaciones, hora_salida_caseta, hora_llegada_caseta, creado_por_vigilancia, firma_1_estado, firma_2_estado, estado_general, usuarios!permisos_usuario_id_fkey!inner ( id, nombre_completo, numero_empleado, foto_url, sede_id, departamentos!usuarios_departamento_id_fkey ( nombre ) )`)
         .eq('fecha_permiso', hoyISO)
         .eq('usuarios.sede_id', sedeGuardia);
 
