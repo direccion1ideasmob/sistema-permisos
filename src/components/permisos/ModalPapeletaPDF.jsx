@@ -154,10 +154,11 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
         boxShadow: '0 25px 60px rgba(0,0,0,0.6)', overflow: 'hidden'
       }}>
         
-        {/* BARRA SUPERIOR (NO SE IMPRIME) */}
+       {/* BARRA SUPERIOR (NO SE IMPRIME) */}
         <div className="no-print" style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '10px 18px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc'
+          padding: '10px 18px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
+          flexWrap: 'wrap', gap: '10px' /* Evita que el botón de Imprimir se junte con el folio */
         }}>
           <span style={{ fontSize: '12px', fontWeight: '800', color: '#16a34a' }}>
             FORMATO OFICIAL • {permiso.folio}
@@ -180,8 +181,13 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
           </div>
         </div>
 
-        {/* CONTENEDOR CON SCROLL */}
-        <div style={{ padding: '20px', overflowY: 'auto', background: '#f1f5f9' }}>
+{/* CONTENEDOR CON SCROLL */}
+        <div style={{ 
+          padding: '15px', 
+          overflow: 'auto', /* Permite scroll horizontal y vertical */
+          background: '#f1f5f9',
+          WebkitOverflowScrolling: 'touch' /* Hace que el deslizamiento en celular sea suave */
+        }}>
           
           <div 
             id="papeleta-impresion-oficial"
@@ -195,7 +201,8 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              minHeight: '125mm'
+              minHeight: '125mm',
+              minWidth: '700px' /* <--- ESTA ES LA MAGIA: Obliga al celular a respetar el tamaño y no apachurrarlo */
             }}
           >
             {/* BANDA 1: MEMBRETE */}
