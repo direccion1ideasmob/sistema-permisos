@@ -33,7 +33,7 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
 
   // Limpieza del motivo
   const procesarMotivo = (textoCrudo = '') => {
-    const match = textoCrudo.match(/^(\[|\{)(.*?)(\]|\})\s*(.*)$/);
+    const match = textoCrudo.match(/^(\[\vert{}\{)(.*?)(\]|\})\s*(.*)$/);
     if (match) {
       return {
         etiqueta: match[2].trim(),
@@ -278,7 +278,7 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
               </div>
             </div>
 
-            {/* BANDA 3: DATOS DE LA INCIDENCIA (DURACIÓN LIMPIA) */}
+            {/* BANDA 3: DATOS DE LA INCIDENCIA */}
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px',
               padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: '6px',
@@ -332,8 +332,10 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
               </div>
             </div>
 
-            {/* BANDA 5: FIRMAS OFICIALES */}
+            {/* BANDA 5: FIRMAS OFICIALES INTELIGENTES */}
             <div style={{ display: 'flex', gap: '10px', marginTop: '0', paddingBottom: '2px' }}>
+              
+              {/* 1. Solicitante (Siempre visible) */}
               {renderFirmaTradicional(
                 'Solicitante',
                 permiso.usuarios?.nombre_completo,
@@ -341,18 +343,28 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
                 'autorizado',
                 true
               )}
-              {renderFirmaTradicional(
-                'Jefe de Área',
-                permiso.jefe?.nombre_completo,
-                permiso.jefe?.firma_url,
-                permiso.firma_1_estado
+              
+              {/* 2. Jefe de Área (Se OCULTA si el pase lo auto-aprobó el propio Jefe) */}
+              {permiso.firma_1_estado !== 'auto_aprobado' && permiso.firma_1_estado !== 'omitido' && (
+                renderFirmaTradicional(
+                  'Jefe de Área',
+                  permiso.jefe?.nombre_completo,
+                  permiso.jefe?.firma_url,
+                  permiso.firma_1_estado
+                )
               )}
-              {renderFirmaTradicional(
-                'Gerencia',
-                permiso.gerente?.nombre_completo,
-                permiso.gerente?.firma_url,
-                permiso.firma_2_estado
+
+              {/* 3. Gerencia (Se OCULTA si el pase lo auto-aprobó el propio Gerente) */}
+              {permiso.firma_2_estado !== 'auto_aprobado' && permiso.firma_2_estado !== 'omitido' && (
+                renderFirmaTradicional(
+                  'Gerencia',
+                  permiso.gerente?.nombre_completo,
+                  permiso.gerente?.firma_url,
+                  permiso.firma_2_estado
+                )
               )}
+
+              {/* 4. Recursos Humanos (Siempre visible) */}
               {renderFirmaTradicional(
                 'Recursos Humanos',
                 permiso.rh?.nombre_completo,
@@ -362,7 +374,6 @@ export default function ModalPapeletaPDF({ permiso, onClose }) {
             </div>
 
           </div>
-
         </div>
       </div>
     </div>
