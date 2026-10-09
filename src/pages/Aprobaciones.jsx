@@ -7,7 +7,7 @@ import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../componen
 import TarjetaAprobacion from '../components/aprobaciones/TarjetaAprobacion';
 import ModalDictamenAprobar from '../components/aprobaciones/ModalDictamenAprobar';
 import ModalRechazoPermiso from '../components/aprobaciones/ModalRechazoPermiso';
-import TablaHistorial from '../components/aprobaciones/TablaHistorial'; // <-- IMPORTACIÓN COMPONENTE LIMPIO
+import TablaHistorial from '../components/aprobaciones/TablaHistorial';
 import { CheckCircle2, Clock, Bell, Radar, FileCheck } from 'lucide-react';
 
 export default function Aprobaciones() {
@@ -52,16 +52,21 @@ export default function Aprobaciones() {
     }
   };
 
+  // FUNCION CORREGIDA: Parsea correctamente la suscripción del empleado para cerrar el círculo
   const notificarEmpleado = async (empleadoId, titulo, mensaje, ruta = '/mis-permisos') => {
     try {
       const { data: subs } = await supabase.from('suscripciones_push').select('subscription').eq('usuario_id', empleadoId);
       if (subs && subs.length > 0) {
         subs.forEach(async (item) => {
           try {
+            let subLimpia = item.subscription;
+            if (typeof subLimpia === 'string') {
+              try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+            }
             await fetch('/api/notificar', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ subscription: item.subscription, titulo, mensaje, urlDestino: ruta })
+              body: JSON.stringify({ subscription: subLimpia, titulo, mensaje, urlDestino: ruta })
             });
           } catch (_) {}
         });
@@ -134,13 +139,20 @@ export default function Aprobaciones() {
         if (solicitud.firma_2_id) siguientesEnFirmar.push(solicitud.firma_2_id);
       }
       
+      // LOGICA CORREGIDA: Al firmar Gerente, notifica a TODOS los roles de RH (gerente_rh y rh_nominas)
       if (esGerente) {
         updates.firma_2_estado = 'autorizado';
-        if (solicitud.firma_3_id) {
-            siguientesEnFirmar.push(solicitud.firma_3_id);
-        } else {
-            const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']);
-            if (rhUsers) siguientesEnFirmar = [...siguientesEnFirmar, ...rhUsers.map(u => u.id)];
+        
+        const { data: rhUsers } = await supabase
+          .from('usuarios')
+          .select('id')
+          .in('rol', ['gerente_rh', 'rh_nominas']);
+          
+        if (rhUsers && rhUsers.length > 0) {
+          siguientesEnFirmar = [...siguientesEnFirmar, ...rhUsers.map(u => u.id)];
+        }
+        if (solicitud.firma_3_id && !siguientesEnFirmar.includes(solicitud.firma_3_id)) {
+          siguientesEnFirmar.push(solicitud.firma_3_id);
         }
       }
       
@@ -166,6 +178,7 @@ export default function Aprobaciones() {
       const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
       if (error) throw error;
 
+      // CIERRA EL CIRCULO: Notifica al trabajador de la autorización final
       if (esRH) {
         const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
         await notificarEmpleado(
@@ -175,6 +188,7 @@ export default function Aprobaciones() {
         );
       }
 
+      // PASO CADENA: Notifica a los siguientes aprobadores (ej. Gerente a todo RH)
       if (siguientesEnFirmar.length > 0) {
         try {
             const { data: subs } = await supabase.from('suscripciones_push').select('subscription').in('usuario_id', siguientesEnFirmar);
@@ -398,7 +412,6 @@ export default function Aprobaciones() {
           Cargando solicitudes...
         </div>
       ) : tabActiva === 'historial' ? (
-        /* COMPONENTE REUTILIZABLE IMPORTADO */
         <TablaHistorial 
           solicitudes={solicitudesHistorial} 
           c={c} 
