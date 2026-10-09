@@ -30,30 +30,33 @@ export default function MisPermisos() {
   const activarAlertas = async () => {
     setSuscribiendo(true);
     try {
+      if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.register('/sw.js');
+      }
+
       const sub = await registrarSuscripcionPush();
       if (!sub) {
-        alert("No se pudo activar. Revisa los permisos de tu navegador.");
+        alert("No se otorgaron permisos de notificación en el navegador.");
         setSuscribiendo(false);
         return;
       }
 
-      const rol = usuario?.rol || '';
-      const esJefeOAprobador = rol.includes('jefe') || rol.includes('gerente') || rol.includes('rh') || rol.includes('admin');
-      
-      if (!esJefeOAprobador) {
-        await supabase.from('suscripciones_push').delete().eq('usuario_id', usuario.id);
-      }
-
-      const { error } = await supabase.from('suscripciones_push').insert([{ 
-        usuario_id: usuario.id, 
-        subscription: sub 
-      }]);
+      const { error } = await supabase
+        .from('suscripciones_push')
+        .upsert(
+          { 
+            usuario_id: usuario.id, 
+            subscription: sub, 
+            endpoint: sub.endpoint 
+          }, 
+          { onConflict: 'endpoint' }
+        );
 
       if (error) throw error;
       alert("✅ Alertas activadas correctamente en este dispositivo.");
     } catch (error) {
       console.error("Error al guardar suscripción:", error);
-      alert("Hubo un error al activar las alertas.");
+      alert("Hubo un error al activar las alertas: " + (error.message || ''));
     } finally {
       setSuscribiendo(false);
     }
