@@ -318,15 +318,15 @@ export default function Layout() {
             )}
 
             {esNominas && (
-              <>
-                <Link 
-                  to="/kardex" 
-                  onClick={cerrarMenuMovil} 
-                  style={location.pathname === '/kardex' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-                >
-                  <FileBarChart size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                  <span style={s.navText}>Kardex / Reportes</span>
-                </Link>
+  <>
+    <Link 
+      to="/control-historial" // <--- CAMBIO AQUÍ
+      onClick={cerrarMenuMovil} 
+      style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+    >
+      <FileBarChart size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+      <span style={s.navText}>Control / Historial</span>
+    </Link>
                 <Link 
                   to="/directorio" 
                   onClick={cerrarMenuMovil} 

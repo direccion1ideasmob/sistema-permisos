@@ -103,27 +103,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
     return 0;
   };
 
-  const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
-    const patron = `${prefijoLetra}-${anio2Digitos}-%`;
-    const { data } = await supabase
-      .from('permisos')
-      .select('folio')
-      .ilike('folio', patron)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    let consecutivo = 1;
-    if (data && data.length > 0 && data[0].folio) {
-      const partes = data[0].folio.split('-');
-      if (partes.length === 3) {
-        const num = parseInt(partes[2], 10);
-        if (!isNaN(num)) consecutivo = num + 1;
-      }
-    }
-    return `${prefijoLetra}-${anio2Digitos}-${String(consecutivo).padStart(4, '0')}`;
-  };
-
- const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!motivo.trim()) return alert("Por favor escribe la justificación del pase.");
     if (!userId || !deptoId) return alert("Error: Sesión incompleta. Vuelve a iniciar sesión.");
@@ -177,11 +157,11 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         }
       }
 
-      let letra = 'P';
-      if (clasificacionDepto.includes('admin')) letra = 'A';
-      else if (clasificacionDepto.includes('obra')) letra = 'O';
-      const anio = hoy.getFullYear().toString().slice(-2);
-      const folioFinal = await generarFolioOficial(letra, anio);
+      // -------------------------------------------------------------
+      // NUEVO: FOLIO TEMPORAL DIFERIDO
+      // -------------------------------------------------------------
+      const numAleatorio = Math.floor(100000 + Math.random() * 900000);
+      const folioTemporal = `REQ-${numAleatorio}`;
 
       // --- TEXTO DE HORARIOS CON EMOJIS ---
       let detalleHorarioTexto = '';
@@ -202,7 +182,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
       const { error: errInsert } = await supabase
         .from('permisos')
         .insert([{
-          folio: folioFinal,
+          folio: folioTemporal, // <-- Aquí guardamos el temporal
           usuario_id: userId,
           fecha_elaboracion: fechaHoy,
           fecha_permiso: fechaPermiso,
@@ -281,7 +261,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, c, mod
         }
       }
 
-      alert(`✅ Solicitud enviada correctamente.\nFolio Oficial: ${folioFinal}`);
+      // ALERTA MODIFICADA PARA REFLEJAR EL FOLIO TEMPORAL
+      alert(`✅ Solicitud enviada correctamente.\n\nFolio Temporal: ${folioTemporal}\n(El folio oficial se asignará tras la aprobación final)`);
       setMotivo('');
       setRegresaMismoDia(false);
       if (onSolicitudCreada) onSolicitudCreada();

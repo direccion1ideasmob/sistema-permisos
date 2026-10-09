@@ -1,81 +1,180 @@
 import React from 'react';
-import { User, LogOut, LogIn, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { LogOut, LogIn, CheckCircle, Clock, AlertTriangle, ShieldX, UserMinus } from 'lucide-react';
 
-export default function TablaRegistrosVig({ pases, registrarMovimiento, procesandoId, theme }) {
-  const porSalir = pases.filter(p => p.tipo_permiso === 'salida' && !p.hora_salida_caseta);
-  const retardosEsperados = pases.filter(p => p.tipo_permiso === 'retardo' && !p.hora_llegada_caseta);
-  const fueraDePlanta = pases.filter(p => p.tipo_permiso === 'salida' && p.hora_salida_caseta && p.observaciones?.includes('Regresa') && !p.hora_llegada_caseta);
-  const completados = pases.filter(p => (p.tipo_permiso === 'retardo' && p.hora_llegada_caseta) || (p.tipo_permiso === 'salida' && p.hora_salida_caseta && !p.observaciones?.includes('Regresa')) || (p.tipo_permiso === 'salida' && p.hora_salida_caseta && p.hora_llegada_caseta));
+export default function TablaRegistrosVig({ 
+  tabActiva, pasesAutorizados, pasesEnEspera, pasesRechazados, 
+  personalFuera, faltasProgramadas, completados, 
+  registrarMovimiento, procesandoId, theme 
+}) {
 
   const formatearHora = (isoString) => isoString ? new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-  const TarjetaEmpleado = ({ pase, accion, tipoAccion }) => {
+  const TarjetaPase = ({ pase, accion, tipoAccion, color, icono: Icono, textoBoton }) => {
     const usr = pase.usuarios || {};
+    const esSalida = tipoAccion === 'salida';
+    
     return (
-      <div style={{ background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {usr.foto_url ? <img src={usr.foto_url} alt="foto" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }} /> : <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textMuted }}><User size={20} /></div>}
-            <div>
-              <div style={{ fontWeight: '800', fontSize: '13px', color: theme.text, lineHeight: '1.2' }}>{usr.nombre_completo}</div>
-              <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: '2px' }}>{usr.departamentos?.nombre} • #{usr.numero_empleado}</div>
-            </div>
-          </div>
-          {pase.creado_por_vigilancia ? (
-             <span style={{ fontSize: '9px', fontWeight: '800', background: '#fee2e2', color: '#dc2626', padding: '4px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={10}/> EMERGENCIA</span>
+      <div style={{ background: theme.surface, borderRadius: '12px', border: `2px solid ${color}`, padding: '16px', marginBottom: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px' }}>
+          {usr.foto_url ? (
+            <img src={usr.foto_url} alt="foto" style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
           ) : (
-             <span style={{ fontSize: '10px', fontWeight: '800', background: '#f1f5f9', color: '#475569', padding: '4px 8px', borderRadius: '4px' }}>{pase.folio || 'N/A'}</span>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icono size={24} color={theme.textMuted} />
+            </div>
           )}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: '900', fontSize: '15px', color: theme.text }}>{usr.nombre_completo}</div>
+            <div style={{ fontSize: '12px', color: theme.textMuted }}>{usr.departamentos?.nombre || 'Sin Depto'} • #{usr.numero_empleado}</div>
+          </div>
+          <span style={{ fontSize: '10px', fontWeight: '800', background: '#f1f5f9', padding: '4px 8px', borderRadius: '6px' }}>{pase.folio}</span>
         </div>
         
-        {!pase.creado_por_vigilancia && (
-          <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', fontSize: '11.5px', color: theme.text, display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Clock size={14} color={theme.textMuted} />
-            <span dangerouslySetInnerHTML={{ __html: pase.observaciones?.split('\n')[0] || 'Sin horario definido' }} />
-          </div>
-        )}
+        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', fontSize: '13px', color: theme.text, display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '12px' }}>
+          <Clock size={16} color={theme.textMuted} style={{ marginTop: '2px' }} />
+          <div dangerouslySetInnerHTML={{ __html: pase.observaciones?.replace(/\n/g, '<br/>') || 'Sin horario definido' }} />
+        </div>
 
         {accion && (
-          <button onClick={() => accion(pase.id, tipoAccion)} disabled={procesandoId === pase.id} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: tipoAccion === 'salida' ? '#ef4444' : '#16a34a', color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: procesandoId === pase.id ? 0.7 : 1 }}>
-            {tipoAccion === 'salida' ? <LogOut size={16} /> : <LogIn size={16} />}
-            {procesandoId === pase.id ? 'Registrando...' : tipoAccion === 'salida' ? 'REGISTRAR SALIDA' : 'REGISTRAR LLEGADA'}
+          <button 
+            onClick={() => accion(pase.id, tipoAccion)} 
+            disabled={procesandoId === pase.id} 
+            style={{ 
+              width: '100%', padding: '14px', borderRadius: '8px', border: 'none', 
+              background: color, color: '#fff', fontSize: '14px', fontWeight: '900', 
+              cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px',
+              opacity: procesandoId === pase.id ? 0.7 : 1
+            }}
+          >
+            <Icono size={20} />
+            {procesandoId === pase.id ? 'REGISTRANDO...' : textoBoton}
           </button>
         )}
       </div>
     );
   };
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', alignItems: 'start' }}>
-      {/* Columna 1 */}
-      <div>
-        <h2 style={{ fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>Acciones Pendientes <span style={{ background: '#e2e8f0', padding: '2px 8px', borderRadius: '12px', color: '#0f172a' }}>{porSalir.length + retardosEsperados.length}</span></h2>
-        {porSalir.map(p => <TarjetaEmpleado key={p.id} pase={p} accion={registrarMovimiento} tipoAccion="salida" />)}
-        {retardosEsperados.map(p => <TarjetaEmpleado key={p.id} pase={p} accion={registrarMovimiento} tipoAccion="llegada" />)}
-        {(porSalir.length === 0 && retardosEsperados.length === 0) && <div style={{ textAlign: 'center', padding: '30px', color: theme.textMuted, fontSize: '12px', border: `1px dashed ${theme.border}`, borderRadius: '12px' }}>Pizarra limpia.</div>}
-      </div>
+  // ==========================================
+  // PESTAÑA 1: CONTROL EN VIVO (TORNIQUETE)
+  // ==========================================
+  if (tabActiva === 'en_vivo') {
+    const salidasPendientes = pasesAutorizados.filter(p => p.tipo_permiso === 'salida');
+    const entradasPendientes = pasesAutorizados.filter(p => p.tipo_permiso === 'retardo');
 
-      {/* Columna 2 */}
-      <div>
-        <h2 style={{ fontSize: '12px', fontWeight: '800', color: '#eab308', textTransform: 'uppercase', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>Fuera de Planta <span style={{ background: '#fef08a', padding: '2px 8px', borderRadius: '12px', color: '#854d0e' }}>{fueraDePlanta.length}</span></h2>
-        {fueraDePlanta.map(p => <TarjetaEmpleado key={p.id} pase={p} accion={registrarMovimiento} tipoAccion="llegada" />)}
-        {fueraDePlanta.length === 0 && <div style={{ textAlign: 'center', padding: '30px', color: theme.textMuted, fontSize: '12px', border: `1px dashed ${theme.border}`, borderRadius: '12px' }}>Nadie afuera.</div>}
-      </div>
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', alignItems: 'start' }}>
+        
+        {/* COLUMNA 1: LUZ VERDE (DAR PASO) */}
+        <div>
+          <h2 style={{ fontSize: '14px', fontWeight: '900', color: '#16a34a', textTransform: 'uppercase', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#16a34a', display: 'inline-block' }}></span>
+            Luz Verde - Autorizados ({salidasPendientes.length + entradasPendientes.length})
+          </h2>
+          {salidasPendientes.map(p => <TarjetaPase key={p.id} pase={p} accion={registrarMovimiento} tipoAccion="salida" color="#ef4444" icono={LogOut} textoBoton="REGISTRAR SALIDA" />)}
+          {entradasPendientes.map(p => <TarjetaPase key={p.id} pase={p} accion={registrarMovimiento} tipoAccion="llegada" color="#16a34a" icono={LogIn} textoBoton="REGISTRAR ENTRADA" />)}
+          
+          {(salidasPendientes.length === 0 && entradasPendientes.length === 0) && (
+            <div style={{ padding: '30px', textAlign: 'center', border: '2px dashed #bbf7d0', borderRadius: '12px', color: '#16a34a', fontWeight: '700' }}>No hay nadie con pase autorizado para cruzar.</div>
+          )}
+        </div>
 
-      {/* Columna 3 */}
-      <div>
-        <h2 style={{ fontSize: '12px', fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>Completados Hoy <span style={{ background: '#dcfce3', padding: '2px 8px', borderRadius: '12px', color: '#14532d' }}>{completados.length}</span></h2>
-        {completados.map(p => (
-          <div key={p.id} style={{ background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '12px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.8 }}>
-            <CheckCircle size={20} color="#16a34a" style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: '700', fontSize: '12px', color: theme.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.usuarios?.nombre_completo}</div>
-              <div style={{ fontSize: '11px', color: theme.textMuted }}>{p.tipo_permiso === 'retardo' ? `Llegó: ${formatearHora(p.hora_llegada_caseta)}` : `Salió: ${formatearHora(p.hora_salida_caseta)}`}</div>
+        {/* COLUMNA 2: ESPERANDO EN PUERTA */}
+        <div>
+          <h2 style={{ fontSize: '14px', fontWeight: '900', color: '#d97706', textTransform: 'uppercase', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#d97706', display: 'inline-block' }}></span>
+            En Espera de Dictamen ({pasesEnEspera.length})
+          </h2>
+          {pasesEnEspera.map(p => (
+            <div key={p.id} style={{ background: '#fffbe3', borderRadius: '12px', border: '2px solid #fde047', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ fontWeight: '900', fontSize: '15px', color: '#713f12', marginBottom: '8px' }}>{p.usuarios?.nombre_completo}</div>
+              <div style={{ fontSize: '13px', color: '#854d0e', marginBottom: '12px' }}>{p.observaciones}</div>
+              <div style={{ background: '#fef9c3', padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: '800', color: '#a16207', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={16} /> Falta firma de: {p.nivelEspera}
+              </div>
             </div>
-          </div>
-        ))}
-        {completados.length === 0 && <div style={{ textAlign: 'center', padding: '30px', color: theme.textMuted, fontSize: '12px', border: `1px dashed ${theme.border}`, borderRadius: '12px' }}>Sin registros aún.</div>}
+          ))}
+          {pasesEnEspera.length === 0 && (
+            <div style={{ padding: '30px', textAlign: 'center', border: '2px dashed #fef08a', borderRadius: '12px', color: '#ca8a04', fontWeight: '700' }}>Nadie esperando en puerta.</div>
+          )}
+        </div>
+
+        {/* COLUMNA 3: ACCESO DENEGADO */}
+        <div>
+          <h2 style={{ fontSize: '14px', fontWeight: '900', color: '#dc2626', textTransform: 'uppercase', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#dc2626', display: 'inline-block' }}></span>
+            Accesos Denegados ({pasesRechazados.length})
+          </h2>
+          {pasesRechazados.map(p => (
+            <div key={p.id} style={{ background: '#fef2f2', borderRadius: '12px', border: '2px solid #fca5a5', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#991b1b', fontWeight: '900', fontSize: '13px', marginBottom: '8px' }}>
+                <ShieldX size={20} /> RECHAZADO POR SISTEMA
+              </div>
+              <div style={{ fontWeight: '800', fontSize: '14px', color: '#7f1d1d' }}>{p.usuarios?.nombre_completo}</div>
+              <div style={{ marginTop: '12px', background: '#fee2e2', padding: '10px', borderRadius: '8px', fontSize: '13px', color: '#991b1b', fontWeight: '800', textAlign: 'center' }}>
+                🚫 RETIRAR DE PLANTA / REGRESAR A CASA
+              </div>
+            </div>
+          ))}
+          {pasesRechazados.length === 0 && (
+            <div style={{ padding: '30px', textAlign: 'center', border: '2px dashed #fecaca', borderRadius: '12px', color: '#dc2626', fontWeight: '700' }}>Sin incidentes de rechazo.</div>
+          )}
+        </div>
+
       </div>
-    </div>
-  );
+    );
+  }
+
+  // ==========================================
+  // PESTAÑA 2: FUERA DE PLANTA (REINGRESOS)
+  // ==========================================
+  if (tabActiva === 'fuera_planta') {
+    return (
+      <div style={{ maxWidth: '600px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: '900', color: '#1e3a8a', marginBottom: '20px' }}>Colaboradores que salieron y deben regresar hoy:</h2>
+        {personalFuera.map(p => (
+          <TarjetaPase key={p.id} pase={p} accion={registrarMovimiento} tipoAccion="llegada" color="#3b82f6" icono={LogIn} textoBoton="REGISTRAR REINGRESO A PLANTA" />
+        ))}
+        {personalFuera.length === 0 && (
+          <div style={{ padding: '40px', textAlign: 'center', border: '2px dashed #bfdbfe', borderRadius: '12px', color: '#2563eb', fontWeight: '800' }}>
+            Todo el personal se encuentra dentro de planta.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ==========================================
+  // PESTAÑA 3: FALTAS Y CIERRE DE TURNO
+  // ==========================================
+  if (tabActiva === 'faltas') {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+        <div>
+          <h2 style={{ fontSize: '15px', fontWeight: '900', color: theme.text, marginBottom: '20px' }}>Faltas Programadas y Vacaciones de Hoy:</h2>
+          {faltasProgramadas.map(p => (
+            <div key={p.id} style={{ background: theme.surface, padding: '16px', borderRadius: '12px', border: `1px solid ${theme.border}`, marginBottom: '12px' }}>
+              <div style={{ fontWeight: '800', fontSize: '14px', color: theme.text }}>{p.usuarios?.nombre_completo}</div>
+              <div style={{ fontSize: '12px', color: theme.textMuted, marginTop: '4px' }}>{p.tipo_permiso.toUpperCase()} • {p.asunto_motivo}</div>
+            </div>
+          ))}
+          {faltasProgramadas.length === 0 && <div style={{ padding: '20px', color: theme.textMuted, fontSize: '13px' }}>Sin inasistencias programadas.</div>}
+        </div>
+
+        <div>
+          <h2 style={{ fontSize: '15px', fontWeight: '900', color: '#64748b', marginBottom: '20px' }}>Historial Completados Hoy:</h2>
+          {completados.slice(0, 15).map(p => (
+            <div key={p.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', borderBottom: `1px solid ${theme.border}` }}>
+              <CheckCircle size={18} color="#64748b" />
+              <div>
+                <div style={{ fontWeight: '700', fontSize: '13px', color: theme.text }}>{p.usuarios?.nombre_completo}</div>
+                <div style={{ fontSize: '11px', color: theme.textMuted }}>{p.tipo_permiso === 'retardo' ? `Entró a las ${formatearHora(p.hora_llegada_caseta)}` : `Salió a las ${formatearHora(p.hora_salida_caseta)}`}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

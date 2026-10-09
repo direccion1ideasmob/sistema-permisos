@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Check, X, ShieldAlert, AlertTriangle, Calendar, Clock, MessageSquare, Info } from 'lucide-react';
+import { 
+  Check, X, ShieldAlert, AlertTriangle, Calendar, Clock, 
+  MessageSquare, Info, LockOpen, CheckCircle2, XCircle, FastForward 
+} from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
 export default function TarjetaAprobacion({ 
-  solicitud, esPendiente, onAprobar, onRechazar, c, modoOscuro 
+  solicitud, esPendiente, onAprobar, onRechazar, onForzarFirma, usuarioActual, c, modoOscuro 
 }) {
   const u = solicitud.usuarios || {};
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo || 'U')}&background=16a34a&color=fff&bold=true`;
@@ -13,6 +16,20 @@ export default function TarjetaAprobacion({
 
   const fechaCreacion = new Date(solicitud.created_at);
   const esUrgente = esRetardo && solicitud.fecha_permiso === solicitud.fecha_elaboracion && fechaCreacion.getHours() >= 6;
+
+  // Lógica de Override para RH
+  const esRH = usuarioActual?.rol === 'rh_nominas' || usuarioActual?.rol === 'gerente_rh';
+  const estaAtoradoConJefe = solicitud.firma_1_estado === 'pendiente';
+  const estaAtoradoConGerente = solicitud.firma_1_estado !== 'pendiente' && solicitud.firma_2_estado === 'pendiente';
+  const mostrarOverride = esRH && esPendiente && (estaAtoradoConJefe || estaAtoradoConGerente);
+
+  // Saber a quién le toca realmente
+  const esMiTurno = () => {
+    if (usuarioActual?.rol === 'jefe_area' && solicitud.firma_1_estado === 'pendiente') return true;
+    if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
+    if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_2_estado !== 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
+    return false;
+  };
 
   useEffect(() => {
     const checarReincidencia = async () => {
@@ -33,18 +50,12 @@ export default function TarjetaAprobacion({
     checarReincidencia();
   }, [esRetardo, solicitud, fechaCreacion]);
 
-  // FUNCIÓN BLINDADA PARA LIMPIAR CORCHETES (Soporta saltos de línea [\s\S])
   const procesarMotivo = (textoCrudo = '') => {
     if (!textoCrudo) return { etiqueta: 'SIN CATEGORÍA', redaccion: 'No se ingresaron detalles.' };
-    
     const txt = String(textoCrudo).trim();
-    const match = txt.match(/^([\[\{])(.*?)([\]\}])\s*([\s\S]*)$/);
-    
+    const match = txt.match(/^([\[\{])(.*?)([\]\}])\s*([\s\S]*)\$/);
     if (match) {
-      return { 
-        etiqueta: match[2].trim(), 
-        redaccion: match[4].trim() || 'Sin comentarios adicionales.' 
-      };
+      return { etiqueta: match[2].trim(), redaccion: match[4].trim() || 'Sin comentarios adicionales.' };
     }
     return { etiqueta: 'MOTIVO DE LA SOLICITUD', redaccion: txt };
   };
@@ -62,9 +73,67 @@ export default function TarjetaAprobacion({
   const estilo = getEstiloTipo(solicitud.tipo_permiso);
   const observacionesLimpias = solicitud.observaciones ? solicitud.observaciones.replace(/Nota:\s*/i, '').trim() : '';
 
+  // -------------------------------------------------------------
+  // HELPER VISUAL DE ESTADOS PARA LA CADENA DE FIRMAS (STEPPER)
+  // -------------------------------------------------------------
+  const renderPasoFirma = (titulo, estado, esSiguienteTurno) => {
+    const est = (estado || 'pendiente').toLowerCase();
+
+    if (['autorizado', 'auto_aprobado'].includes(est)) {
+      return {
+        badgeBg: 'rgba(34, 197, 94, 0.12)',
+        borderColor: '#22c55e',
+        textColor: '#22c55e',
+        icon: <CheckCircle2 size={13} />,
+        label: est === 'auto_aprobado' ? 'Auto-aprobado' : 'Aprobado'
+      };
+    }
+    if (['escalado', 'omitido'].includes(est)) {
+      return {
+        badgeBg: 'rgba(59, 130, 246, 0.12)',
+        borderColor: '#3b82f6',
+        textColor: '#3b82f6',
+        icon: <FastForward size={13} />,
+        label: est === 'escalado' ? 'Escalado por RH' : 'Omitido'
+      };
+    }
+    if (est === 'rechazado') {
+      return {
+        badgeBg: 'rgba(239, 68, 68, 0.12)',
+        borderColor: '#ef4444',
+        textColor: '#ef4444',
+        icon: <XCircle size={13} />,
+        label: 'Rechazado'
+      };
+    }
+    // Pendiente
+    if (esSiguienteTurno) {
+      return {
+        badgeBg: 'rgba(245, 158, 11, 0.12)',
+        borderColor: '#f59e0b',
+        textColor: '#f59e0b',
+        icon: <Clock size={13} />,
+        label: 'En espera'
+      };
+    }
+    return {
+      badgeBg: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+      borderColor: c.border,
+      textColor: c.textMuted,
+      icon: <Clock size={13} />,
+      label: 'Pendiente'
+    };
+  };
+
+  const firma1Listo = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(solicitud.firma_1_estado);
+  const firma2Listo = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(solicitud.firma_2_estado);
+
+  const pasoJefe = renderPasoFirma('Jefe', solicitud.firma_1_estado, true);
+  const pasoGerente = renderPasoFirma('Gerente', solicitud.firma_2_estado, firma1Listo);
+  const pasoRH = renderPasoFirma('RH', solicitud.firma_3_estado, firma1Listo && firma2Listo);
+
   return (
     <>
-      {/* MAGIA RESPONSIVA DE LA TARJETA */}
       <style>{`
         .tarjeta-wrapper { padding: 20px; border-radius: 20px; display: flex; flex-direction: column; gap: 20px; }
         .tarjeta-header { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -72,17 +141,30 @@ export default function TarjetaAprobacion({
         .footer-container { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
         .footer-buttons { display: flex; gap: 10px; }
         
-        /* CUANDO ES UN CELULAR (max 480px) */
+        .stepper-container { 
+          display: flex; gap: 8px; align-items: center; justify-content: space-between;
+          padding: 10px 14px; border-radius: 12px; background: ${modoOscuro ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.02)'};
+          border: 1px solid ${c.borderDivider}; margin-top: 2px;
+        }
+        .stepper-item { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+        .stepper-pill {
+          display: inline-flex; alignItems: center; gap: 5px; padding: 4px 8px; borderRadius: 8px;
+          font-size: 11px; font-weight: 700; border: 1px solid; white-space: nowrap;
+        }
+
+        @media (max-width: 580px) {
+          .stepper-container { flex-direction: column; align-items: stretch; gap: 8px; }
+          .stepper-item { justify-content: space-between; }
+        }
+
         @media (max-width: 480px) {
           .tarjeta-wrapper { padding: 16px !important; border-radius: 16px !important; gap: 16px !important; }
           .tarjeta-header { flex-direction: column !important; gap: 12px !important; }
           .header-pill { align-self: flex-start !important; }
-          
           .fechas-container { flex-direction: column !important; gap: 14px !important; }
-          
           .footer-container { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
-          .footer-buttons { width: 100% !important; justify-content: space-between !important; }
-          .footer-buttons button { flex: 1 !important; justify-content: center !important; padding: 12px 10px !important; }
+          .footer-buttons { width: 100% !important; justify-content: space-between !important; flex-wrap: wrap; }
+          .footer-buttons button { flex: 1 !important; justify-content: center !important; padding: 12px 10px !important; min-width: 45%; }
           .estado-firma { width: 100% !important; justify-content: center !important; }
         }
       `}</style>
@@ -92,7 +174,6 @@ export default function TarjetaAprobacion({
         boxShadow: modoOscuro ? '0 8px 30px rgba(0,0,0,0.4)' : '0 4px 15px rgba(0,0,0,0.04)'
       }}>
         
-        {/* 1. CABECERA: PERFIL Y ETIQUETA TIPO */}
         <div className="tarjeta-header">
           <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
             <img src={urlFoto} alt="" style={{ width: '48px', height: '48px', borderRadius: '14px', objectFit: 'cover', border: `1px solid ${c.border}`, flexShrink: 0 }} />
@@ -111,8 +192,6 @@ export default function TarjetaAprobacion({
               </div>
             </div>
           </div>
-          
-          {/* Píldora del Tipo de Permiso */}
           <span className="header-pill" style={{ 
             fontSize: '11.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg, 
             border: `1px solid ${estilo.border}`, padding: '6px 12px', borderRadius: '10px', textTransform: 'uppercase', letterSpacing: '0.02em'
@@ -121,7 +200,6 @@ export default function TarjetaAprobacion({
           </span>
         </div>
 
-        {/* 2. ALERTAS */}
         {(esUrgente || reincidencias > 0) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {esUrgente && (
@@ -139,10 +217,32 @@ export default function TarjetaAprobacion({
           </div>
         )}
 
-        {/* 3. BLOQUE CENTRAL DE INFORMACIÓN */}
         <div style={{ background: c.surface, border: `1px solid ${c.borderDivider}`, borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Fechas y Horas */}
+          {/* STEPPER: CADENA VISUAL DE FIRMAS */}
+          <div className="stepper-container">
+            <div className="stepper-item">
+              <span style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>1. Jefe:</span>
+              <span className="stepper-pill" style={{ backgroundColor: pasoJefe.badgeBg, borderColor: pasoJefe.borderColor, color: pasoJasoColor(pasoJefe) }}>
+                {pasoJefe.icon} {pasoJefe.label}
+              </span>
+            </div>
+
+            <div className="stepper-item">
+              <span style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>2. Gerente:</span>
+              <span className="stepper-pill" style={{ backgroundColor: pasoGerente.badgeBg, borderColor: pasoGerente.borderColor, color: pasoJasoColor(pasoGerente) }}>
+                {pasoGerente.icon} {pasoGerente.label}
+              </span>
+            </div>
+
+            <div className="stepper-item">
+              <span style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>3. RH:</span>
+              <span className="stepper-pill" style={{ backgroundColor: pasoRH.badgeBg, borderColor: pasoRH.borderColor, color: pasoJasoColor(pasoRH) }}>
+                {pasoRH.icon} {pasoRH.label}
+              </span>
+            </div>
+          </div>
+
           <div className="fechas-container">
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Calendar size={18} color={c.textMuted} /></div>
@@ -161,7 +261,6 @@ export default function TarjetaAprobacion({
             </div>
           </div>
 
-          {/* El Motivo Limpio */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <MessageSquare size={14} color={c.accent} />
@@ -174,7 +273,6 @@ export default function TarjetaAprobacion({
             </div>
           </div>
 
-          {/* Observaciones Extra */}
           {observacionesLimpias && (
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: c.bg, padding: '12px 14px', borderRadius: '10px', border: `1px solid ${c.border}`, marginTop: '4px' }}>
               <Info size={16} color={c.textSubtle} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -185,9 +283,7 @@ export default function TarjetaAprobacion({
           )}
         </div>
 
-        {/* 4. PIE DE TARJETA: ESTADO Y BOTONES */}
         <div className="footer-container">
-          
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dictamen de Nómina</span>
             <span style={{ fontSize: '14px', fontWeight: '900', color: solicitud.pago === 'Pendiente' ? '#f59e0b' : c.text, marginTop: '2px' }}>
@@ -197,18 +293,32 @@ export default function TarjetaAprobacion({
 
           {esPendiente ? (
             <div className="footer-buttons">
-              <button 
-                onClick={() => onRechazar(solicitud)} 
-                style={{ padding: '10px 16px', borderRadius: '10px', border: `1px solid ${c.border}`, background: 'transparent', color: c.danger, fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'background 0.2s' }}
-              >
-                <X size={16} /> Rechazar
-              </button>
-              <button 
-                onClick={() => onAprobar(solicitud)} 
-                style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: `0 4px 12px rgba(22, 163, 74, 0.3)` }}
-              >
-                <Check size={16} /> Evaluar
-              </button>
+              {/* BOTON ROJO DE OVERRIDE PARA RH */}
+              {mostrarOverride && (
+                <button 
+                  onClick={() => onForzarFirma(solicitud)} 
+                  style={{ padding: '10px 14px', borderRadius: '10px', border: `1px solid #ef4444`, backgroundColor: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '12px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <LockOpen size={16} /> Destrabar
+                </button>
+              )}
+
+              {esMiTurno() && (
+                <>
+                  <button 
+                    onClick={() => onRechazar(solicitud)} 
+                    style={{ padding: '10px 16px', borderRadius: '10px', border: `1px solid ${c.border}`, background: 'transparent', color: c.danger, fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'background 0.2s' }}
+                  >
+                    <X size={16} /> Rechazar
+                  </button>
+                  <button 
+                    onClick={() => onAprobar(solicitud)} 
+                    style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: `0 4px 12px rgba(22, 163, 74, 0.3)` }}
+                  >
+                    <Check size={16} /> Evaluar
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <span className="estado-firma" style={{ fontSize: '13px', fontWeight: '800', color: c.accent, display: 'flex', alignItems: 'center', gap: '6px', background: c.accentSoft, padding: '8px 14px', borderRadius: '10px' }}>
@@ -220,4 +330,9 @@ export default function TarjetaAprobacion({
       </div>
     </>
   );
+}
+
+// Auxiliar para extraer color
+function pasoJasoColor(paso) {
+  return paso.textColor;
 }

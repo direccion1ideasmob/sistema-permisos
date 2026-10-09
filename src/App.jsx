@@ -1,15 +1,16 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-
+import Inicio from './pages/Inicio';
 import AdminUsuarios from './pages/AdminUsuarios';
 import Layout from './components/Layout'; 
 import Login from './pages/Login';
-import Solicitar from './pages/Solicitar'; // <--- Import indispensable
+import Solicitar from './pages/Solicitar';
 import MisPermisos from './pages/MisPermisos';
 import Aprobaciones from './pages/Aprobaciones';
 import Caseta from './pages/Caseta';
 import AprobarDirecto from './pages/AprobarDirecto';
+import ControlHistorial from './pages/ControlHistorial';
 
 function RutasProtegidas() {
   const { usuario, iniciarSesion } = useAuth();
@@ -31,14 +32,16 @@ export default function App() {
           
           {/* Rutas Privadas envueltas en Layout */}
           <Route element={<RutasProtegidas />}>
+            <Route path="/inicio" element={<Inicio />} />
             <Route path="/solicitar" element={<Solicitar />} />
             <Route path="/mis-permisos" element={<MisPermisos />} />
             <Route path="/aprobaciones" element={<Aprobaciones />} />
+            <Route path="/control-historial" element={<ControlHistorial />} />
             <Route path="/caseta" element={<Caseta />} />
             <Route path="/directorio" element={<AdminUsuarios />} />
             
-            {/* Redirección por defecto a Crear Solicitud */}
-            <Route path="/" element={<Navigate to="/solicitar" replace />} />
+            {/* Redirección por defecto a INICIO */}
+            <Route path="/" element={<Navigate to="/inicio" replace />} />
           </Route>
           
           {/* Comodín de seguridad */}
