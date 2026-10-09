@@ -188,7 +188,7 @@ export default function Aprobaciones() {
         );
       }
 
-      // PASO CADENA: Notifica a los siguientes aprobadores (ej. Gerente a todo RH)
+      // PASO CADENA: Notifica a los siguientes aprobadores
       if (siguientesEnFirmar.length > 0) {
         try {
             const { data: subs } = await supabase.from('suscripciones_push').select('subscription').in('usuario_id', siguientesEnFirmar);
@@ -197,11 +197,27 @@ export default function Aprobaciones() {
                 const fotoSolicitante = solicitud.usuarios?.foto_url || null;
                 const asuntoRaw = solicitud.asunto_motivo || '';
                 const matchMotivo = asuntoRaw.match(/\[(.*?)\]\s*(.*)/);
-                const naturalezaClean = matchMotivo ? matchMotivo[1] : '';
+                const naturalezaClean = matchMotivo ? matchMotivo[1].toUpperCase() : '';
                 const motivoLimpio = matchMotivo ? matchMotivo[2] : asuntoRaw;
-                const tipoClean = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
-                const tituloNotifDomino = solicitud.tipo_permiso === 'vacaciones' ? 'Vacaciones' : `${tipoClean} (${naturalezaClean})`;
-                const mensajeNotifDomino = `${nombreSolicitante}: "${motivoLimpio}"`;
+                
+                // 1. CONSTRUCCIÓN DE TÍTULO UNIFICADO
+                let titNotif = '';
+                if (solicitud.tipo_permiso === 'salida') titNotif = 'SALIDA ANTICIPADA';
+                else if (solicitud.tipo_permiso === 'retardo') titNotif = 'RETARDO';
+                else if (solicitud.tipo_permiso === 'falta') titNotif = 'FALTA PROGRAMADA';
+                else if (solicitud.tipo_permiso === 'vacaciones') titNotif = 'VACACIONES';
+
+                // 2. CONSTRUCCIÓN DE ETIQUETAS Y EMOJIS (Igual a AprobarDirecto)
+                let etiquetaNaturaleza = '🏠 PERSONAL / FAMILIAR';
+                if (naturalezaClean === 'ASUNTO DE TRABAJO') etiquetaNaturaleza = '💼 ASUNTO LABORAL';
+                else if (naturalezaClean === 'CITA MÉDICA') etiquetaNaturaleza = '🏥 CITA MÉDICA';
+                else if (naturalezaClean === 'VACACIONES' || solicitud.tipo_permiso === 'vacaciones') etiquetaNaturaleza = '🌴 PERIODO VACACIONAL';
+                else if (naturalezaClean) etiquetaNaturaleza = `🏠 ${naturalezaClean}`;
+
+                const horarioLimpio = (solicitud.observaciones || '').split(' | ')[0];
+                
+                const tituloFinal = titNotif;
+                const mensajeFinal = `👤 ${nombreSolicitante}\n${etiquetaNaturaleza}\n${horarioLimpio}\n💬 ${motivoLimpio}`;
 
                 const envios = subs.map(async (item) => {
                     let subLimpia = item.subscription;
@@ -211,7 +227,13 @@ export default function Aprobaciones() {
                     const res = await fetch('/api/notificar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ subscription: subLimpia, titulo: tituloNotifDomino, mensaje: mensajeNotifDomino, fotoUrl: fotoSolicitante, urlDestino: '/aprobaciones' })
+                        body: JSON.stringify({ 
+                          subscription: subLimpia, 
+                          titulo: tituloFinal, 
+                          mensaje: mensajeFinal, 
+                          fotoUrl: fotoSolicitante, 
+                          urlDestino: '/aprobaciones' 
+                        })
                     });
                     return res.json();
                 });
