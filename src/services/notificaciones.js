@@ -29,12 +29,13 @@ export async function registrarSuscripcionPush() {
 
     let suscripcion = await registro.pushManager.getSubscription();
     
-    // Si hay una suscripción vieja atrapada, la destruimos para forzar una limpia
+    // CORRECCIÓN VITAL: Si ya hay una suscripción, la reciclamos. 
+    // ¡NO LA DESTRUIMOS! Así conservamos la misma huella (endpoint).
     if (suscripcion) {
-      await suscripcion.unsubscribe();
+      return suscripcion.toJSON();
     }
 
-    // Generamos la suscripción nueva forzosamente con la llave correcta
+    // Si no existía ninguna, generamos la suscripción nueva con la llave
     suscripcion = await registro.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY),
