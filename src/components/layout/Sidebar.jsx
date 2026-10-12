@@ -98,12 +98,13 @@ export default function Sidebar({
         .delete()
         .eq('subscription->>endpoint', endpointActual);
 
-      // 2. Inserción limpia
+     // 2. Inserción limpia
       const { error } = await supabase
         .from('suscripciones_push')
         .insert([{ 
           usuario_id: usuarioLogueado.id, 
-          subscription: sub 
+          subscription: sub,
+          endpoint: endpointActual // <--- ESTA ES LA LÍNEA QUE ME TRAGUÉ
         }]);
 
       if (error) throw error;
