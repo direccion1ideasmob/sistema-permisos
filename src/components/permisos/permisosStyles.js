@@ -1,20 +1,18 @@
 export const obtenerTemaPermisos = (modoOscuro) => ({
-  bg: modoOscuro ? '#09090b' : '#ffffff',
-  surface: modoOscuro ? '#111115' : '#f8fafc',
-  surfaceCard: modoOscuro ? '#141418' : '#ffffff',
-  border: modoOscuro ? '#27272a' : '#cbd5e1',
-  borderSubtle: modoOscuro ? '#1f1f23' : '#e2e8f0',
-  text: modoOscuro ? '#ffffff' : '#09090b',
-  textMuted: modoOscuro ? '#a1a1aa' : '#475569',
-  textSubtle: modoOscuro ? '#71717a' : '#64748b',
-  inputBg: modoOscuro ? '#18181b' : '#ffffff',
-  inputBorder: modoOscuro ? '#3f3f46' : '#94a3b8',
-  accent: '#16a34a',
-  accentSoft: modoOscuro ? 'rgba(22, 163, 74, 0.2)' : 'rgba(22, 163, 74, 0.12)',
+  bg: modoOscuro ? '#171717' : '#fafafa', // Gris carbón puro (sin azul) / Gris clarito
+  surface: modoOscuro ? '#262626' : '#f5f5f5', // Fondo de tarjeta oscuro puro
+  surfaceCard: modoOscuro ? '#262626' : '#ffffff', // Tarjeta pura
+  border: modoOscuro ? '#404040' : '#e5e5e5', // Bordes neutros
+  borderSubtle: modoOscuro ? '#525252' : '#f5f5f5',
+  text: modoOscuro ? '#ffffff' : '#171717', // Texto blanco puro / negro carbón
+  textMuted: modoOscuro ? '#a3a3a3' : '#737373', // Texto secundario gris puro
+  textSubtle: modoOscuro ? '#737373' : '#a3a3a3',
+  inputBg: modoOscuro ? '#171717' : '#ffffff',
+  inputBorder: modoOscuro ? '#525252' : '#d4d4d4',
+  accent: '#16a34a', // Verde
+  accentSoft: modoOscuro ? 'rgba(22, 163, 74, 0.15)' : 'rgba(22, 163, 74, 0.08)',
   warning: '#f59e0b',
-  warningSoft: modoOscuro ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)',
   danger: '#ef4444',
-  dangerSoft: modoOscuro ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)'
 });
 
 export const generarEstilosPermisos = (c, modoOscuro) => `
@@ -25,52 +23,55 @@ export const generarEstilosPermisos = (c, modoOscuro) => `
     display: flex;
     flex-direction: column;
     gap: 16px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     box-sizing: border-box;
     padding: 0 4px;
+    color: ${c.text};
   }
 
   .permiso-card-box {
     background: ${c.surfaceCard};
     border: 1px solid ${c.border};
-    border-radius: 14px;
+    border-radius: 16px;
     padding: 16px 20px;
     box-sizing: border-box;
-    box-shadow: ${modoOscuro ? '0 4px 20px rgba(0,0,0,0.5)' : '0 2px 8px rgba(0,0,0,0.04)'};
+    box-shadow: ${modoOscuro ? '0 4px 20px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.02)'};
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  /* INPUTS DE ALTO CONTRASTE CON COLOR-SCHEME */
+  /* INPUTS MODERNOS */
   .input-permiso {
     width: 100%;
     height: 42px;
     padding: 0 12px;
-    border-radius: 8px;
-    border: 1.5px solid ${c.inputBorder};
+    border-radius: 10px;
+    border: 1px solid ${c.inputBorder};
     background: ${c.inputBg};
     color: ${c.text} !important;
     font-size: 13.5px;
-    font-weight: 600;
+    font-weight: 500;
     outline: none;
     box-sizing: border-box;
-    color-scheme: ${modoOscuro ? 'dark' : 'light'}; /* VITAL PARA QUE FECHA Y HORA SE VEAN */
-    transition: border-color 0.15s ease;
+    color-scheme: ${modoOscuro ? 'dark' : 'light'};
+    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
   }
   .input-permiso:focus {
     border-color: ${c.accent};
-    box-shadow: 0 0 0 2px ${c.accentSoft};
+    box-shadow: 0 0 0 3px ${c.accentSoft};
   }
 
   .label-permiso {
     display: block;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 700;
     color: ${c.textMuted};
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     margin-bottom: 6px;
   }
 
-  /* BOTONES DE TIPO DE PASE */
+  /* CHIPS / BOTONES DE TIPO DE PASE */
   .grid-tipo-pase {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -84,12 +85,12 @@ export const generarEstilosPermisos = (c, modoOscuro) => `
 
   .pill-movimiento {
     padding: 10px 8px;
-    border-radius: 8px;
-    border: 1.5px solid ${c.border};
+    border-radius: 10px;
+    border: 1px solid ${c.border};
     background: ${c.surface};
     color: ${c.textMuted};
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     display: flex;
     flex-direction: column;
@@ -97,15 +98,19 @@ export const generarEstilosPermisos = (c, modoOscuro) => `
     justify-content: center;
     gap: 6px;
     text-align: center;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
+  }
+  .pill-movimiento:hover {
+    border-color: ${c.textMuted};
   }
   .pill-movimiento.active {
     border-color: ${c.accent};
     background: ${c.accentSoft};
     color: ${c.accent};
+    box-shadow: 0 2px 8px ${c.accentSoft};
   }
 
-  /* CUADRÍCULA DE FECHAS Y HORAS BLINDADA CONTRA DESCUADRES */
+  /* CUADRÍCULAS RESPONSIVAS */
   .grid-fechas-horas {
     display: grid;
     grid-template-columns: 1fr;
@@ -117,7 +122,6 @@ export const generarEstilosPermisos = (c, modoOscuro) => `
     }
   }
 
-  /* NATURALEZA DEL ASUNTO */
   .grid-naturaleza {
     display: grid;
     grid-template-columns: 1fr;
@@ -126,6 +130,14 @@ export const generarEstilosPermisos = (c, modoOscuro) => `
   @media (min-width: 500px) {
     .grid-naturaleza {
       grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  /* 🔥 EL TRUCO PARA EL CELULAR: Arregla los sellos de 3 columnas sin tocar el JSX 🔥 */
+  @media (max-width: 500px) {
+    div[style*="repeat(3, 1fr)"] {
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important;
+      gap: 6px !important;
     }
   }
 

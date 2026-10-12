@@ -51,13 +51,19 @@ export default function TarjetaAprobacion({
   }, [esRetardo, solicitud, fechaCreacion]);
 
   const procesarMotivo = (textoCrudo = '') => {
-    if (!textoCrudo) return { etiqueta: 'SIN CATEGORÍA', redaccion: 'No se ingresaron detalles.' };
+    if (!textoCrudo) return { etiqueta: '', redaccion: 'No se ingresaron detalles.' };
     const txt = String(textoCrudo).trim();
-    const match = txt.match(/^([\[\{])(.*?)([\]\}])\s*([\s\S]*)\$/);
+    
+    // FÓRMULA CORREGIDA: Busca [ALGO] al inicio y separa el resto
+    const match = txt.match(/^\[(.*?)\]\s*(.*)/);
+    
     if (match) {
-      return { etiqueta: match[2].trim(), redaccion: match[4].trim() || 'Sin comentarios adicionales.' };
+      return { 
+        etiqueta: match[1].trim(), 
+        redaccion: match[2].trim() || 'Sin comentarios adicionales.' 
+      };
     }
-    return { etiqueta: 'MOTIVO DE LA SOLICITUD', redaccion: txt };
+    return { etiqueta: '', redaccion: txt };
   };
 
   const { etiqueta, redaccion } = procesarMotivo(solicitud.asunto_motivo);
@@ -73,56 +79,22 @@ export default function TarjetaAprobacion({
   const estilo = getEstiloTipo(solicitud.tipo_permiso);
   const observacionesLimpias = solicitud.observaciones ? solicitud.observaciones.replace(/Nota:\s*/i, '').trim() : '';
 
-  // -------------------------------------------------------------
-  // HELPER VISUAL DE ESTADOS PARA LA CADENA DE FIRMAS (STEPPER)
-  // -------------------------------------------------------------
   const renderPasoFirma = (titulo, estado, esSiguienteTurno) => {
     const est = (estado || 'pendiente').toLowerCase();
 
     if (['autorizado', 'auto_aprobado'].includes(est)) {
-      return {
-        badgeBg: 'rgba(34, 197, 94, 0.12)',
-        borderColor: '#22c55e',
-        textColor: '#22c55e',
-        icon: <CheckCircle2 size={13} />,
-        label: est === 'auto_aprobado' ? 'Auto-aprobado' : 'Aprobado'
-      };
+      return { badgeBg: 'rgba(34, 197, 94, 0.12)', borderColor: '#22c55e', textColor: '#22c55e', icon: <CheckCircle2 size={13} />, label: est === 'auto_aprobado' ? 'Auto-aprobado' : 'Aprobado' };
     }
     if (['escalado', 'omitido'].includes(est)) {
-      return {
-        badgeBg: 'rgba(59, 130, 246, 0.12)',
-        borderColor: '#3b82f6',
-        textColor: '#3b82f6',
-        icon: <FastForward size={13} />,
-        label: est === 'escalado' ? 'Escalado por RH' : 'Omitido'
-      };
+      return { badgeBg: 'rgba(59, 130, 246, 0.12)', borderColor: '#3b82f6', textColor: '#3b82f6', icon: <FastForward size={13} />, label: est === 'escalado' ? 'Escalado por RH' : 'Omitido' };
     }
     if (est === 'rechazado') {
-      return {
-        badgeBg: 'rgba(239, 68, 68, 0.12)',
-        borderColor: '#ef4444',
-        textColor: '#ef4444',
-        icon: <XCircle size={13} />,
-        label: 'Rechazado'
-      };
+      return { badgeBg: 'rgba(239, 68, 68, 0.12)', borderColor: '#ef4444', textColor: '#ef4444', icon: <XCircle size={13} />, label: 'Rechazado' };
     }
-    // Pendiente
     if (esSiguienteTurno) {
-      return {
-        badgeBg: 'rgba(245, 158, 11, 0.12)',
-        borderColor: '#f59e0b',
-        textColor: '#f59e0b',
-        icon: <Clock size={13} />,
-        label: 'En espera'
-      };
+      return { badgeBg: 'rgba(245, 158, 11, 0.12)', borderColor: '#f59e0b', textColor: '#f59e0b', icon: <Clock size={13} />, label: 'En espera' };
     }
-    return {
-      badgeBg: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
-      borderColor: c.border,
-      textColor: c.textMuted,
-      icon: <Clock size={13} />,
-      label: 'Pendiente'
-    };
+    return { badgeBg: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)', borderColor: c.border, textColor: c.textMuted, icon: <Clock size={13} />, label: 'Pendiente' };
   };
 
   const firma1Listo = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(solicitud.firma_1_estado);
@@ -135,7 +107,7 @@ export default function TarjetaAprobacion({
   return (
     <>
       <style>{`
-        .tarjeta-wrapper { padding: 20px; border-radius: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .tarjeta-wrapper { padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 20px; }
         .tarjeta-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .fechas-container { display: flex; gap: 30px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid ${c.borderDivider}; }
         .footer-container { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
@@ -158,7 +130,7 @@ export default function TarjetaAprobacion({
         }
 
         @media (max-width: 480px) {
-          .tarjeta-wrapper { padding: 16px !important; border-radius: 16px !important; gap: 16px !important; }
+          .tarjeta-wrapper { padding: 16px !important; border-radius: 12px !important; gap: 16px !important; }
           .tarjeta-header { flex-direction: column !important; gap: 12px !important; }
           .header-pill { align-self: flex-start !important; }
           .fechas-container { flex-direction: column !important; gap: 14px !important; }
@@ -171,7 +143,7 @@ export default function TarjetaAprobacion({
 
       <div className="tarjeta-wrapper" style={{
         background: c.surfaceCard, border: `1px solid ${c.border}`,
-        boxShadow: modoOscuro ? '0 8px 30px rgba(0,0,0,0.4)' : '0 4px 15px rgba(0,0,0,0.04)'
+        boxShadow: modoOscuro ? '0 4px 15px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         
         <div className="tarjeta-header">
@@ -182,8 +154,8 @@ export default function TarjetaAprobacion({
                 {u.nombre_completo || 'Colaborador'}
               </div>
               <div style={{ fontSize: '12px', color: c.textMuted, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '2px 6px', borderRadius: '4px' }}>
-                  {solicitud.folio}
+                <span style={{ fontWeight: '700', color: c.textSubtle }}>
+                  REF: {solicitud.folio}
                 </span>
                 <span>•</span>
                 <span style={{ fontWeight: '600' }}>#{u.numero_empleado}</span>
@@ -193,8 +165,8 @@ export default function TarjetaAprobacion({
             </div>
           </div>
           <span className="header-pill" style={{ 
-            fontSize: '11.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg, 
-            border: `1px solid ${estilo.border}`, padding: '6px 12px', borderRadius: '10px', textTransform: 'uppercase', letterSpacing: '0.02em'
+            fontSize: '11px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg, 
+            border: `1px solid ${estilo.border}`, padding: '6px 12px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.02em'
           }}>
             {estilo.text}
           </span>
@@ -217,27 +189,24 @@ export default function TarjetaAprobacion({
           </div>
         )}
 
-        <div style={{ background: c.surface, border: `1px solid ${c.borderDivider}`, borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ background: c.surface, border: `1px solid ${c.borderDivider}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* STEPPER: CADENA VISUAL DE FIRMAS */}
           <div className="stepper-container">
             <div className="stepper-item">
               <span style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>1. Jefe:</span>
-              <span className="stepper-pill" style={{ backgroundColor: pasoJefe.badgeBg, borderColor: pasoJefe.borderColor, color: pasoJasoColor(pasoJefe) }}>
+              <span className="stepper-pill" style={{ backgroundColor: pasoJefe.badgeBg, borderColor: pasoJefe.borderColor, color: pasoJefe.textColor }}>
                 {pasoJefe.icon} {pasoJefe.label}
               </span>
             </div>
-
             <div className="stepper-item">
               <span style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>2. Gerente:</span>
-              <span className="stepper-pill" style={{ backgroundColor: pasoGerente.badgeBg, borderColor: pasoGerente.borderColor, color: pasoJasoColor(pasoGerente) }}>
+              <span className="stepper-pill" style={{ backgroundColor: pasoGerente.badgeBg, borderColor: pasoGerente.borderColor, color: pasoGerente.textColor }}>
                 {pasoGerente.icon} {pasoGerente.label}
               </span>
             </div>
-
             <div className="stepper-item">
               <span style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>3. RH:</span>
-              <span className="stepper-pill" style={{ backgroundColor: pasoRH.badgeBg, borderColor: pasoRH.borderColor, color: pasoJasoColor(pasoRH) }}>
+              <span className="stepper-pill" style={{ backgroundColor: pasoRH.badgeBg, borderColor: pasoRH.borderColor, color: pasoRH.textColor }}>
                 {pasoRH.icon} {pasoRH.label}
               </span>
             </div>
@@ -245,7 +214,7 @@ export default function TarjetaAprobacion({
 
           <div className="fechas-container">
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Calendar size={18} color={c.textMuted} /></div>
+              <div style={{ padding: '8px', borderRadius: '10px', background: c.surfaceCard, border: `1px solid ${c.borderDivider}` }}><Calendar size={18} color={c.textMuted} /></div>
               <div>
                 <div style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fecha Programada</div>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: c.text, marginTop: '2px' }}>{solicitud.fecha_permiso} {solicitud.fecha_fin && `al ${solicitud.fecha_fin}`}</div>
@@ -253,7 +222,7 @@ export default function TarjetaAprobacion({
             </div>
             
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <div style={{ padding: '8px', borderRadius: '10px', background: c.bg, border: `1px solid ${c.border}` }}><Clock size={18} color={c.textMuted} /></div>
+              <div style={{ padding: '8px', borderRadius: '10px', background: c.surfaceCard, border: `1px solid ${c.borderDivider}` }}><Clock size={18} color={c.textMuted} /></div>
               <div>
                 <div style={{ fontSize: '10.5px', color: c.textMuted, fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tiempo Solicitado</div>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: c.text, marginTop: '2px' }}>{solicitud.total_horas ? `${solicitud.total_horas} hr(s)` : 'Jornada Completa'}</div>
@@ -264,17 +233,23 @@ export default function TarjetaAprobacion({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <MessageSquare size={14} color={c.accent} />
-              <span style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {etiqueta}
-              </span>
+              {etiqueta ? (
+                <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '2px 8px', borderRadius: '12px', letterSpacing: '0.03em' }}>
+                  {etiqueta}
+                </span>
+              ) : (
+                <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                  MOTIVO DE LA SOLICITUD
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.5', fontWeight: '500', paddingLeft: '20px' }}>
+            <div style={{ fontSize: '13.5px', color: c.text, lineHeight: '1.5', fontWeight: '500', paddingLeft: '20px' }}>
               {redaccion}
             </div>
           </div>
 
           {observacionesLimpias && (
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: c.bg, padding: '12px 14px', borderRadius: '10px', border: `1px solid ${c.border}`, marginTop: '4px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: c.surfaceCard, padding: '12px 14px', borderRadius: '10px', border: `1px solid ${c.borderDivider}`, marginTop: '4px' }}>
               <Info size={16} color={c.textSubtle} style={{ flexShrink: 0, marginTop: '2px' }} />
               <div style={{ fontSize: '12.5px', color: c.textSubtle, lineHeight: '1.4', fontWeight: '500' }}>
                 {observacionesLimpias}
@@ -293,7 +268,6 @@ export default function TarjetaAprobacion({
 
           {esPendiente ? (
             <div className="footer-buttons">
-              {/* BOTON ROJO DE OVERRIDE PARA RH */}
               {mostrarOverride && (
                 <button 
                   onClick={() => onForzarFirma(solicitud)} 
@@ -330,9 +304,4 @@ export default function TarjetaAprobacion({
       </div>
     </>
   );
-}
-
-// Auxiliar para extraer color
-function pasoJasoColor(paso) {
-  return paso.textColor;
 }

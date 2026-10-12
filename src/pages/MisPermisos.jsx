@@ -148,7 +148,7 @@ export default function MisPermisos() {
     return (
       <div style={{
         padding: '10px 8px', borderRadius: '10px', background: config.bg,
-        border: `1.5px solid ${config.border}`, textAlign: 'center',
+        border: `1px solid ${config.border}`, textAlign: 'center',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'
       }}>
         <span style={{ fontSize: '9.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -173,7 +173,7 @@ export default function MisPermisos() {
           <p style={{ fontSize: '12px', color: c.textMuted, margin: '4px 0 0 0' }}>Testigo digital y estatus de autorización.</p>
         </div>
 
-        <div style={{ display: 'flex', background: c.card, padding: '4px', borderRadius: '10px', border: `1px solid ${c.border}` }}>
+        <div style={{ display: 'flex', background: c.surfaceCard || c.surface, padding: '4px', borderRadius: '10px', border: `1px solid ${c.border}` }}>
           <button
             onClick={() => setPestaña('proceso')}
             style={{
@@ -209,7 +209,7 @@ export default function MisPermisos() {
         /* VISTA: SOLICITUDES EN PROCESO */
         <div>
           {enProceso.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', background: c.card, borderRadius: '12px', border: `1px dashed ${c.border}` }}>
+            <div style={{ textAlign: 'center', padding: '40px 20px', background: c.surfaceCard || c.surface, borderRadius: '12px', border: `1px dashed ${c.border}` }}>
               <CheckCircle2 size={36} color={c.accent} style={{ marginBottom: '8px', opacity: 0.6 }} />
               <h4 style={{ margin: '0 0 4px 0', color: c.text, fontSize: '14px' }}>Sin solicitudes en curso</h4>
               <p style={{ fontSize: '12px', color: c.textMuted, margin: 0 }}>Tus pases activos o en revisión aparecerán aquí.</p>
@@ -226,62 +226,79 @@ export default function MisPermisos() {
                   <div 
                     key={p.id}
                     style={{
-                      background: c.card, border: `1px solid ${c.border}`, borderRadius: '16px',
-                      padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px'
+                      background: c.surfaceCard || '#fff', border: `1px solid ${c.border}`, borderRadius: '12px',
+                      padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px',
+                      boxShadow: modoOscuro ? '0 4px 15px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.05)'
                     }}
                   >
-                    {/* ENCABEZADO DE TARJETA */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
-                      <div>
-                        <div style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>
+                    {/* ENCABEZADO: LO QUE IMPORTA (TIPO Y FECHA) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>
                           {p.tipo_permiso}
-                        </div>
-                        <div style={{ fontSize: '15px', fontWeight: '800', color: c.text, fontFamily: 'ui-monospace, monospace' }}>
-                          FOLIO: {p.folio}
-                        </div>
+                        </span>
+                        <span style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>
+                          Fecha: {p.fecha_permiso}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '11px', fontWeight: '700', color: c.textMuted, background: c.surface, padding: '4px 8px', borderRadius: '6px', border: `1px solid ${c.border}` }}>
-                        Fecha: {p.fecha_permiso}
-                      </div>
+                      
+                      {/* LA PASTILLA VISUAL A LA DERECHA */}
+                      {p.asunto_motivo && p.asunto_motivo.includes('[') && (
+                        <span style={{ 
+                          background: c.accentSoft, color: c.accent, 
+                          padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '800' 
+                        }}>
+                          {p.asunto_motivo.substring(p.asunto_motivo.indexOf('[') + 1, p.asunto_motivo.indexOf(']'))}
+                        </span>
+                      )}
                     </div>
 
-                    {/* MOTIVO Y HORARIO */}
-                    <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.4' }}>
-                      <strong>Motivo:</strong> {p.asunto_motivo}
+                    {/* DETALLE DEL MOTIVO (LIMPIO) */}
+                    <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.5' }}>
+                      {p.asunto_motivo && p.asunto_motivo.includes(']') 
+                        ? p.asunto_motivo.substring(p.asunto_motivo.indexOf(']') + 1).trim() 
+                        : p.asunto_motivo
+                      }
                       {p.observaciones && (
-                        <div style={{ fontSize: '12px', color: c.textMuted, marginTop: '4px' }}>
+                        <div style={{ fontSize: '12px', color: c.textMuted, marginTop: '4px', background: c.surface, padding: '6px 8px', borderRadius: '6px' }}>
                           {p.observaciones}
                         </div>
                       )}
                     </div>
 
                     {/* SELLOS DE APROBACIÓN POR ÁREA */}
-                    <div>
+                    <div style={{ marginTop: '4px' }}>
                       <div style={{ fontSize: '10px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '6px' }}>
-                        Validación Institucional por Áreas
+                        Validación Institucional
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                         {renderSelloArea('Jefatura', p.firma_1_estado)}
                         {renderSelloArea('Gerencia', p.firma_2_estado)}
-                        {renderSelloArea('Recursos Humanos', p.firma_3_estado)}
+                        {renderSelloArea('R. Humanos', p.firma_3_estado)}
                       </div>
                     </div>
 
-                    {/* BOTÓN DE ESCALAMIENTO POR INACTIVIDAD */}
-                    {puedeEscalar && (
-                      <button
-                        onClick={() => escalarPermiso(p)}
-                        disabled={procesandoEscalamiento}
-                        style={{
-                          width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #f59e0b',
-                          backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#d97706', fontSize: '12px', fontWeight: '800',
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                        }}
-                      >
-                        <AlertTriangle size={15} />
-                        {procesandoEscalamiento ? 'Escalando...' : 'El Jefe no ha respondido: Escalar a Gerencia'}
-                      </button>
-                    )}
+                    {/* PIE DE TARJETA: EL FOLIO (PEQUEÑO, NO ESTORBA) Y BOTÓN DE ESCALAR */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: `1px dashed ${c.border}`, paddingTop: '10px' }}>
+                      <span style={{ fontSize: '10.5px', color: c.textSubtle, fontWeight: '700', fontFamily: 'monospace' }}>
+                        REF: {p.folio}
+                      </span>
+                      
+                      {puedeEscalar && (
+                        <button
+                          onClick={() => escalarPermiso(p)}
+                          disabled={procesandoEscalamiento}
+                          style={{
+                            padding: '6px 12px', borderRadius: '6px', border: 'none',
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#d97706', fontSize: '11px', fontWeight: '700',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                          }}
+                        >
+                          <AlertTriangle size={13} />
+                          {procesandoEscalamiento ? 'Escalando...' : 'Escalar inactividad'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -293,45 +310,76 @@ export default function MisPermisos() {
         /* VISTA: CONCLUIDOS / ARCHIVO HISTÓRICO (TESTIGO DIGITAL FINAL) */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {finalizados.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', background: c.card, borderRadius: '12px', border: `1px dashed ${c.border}` }}>
+            <div style={{ textAlign: 'center', padding: '40px 20px', background: c.surfaceCard || c.surface, borderRadius: '12px', border: `1px dashed ${c.border}` }}>
               <p style={{ fontSize: '12px', color: c.textMuted, margin: 0 }}>No tienes historial de pases autorizados o rechazados.</p>
             </div>
           ) : (
             finalizados.map(p => {
-              // CORRECCIÓN VITAL PARA ALTOS MANDOS (Aprobado vs Autorizado)
               const esAutorizado = ['autorizado', 'aprobado'].includes(p.estado_general);
 
               return (
                 <div 
                   key={p.id}
                   style={{
-                    background: c.card, border: `1px solid ${c.border}`, borderRadius: '16px',
-                    padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px'
+                    background: c.surfaceCard || '#fff', border: `1px solid ${c.border}`, borderRadius: '12px',
+                    padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px',
+                    boxShadow: modoOscuro ? '0 4px 15px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.05)'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: esAutorizado ? c.accent : c.danger, textTransform: 'uppercase' }}>
-                        {esAutorizado ? '✅ PASE AUTORIZADO' : '❌ SOLICITUD RECHAZADA'}
-                      </span>
-                      <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, fontFamily: 'ui-monospace, monospace' }}>
-                        FOLIO: {p.folio}
+                  {/* ENCABEZADO: TIPO, ESTADO Y FECHA */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>
+                          {p.tipo_permiso}
+                        </span>
+                        <span style={{ fontSize: '10px', fontWeight: '800', color: esAutorizado ? c.accent : c.danger, background: esAutorizado ? c.accentSoft : c.dangerSoft, padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                          {esAutorizado ? 'AUTORIZADO' : 'RECHAZADO'}
+                        </span>
                       </div>
+                      <span style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>
+                        Fecha: {p.fecha_permiso}
+                      </span>
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: c.textMuted }}>
-                      {p.fecha_permiso}
-                    </span>
+                    
+                    {/* LA PASTILLA VISUAL A LA DERECHA */}
+                    {p.asunto_motivo && p.asunto_motivo.includes('[') && (
+                      <span style={{ 
+                        background: c.accentSoft, color: c.accent, 
+                        padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '800' 
+                      }}>
+                        {p.asunto_motivo.substring(p.asunto_motivo.indexOf('[') + 1, p.asunto_motivo.indexOf(']'))}
+                      </span>
+                    )}
                   </div>
 
-                  <div style={{ fontSize: '12.5px', color: c.text }}>
-                    <strong>Motivo:</strong> {p.asunto_motivo}
+                  {/* DETALLE DEL MOTIVO (LIMPIO) */}
+                  <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.5' }}>
+                    {p.asunto_motivo && p.asunto_motivo.includes(']') 
+                      ? p.asunto_motivo.substring(p.asunto_motivo.indexOf(']') + 1).trim() 
+                      : p.asunto_motivo
+                    }
+                    {p.observaciones && (
+                      <div style={{ fontSize: '12px', color: c.textMuted, marginTop: '4px', background: c.surface, padding: '6px 8px', borderRadius: '6px' }}>
+                        {p.observaciones}
+                      </div>
+                    )}
                   </div>
 
                   {/* SELLOS EN ESTADO FINAL */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                    {renderSelloArea('Jefatura', p.firma_1_estado)}
-                    {renderSelloArea('Gerencia', p.firma_2_estado)}
-                    {renderSelloArea('Recursos Humanos', p.firma_3_estado)}
+                  <div style={{ marginTop: '4px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                      {renderSelloArea('Jefatura', p.firma_1_estado)}
+                      {renderSelloArea('Gerencia', p.firma_2_estado)}
+                      {renderSelloArea('R. Humanos', p.firma_3_estado)}
+                    </div>
+                  </div>
+
+                  {/* PIE DE TARJETA: EL FOLIO (PEQUEÑO, NO ESTORBA) */}
+                  <div style={{ marginTop: '4px', borderTop: `1px dashed ${c.border}`, paddingTop: '10px' }}>
+                    <span style={{ fontSize: '10.5px', color: c.textSubtle, fontWeight: '700', fontFamily: 'monospace' }}>
+                      REF: {p.folio}
+                    </span>
                   </div>
                 </div>
               );
