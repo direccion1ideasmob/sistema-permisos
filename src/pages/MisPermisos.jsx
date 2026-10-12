@@ -3,8 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
 
 import { obtenerTemaPermisos, generarEstilosPermisos } from '../components/permisos/permisosStyles';
-import { Clock, CheckCircle2, FileText, Bell, AlertTriangle, ShieldCheck, XCircle, FastForward } from 'lucide-react';
-import { registrarSuscripcionPush } from '../services/notificaciones';
+import { Clock, CheckCircle2, FileText, AlertTriangle, ShieldCheck, XCircle, FastForward } from 'lucide-react';
 
 export default function MisPermisos() {
   const { usuario } = useAuth();
@@ -16,7 +15,6 @@ export default function MisPermisos() {
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const [pestaña, setPestaña] = useState('proceso'); 
   
-  const [suscribiendo, setSuscribiendo] = useState(false);
   const [procesandoEscalamiento, setProcesandoEscalamiento] = useState(false);
 
   // Reloj interno para la regla de 1 hora
@@ -26,41 +24,6 @@ export default function MisPermisos() {
     const timer = setInterval(() => setHoraActual(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
-
-  const activarAlertas = async () => {
-    setSuscribiendo(true);
-    try {
-      if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.register('/sw.js');
-      }
-
-      const sub = await registrarSuscripcionPush();
-      if (!sub) {
-        alert("No se otorgaron permisos de notificación en el navegador.");
-        setSuscribiendo(false);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('suscripciones_push')
-        .upsert(
-          { 
-            usuario_id: usuario.id, 
-            subscription: sub, 
-            endpoint: sub.endpoint 
-          }, 
-          { onConflict: 'endpoint' }
-        );
-
-      if (error) throw error;
-      alert("✅ Alertas activadas correctamente en este dispositivo.");
-    } catch (error) {
-      console.error("Error al guardar suscripción:", error);
-      alert("Hubo un error al activar las alertas: " + (error.message || ''));
-    } finally {
-      setSuscribiendo(false);
-    }
-  };
 
   const cargarHistorial = useCallback(async () => {
     if (!usuario?.id) return;
@@ -91,6 +54,7 @@ export default function MisPermisos() {
     
     setProcesandoEscalamiento(true);
     try {
+      // 1. Actualizar en Supabase
       const { error } = await supabase
         .from('permisos')
         .update({ 
@@ -100,6 +64,35 @@ export default function MisPermisos() {
         .eq('id', permiso.id);
 
       if (error) throw error;
+
+      // 2. AVISAR AL GERENTE
+      if (permiso.firma_2_id) {
+        const { data: subs } = await supabase
+          .from('suscripciones_push')
+          .select('subscription')
+          .eq('usuario_id', permiso.firma_2_id);
+
+        if (subs && subs.length > 0) {
+          const envios = subs.map(async (item) => {
+            let subLimpia = item.subscription;
+            if (typeof subLimpia === 'string') {
+              try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+            }
+            const res = await fetch('/api/notificar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                subscription: subLimpia,
+                titulo: `⚠️ ESCALAMIENTO: ${permiso.tipo_permiso.toUpperCase()}`,
+                mensaje: `El Jefe de Área no respondió a tiempo. Se requiere tu autorización para el folio ${permiso.folio}.`,
+                urlDestino: '/aprobaciones'
+              })
+            });
+            return res.json();
+          });
+          await Promise.allSettled(envios);
+        }
+      }
 
       alert("✅ Solicitud escalada a Gerencia correctamente.");
       await cargarHistorial();
@@ -180,39 +173,29 @@ export default function MisPermisos() {
           <p style={{ fontSize: '12px', color: c.textMuted, margin: '4px 0 0 0' }}>Testigo digital y estatus de autorización.</p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button 
-            onClick={activarAlertas} 
-            disabled={suscribiendo}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${c.border}`, background: c.surface, color: c.accent, fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}
+        <div style={{ display: 'flex', background: c.card, padding: '4px', borderRadius: '10px', border: `1px solid ${c.border}` }}>
+          <button
+            onClick={() => setPestaña('proceso')}
+            style={{
+              padding: '8px 14px', borderRadius: '8px', border: 'none',
+              background: pestaña === 'proceso' ? c.accent : 'transparent',
+              color: pestaña === 'proceso' ? '#ffffff' : c.textMuted,
+              fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+            }}
           >
-            <Bell size={14} /> {suscribiendo ? 'Activando...' : 'Activar Alertas'}
+            <Clock size={14} /> En Proceso ({enProceso.length})
           </button>
-
-          <div style={{ display: 'flex', background: c.card, padding: '4px', borderRadius: '10px', border: `1px solid ${c.border}` }}>
-            <button
-              onClick={() => setPestaña('proceso')}
-              style={{
-                padding: '8px 14px', borderRadius: '8px', border: 'none',
-                background: pestaña === 'proceso' ? c.accent : 'transparent',
-                color: pestaña === 'proceso' ? '#ffffff' : c.textMuted,
-                fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
-              }}
-            >
-              <Clock size={14} /> En Proceso ({enProceso.length})
-            </button>
-            <button
-              onClick={() => setPestaña('historial')}
-              style={{
-                padding: '8px 14px', borderRadius: '8px', border: 'none',
-                background: pestaña === 'historial' ? c.accent : 'transparent',
-                color: pestaña === 'historial' ? '#ffffff' : c.textMuted,
-                fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
-              }}
-            >
-              <FileText size={14} /> Concluidos ({finalizados.length})
-            </button>
-          </div>
+          <button
+            onClick={() => setPestaña('historial')}
+            style={{
+              padding: '8px 14px', borderRadius: '8px', border: 'none',
+              background: pestaña === 'historial' ? c.accent : 'transparent',
+              color: pestaña === 'historial' ? '#ffffff' : c.textMuted,
+              fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+            }}
+          >
+            <FileText size={14} /> Concluidos ({finalizados.length})
+          </button>
         </div>
       </div>
 
@@ -315,7 +298,8 @@ export default function MisPermisos() {
             </div>
           ) : (
             finalizados.map(p => {
-              const esAutorizado = p.estado_general === 'autorizado';
+              // CORRECCIÓN VITAL PARA ALTOS MANDOS (Aprobado vs Autorizado)
+              const esAutorizado = ['autorizado', 'aprobado'].includes(p.estado_general);
 
               return (
                 <div 

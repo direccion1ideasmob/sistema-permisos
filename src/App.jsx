@@ -12,6 +12,7 @@ import Caseta from './pages/Caseta';
 import AprobarDirecto from './pages/AprobarDirecto';
 import ControlHistorial from './pages/ControlHistorial';
 
+// 1. EL CADENERO GENERAL (Verifica si hay sesión iniciada)
 function RutasProtegidas() {
   const { usuario, iniciarSesion } = useAuth();
 
@@ -20,6 +21,22 @@ function RutasProtegidas() {
   }
 
   return <Layout />;
+}
+
+// 2. EL NUEVO CADENERO ESTRICTO (Verifica los roles autorizados)
+function RutaRol({ rolesPermitidos, children }) {
+  const { usuario } = useAuth();
+  
+  // Si no hay usuario, lo saca
+  if (!usuario) return <Navigate to="/" replace />;
+  
+  // Si el rol del usuario NO está en la lista de permitidos, lo expulsa al inicio
+  if (!rolesPermitidos.includes(usuario.rol)) {
+    return <Navigate to="/inicio" replace />;
+  }
+
+  // Si tiene permiso, lo deja pasar
+  return children;
 }
 
 export default function App() {
@@ -35,10 +52,21 @@ export default function App() {
             <Route path="/inicio" element={<Inicio />} />
             <Route path="/solicitar" element={<Solicitar />} />
             <Route path="/mis-permisos" element={<MisPermisos />} />
+            
+            {/* Puedes aplicar RutaRol a estas también si lo necesitan en un futuro */}
             <Route path="/aprobaciones" element={<Aprobaciones />} />
             <Route path="/control-historial" element={<ControlHistorial />} />
             <Route path="/caseta" element={<Caseta />} />
-            <Route path="/directorio" element={<AdminUsuarios />} />
+            
+            {/* === RUTA BLINDADA: SOLO HR Y SUPERADMIN === */}
+            <Route 
+              path="/directorio" 
+              element={
+                <RutaRol rolesPermitidos={['superadmin', 'gerente_rh', 'rh_nominas']}>
+                  <AdminUsuarios />
+                </RutaRol>
+              } 
+            />
             
             {/* Redirección por defecto a INICIO */}
             <Route path="/" element={<Navigate to="/inicio" replace />} />

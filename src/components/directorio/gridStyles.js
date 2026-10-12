@@ -1,20 +1,31 @@
 export const obtenerTemaGrid = (modoOscuro) => ({
-  bg: modoOscuro ? '#09090b' : '#ffffff',
-  surface: modoOscuro ? '#0e1117' : '#f8fafc',
-  surfaceCard: modoOscuro ? '#12161f' : '#ffffff',
-  border: modoOscuro ? 'rgba(255, 255, 255, 0.07)' : '#e2e8f0',
-  borderDivider: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9',
-  text: modoOscuro ? '#f8fafc' : '#0f172a',
-  textMuted: modoOscuro ? '#94a3b8' : '#64748b',
-  textSubtle: modoOscuro ? '#64748b' : '#94a3b8',
-  rowHover: modoOscuro ? 'rgba(255, 255, 255, 0.025)' : '#f1f5f9',
-  rowActive: modoOscuro ? 'rgba(22, 163, 74, 0.12)' : 'rgba(22, 163, 74, 0.06)',
-  inputBg: modoOscuro ? '#161b24' : '#ffffff',
-  inputBorder: modoOscuro ? 'rgba(255, 255, 255, 0.14)' : '#cbd5e1',
+  // Fondos base (Gris más suave y elegante, no negro puro)
+  bg: modoOscuro ? '#27272a' : '#f8fafc', // Zinc 800
+  surface: modoOscuro ? '#27272a' : '#f1f5f9',
+  surfaceCard: modoOscuro ? '#3f3f46' : '#ffffff', // Zinc 700 para resaltar las tarjetas/tabla
+  
+  // Bordes
+  border: modoOscuro ? '#52525b' : 'rgba(0, 0, 0, 0.08)', // Zinc 600
+  borderDivider: modoOscuro ? '#52525b' : 'rgba(0, 0, 0, 0.04)',
+  
+  // Textos
+  text: modoOscuro ? '#f4f4f5' : '#09090b',
+  textMuted: modoOscuro ? '#a1a1aa' : '#71717a',
+  textSubtle: modoOscuro ? '#94a3b8' : '#94a3b8',
+  
+  // Interacciones
+  rowHover: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9',
+  rowActive: modoOscuro ? 'rgba(22, 163, 74, 0.2)' : 'rgba(22, 163, 74, 0.06)',
+  
+  // Inputs
+  inputBg: modoOscuro ? '#27272a' : '#ffffff',
+  inputBorder: modoOscuro ? '#52525b' : 'rgba(0, 0, 0, 0.08)',
+  
+  // Acentos
   accent: '#16a34a',
-  accentSoft: modoOscuro ? 'rgba(22, 163, 74, 0.15)' : 'rgba(22, 163, 74, 0.08)',
+  accentSoft: modoOscuro ? 'rgba(22, 163, 74, 0.2)' : 'rgba(22, 163, 74, 0.08)',
   danger: '#ef4444',
-  dangerSoft: modoOscuro ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)'
+  dangerSoft: modoOscuro ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.08)'
 });
 
 export const generarEstilosCSS = (c, modoOscuro) => `
@@ -49,14 +60,15 @@ export const generarEstilosCSS = (c, modoOscuro) => `
     height: 32px;
     padding: 0 12px;
     border-radius: 9999px;
-    border: 1px solid ${c.border};
-    background: ${c.surface};
+    border: 1.5px solid ${c.border};
+    background: ${c.surfaceCard};
     color: ${c.text};
     font-size: 11.5px;
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;
     flex-shrink: 0;
+    transition: all 0.2s ease;
   }
   .filter-pill.active {
     border-color: ${c.accent};
@@ -73,39 +85,19 @@ export const generarEstilosCSS = (c, modoOscuro) => `
     outline: none;
     cursor: pointer;
   }
-
-  /* ================= LISTA MÓVIL BLINDADA CONTRA DESCUADRES ================= */
-  .mobile-contact-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  .mobile-contact-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px;
-    border-radius: 12px;
+  .pill-select option {
     background: ${c.surfaceCard};
-    border: 1px solid ${c.border};
-    cursor: pointer;
-    box-sizing: border-box;
-    width: 100%;
-    overflow: hidden;
+    color: ${c.text};
   }
 
   /* ================= VISTA LAPTOP: TABLA MAESTRA ================= */
   .desktop-table-container {
     width: 100%;
-    border: 1px solid ${c.border};
+    border: 1.5px solid ${c.border};
     border-radius: 12px;
     overflow: hidden;
-    background: ${c.bg};
-    box-shadow: ${modoOscuro ? '0 4px 30px rgba(0,0,0,0.5)' : '0 1px 3px rgba(0,0,0,0.04)'};
+    background: ${c.surfaceCard};
+    box-shadow: ${modoOscuro ? '0 10px 30px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.04)'};
   }
 
   .desktop-table {
@@ -132,15 +124,13 @@ export const generarEstilosCSS = (c, modoOscuro) => `
 
   .desktop-table td {
     padding: 12px 14px;
-    border-bottom: 1px solid ${c.borderDivider};
+    border-bottom: 1.5px solid ${c.borderDivider};
     color: ${c.text};
     vertical-align: middle;
     cursor: pointer;
   }
 
-  .desktop-table tr.row-item:hover td {
-    background-color: ${c.rowHover};
-  }
+  .desktop-table tr.row-item:hover td { background-color: ${c.rowHover}; }
   .desktop-table tr.row-item.active-row td {
     background-color: ${c.rowActive};
     border-bottom-color: ${c.accent};
@@ -149,15 +139,30 @@ export const generarEstilosCSS = (c, modoOscuro) => `
   .mono-id {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-weight: 700;
-    color: ${c.accent};
+    color: ${c.textMuted};
+  }
+
+  /* ================= SCROLLBAR ELEGANTE PARA EL MODAL ================= */
+  .dossier-body-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .dossier-body-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dossier-body-scroll::-webkit-scrollbar-thumb {
+    background: ${c.border};
+    border-radius: 10px;
+  }
+  .dossier-body-scroll::-webkit-scrollbar-thumb:hover {
+    background: ${c.textMuted};
   }
 
   /* ================= MODAL DEL EXPEDIENTE ================= */
   .dossier-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(5px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
     z-index: 5000;
     display: flex;
     align-items: center;
@@ -166,35 +171,18 @@ export const generarEstilosCSS = (c, modoOscuro) => `
     box-sizing: border-box;
   }
 
-  @media (max-width: 768px) {
-    .dossier-overlay {
-      align-items: flex-end;
-      padding: 0;
-    }
-  }
-
   .dossier-drawer {
     width: 100%;
     max-width: 580px;
     max-height: 88vh;
-    background: ${c.bg};
-    border: 1px solid ${c.border};
+    background: ${c.bg}; /* Usa el gris base */
+    border: 1.5px solid ${c.border};
     border-radius: 16px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
     overflow: hidden;
     box-sizing: border-box;
-  }
-
-  @media (max-width: 768px) {
-    .dossier-drawer {
-      max-width: 100%;
-      height: 92vh;
-      border-radius: 20px 20px 0 0;
-      border-left: none;
-      border-right: none;
-    }
   }
 
   .dossier-body-scroll {
@@ -211,17 +199,18 @@ export const generarEstilosCSS = (c, modoOscuro) => `
     width: 100%;
     height: 38px;
     padding: 0 10px;
-    border-radius: 6px;
-    border: 1px solid ${c.inputBorder};
+    border-radius: 8px;
+    border: 1.5px solid ${c.inputBorder};
     background: ${c.inputBg};
     color: ${c.text};
     font-size: 13px;
     outline: none;
     box-sizing: border-box;
+    transition: all 0.2s ease;
   }
   .touch-field-input:focus {
     border-color: ${c.accent};
-    box-shadow: 0 0 0 2px ${c.accentSoft};
+    box-shadow: 0 0 0 3px ${c.accentSoft};
   }
 
   .touch-field-label {

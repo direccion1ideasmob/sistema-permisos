@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
-import { registrarSuscripcionPush } from '../services/notificaciones';
 
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../components/aprobaciones/aprobacionesStyles';
 import TarjetaAprobacion from '../components/aprobaciones/TarjetaAprobacion';
 import ModalDictamenAprobar from '../components/aprobaciones/ModalDictamenAprobar';
 import ModalRechazoPermiso from '../components/aprobaciones/ModalRechazoPermiso';
 import TablaHistorial from '../components/aprobaciones/TablaHistorial';
-import { CheckCircle2, Clock, Bell, Radar, FileCheck } from 'lucide-react';
+import { CheckCircle2, Clock, Radar, FileCheck } from 'lucide-react';
 
 export default function Aprobaciones() {
   const { usuario } = useAuth();
@@ -19,40 +18,10 @@ export default function Aprobaciones() {
 
   const [solicitudAprobar, setSolicitudAprobar] = useState(null);
   const [solicitudRechazar, setSolicitudRechazar] = useState(null);
-  const [dispositivoVinculado, setDispositivoVinculado] = useState(false);
 
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);
 
-  const vincularDispositivoManual = async () => {
-    try {
-      if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.register('/sw.js');
-      }
-
-      const sub = await registrarSuscripcionPush();
-      
-      if (!sub) {
-        alert("No se otorgaron permisos de notificación en el navegador.");
-        return;
-      }
-
-      const { error } = await supabase
-        .from('suscripciones_push')
-        .upsert(
-          { usuario_id: usuario.id, subscription: sub, endpoint: sub.endpoint }, 
-          { onConflict: 'endpoint' }
-        );
-
-      if (error) throw error;
-      setDispositivoVinculado(true);
-      alert("✅ ¡Teléfono vinculado con éxito!");
-    } catch (err) {
-      alert("Error al vincular: " + err.message);
-    }
-  };
-
-  // FUNCION CORREGIDA: Parsea correctamente la suscripción del empleado para cerrar el círculo
   const notificarEmpleado = async (empleadoId, titulo, mensaje, ruta = '/mis-permisos') => {
     try {
       const { data: subs } = await supabase.from('suscripciones_push').select('subscription').eq('usuario_id', empleadoId);
@@ -125,7 +94,7 @@ export default function Aprobaciones() {
   const ejecutarAprobacion = async (solicitud, dictamenPago, comentarios) => {
     setProcesando(true);
     try {
-      const esJefeDepto = usuario.rol === 'jefe_area' && (solicitud.firma_1_id === usuario.id || solicitud.usuarios?.departamento_id === usuario.departamento_id);
+      const esJefeDepto = usuario.rol === 'jefe_area' && solicitud.firma_1_id === usuario.id;
       const esGerente = solicitud.firma_2_id === usuario.id;
       const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
@@ -133,26 +102,33 @@ export default function Aprobaciones() {
       let siguientesEnFirmar = []; 
       let nuevoFolioGenerado = null;
 
+      // 1. EL ENRUTADOR INTELIGENTE
       if (esJefeDepto) {
         updates.firma_1_estado = 'autorizado';
         if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
-        if (solicitud.firma_2_id) siguientesEnFirmar.push(solicitud.firma_2_id);
+
+        // Analiza si el Gerente (Firma 2) es válido o se debe saltar a RH (Firma 3)
+        if (solicitud.firma_2_estado === 'pendiente') {
+          if (solicitud.firma_2_id) siguientesEnFirmar.push(solicitud.firma_2_id);
+        } else if (solicitud.firma_3_estado === 'pendiente') {
+          if (solicitud.firma_3_id) siguientesEnFirmar.push(solicitud.firma_3_id);
+          else {
+            const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']);
+            if (rhUsers) siguientesEnFirmar = [...siguientesEnFirmar, ...rhUsers.map(u => u.id)];
+          }
+        }
       }
       
-      // LOGICA CORREGIDA: Al firmar Gerente, notifica a TODOS los roles de RH (gerente_rh y rh_nominas)
       if (esGerente) {
         updates.firma_2_estado = 'autorizado';
         
-        const { data: rhUsers } = await supabase
-          .from('usuarios')
-          .select('id')
-          .in('rol', ['gerente_rh', 'rh_nominas']);
-          
-        if (rhUsers && rhUsers.length > 0) {
-          siguientesEnFirmar = [...siguientesEnFirmar, ...rhUsers.map(u => u.id)];
-        }
-        if (solicitud.firma_3_id && !siguientesEnFirmar.includes(solicitud.firma_3_id)) {
-          siguientesEnFirmar.push(solicitud.firma_3_id);
+        if (solicitud.firma_3_estado === 'pendiente') {
+          if (solicitud.firma_3_id) {
+            siguientesEnFirmar.push(solicitud.firma_3_id);
+          } else {
+            const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']);
+            if (rhUsers) siguientesEnFirmar = [...siguientesEnFirmar, ...rhUsers.map(u => u.id)];
+          }
         }
       }
       
@@ -188,7 +164,7 @@ export default function Aprobaciones() {
         );
       }
 
-      // PASO CADENA: Notifica a los siguientes aprobadores
+      // PASO CADENA: Notifica a los siguientes aprobadores usando enrutador inteligente
       if (siguientesEnFirmar.length > 0) {
         try {
             const { data: subs } = await supabase.from('suscripciones_push').select('subscription').in('usuario_id', siguientesEnFirmar);
@@ -200,14 +176,12 @@ export default function Aprobaciones() {
                 const naturalezaClean = matchMotivo ? matchMotivo[1].toUpperCase() : '';
                 const motivoLimpio = matchMotivo ? matchMotivo[2] : asuntoRaw;
                 
-                // 1. CONSTRUCCIÓN DE TÍTULO UNIFICADO
                 let titNotif = '';
                 if (solicitud.tipo_permiso === 'salida') titNotif = 'SALIDA ANTICIPADA';
                 else if (solicitud.tipo_permiso === 'retardo') titNotif = 'RETARDO';
                 else if (solicitud.tipo_permiso === 'falta') titNotif = 'FALTA PROGRAMADA';
                 else if (solicitud.tipo_permiso === 'vacaciones') titNotif = 'VACACIONES';
 
-                // 2. CONSTRUCCIÓN DE ETIQUETAS Y EMOJIS (Igual a AprobarDirecto)
                 let etiquetaNaturaleza = '🏠 PERSONAL / FAMILIAR';
                 if (naturalezaClean === 'ASUNTO DE TRABAJO') etiquetaNaturaleza = '💼 ASUNTO LABORAL';
                 else if (naturalezaClean === 'CITA MÉDICA') etiquetaNaturaleza = '🏥 CITA MÉDICA';
@@ -256,7 +230,7 @@ export default function Aprobaciones() {
   const ejecutarRechazo = async (solicitud, motivoRechazo) => {
     setProcesando(true);
     try {
-      const esJefeDepto = usuario.rol === 'jefe_area' && (solicitud.firma_1_id === usuario.id || solicitud.usuarios?.departamento_id === usuario.departamento_id);
+      const esJefeDepto = usuario.rol === 'jefe_area' && solicitud.firma_1_id === usuario.id;
       const esGerente = solicitud.firma_2_id === usuario.id;
       const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
@@ -329,18 +303,16 @@ export default function Aprobaciones() {
   const esGerente = usuario?.rol.includes('gerente') && !esRH;
   const esJefeDepto = usuario?.rol === 'jefe_area';
 
+  // FILTRO ESTRICTO DE VISIBILIDAD (Anti-Metiches)
   const solicitudesDelUsuario = solicitudes.filter(s => {
     if (esRH) return true;
-    if (esJefeDepto) {
-      if (s.firma_1_id === usuario.id) return true;
-      if (s.usuarios?.departamento_id && s.usuarios.departamento_id === usuario.departamento_id) return true;
-    }
-    if (s.firma_2_id === usuario?.id) return true;
+    if (esJefeDepto) return s.firma_1_id === usuario.id;
+    if (esGerente) return s.firma_2_id === usuario.id;
     return false;
   });
 
   const solicitudesPendientes = solicitudesDelUsuario.filter(s => {
-    if (s.estado_general === 'rechazado' || s.estado_general === 'autorizado') return false;
+    if (s.estado_general === 'rechazado' || s.estado_general === 'autorizado' || s.estado_general === 'aprobado') return false;
 
     if (esRH) {
       const firma1OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado);
@@ -348,20 +320,27 @@ export default function Aprobaciones() {
       return firma1OK && firma2OK && s.firma_3_estado === 'pendiente';
     }
 
-    if (esJefeDepto && s.firma_1_estado === 'pendiente') return true;
-    if (esGerente && s.firma_2_estado === 'pendiente' && ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado)) return true;
+    if (esGerente) {
+      const firma1OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado);
+      return firma1OK && s.firma_2_estado === 'pendiente';
+    }
+
+    if (esJefeDepto) {
+      return s.firma_1_estado === 'pendiente';
+    }
+    
     return false;
   });
 
   const solicitudesTransito = solicitudesDelUsuario.filter(s => {
     if (!esRH) return false;
-    if (s.estado_general === 'rechazado' || s.estado_general === 'autorizado') return false;
+    if (s.estado_general === 'rechazado' || s.estado_general === 'autorizado' || s.estado_general === 'aprobado') return false;
     if (s.firma_1_estado === 'pendiente' || s.firma_2_estado === 'pendiente') return true;
     return false;
   });
 
   const solicitudesHistorial = solicitudesDelUsuario.filter(s => 
-    s.estado_general === 'autorizado' || s.estado_general === 'rechazado'
+    s.estado_general === 'autorizado' || s.estado_general === 'rechazado' || s.estado_general === 'aprobado'
   );
 
   let listadoActual = [];
@@ -371,20 +350,6 @@ export default function Aprobaciones() {
   return (
     <div className="aprobaciones-container">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
-
-      {!dispositivoVinculado && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-          <button
-            onClick={vincularDispositivoManual}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '20px',
-              backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid #f59e0b', color: '#f59e0b', fontSize: '11px', fontWeight: '800', cursor: 'pointer'
-            }}
-          >
-            <Bell size={12} /> Activar notificaciones en este celular
-          </button>
-        </div>
-      )}
 
       {/* PESTAÑAS DINÁMICAS */}
       <div className="tabs-aprobacion-bar" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>

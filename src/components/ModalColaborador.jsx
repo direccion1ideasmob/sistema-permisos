@@ -29,18 +29,19 @@ export default function ModalColaborador({
   const [creandoNuevo, setCreandoNuevo] = useState({ sede: false, depto: false, area: false, puesto: false });
   const [textosNuevos, setTextosNuevos] = useState({ sede: '', depto: '', area: '', puesto: '' });
 
+  // === PALETA ZINC EXACTA (Sincronizada con gridStyles y Layout) ===
   const c = {
-    overlay: modoOscuro ? 'rgba(0, 0, 0, 0.75)' : 'rgba(15, 23, 42, 0.5)',
-    bg: modoOscuro ? '#09090b' : '#ffffff',
-    bgHeader: modoOscuro ? '#09090b' : '#ffffff',
-    bgBody: modoOscuro ? '#09090b' : '#fcfcfd',
-    border: modoOscuro ? '#27272a' : '#e4e4e7',
-    text: modoOscuro ? '#fafafa' : '#09090b',
-    label: modoOscuro ? '#a1a1aa' : '#52525b',
-    inputBg: modoOscuro ? '#121214' : '#ffffff',
-    inputBorder: modoOscuro ? '#3f3f46' : '#cbd5e1',
-    accent: '#10b981',
-    accentGlow: 'rgba(16, 185, 129, 0.15)',
+    overlay: modoOscuro ? 'rgba(0, 0, 0, 0.6)' : 'rgba(15, 23, 42, 0.5)',
+    bg: modoOscuro ? '#27272a' : '#f8fafc',
+    surfaceCard: modoOscuro ? '#3f3f46' : '#ffffff',
+    border: modoOscuro ? '#52525b' : 'rgba(0, 0, 0, 0.08)',
+    text: modoOscuro ? '#f4f4f5' : '#09090b',
+    label: modoOscuro ? '#a1a1aa' : '#71717a',
+    inputBg: modoOscuro ? '#27272a' : '#ffffff',
+    inputBorder: modoOscuro ? '#52525b' : 'rgba(0, 0, 0, 0.08)',
+    accent: '#16a34a',
+    accentSoft: modoOscuro ? 'rgba(22, 163, 74, 0.2)' : 'rgba(22, 163, 74, 0.08)',
+    accentGlow: 'rgba(22, 163, 74, 0.15)',
     danger: '#ef4444'
   };
 
@@ -92,12 +93,12 @@ export default function ModalColaborador({
     try {
       setGuardando(true);
 
-      // VALIDACIÓN Y CREACIÓN DE SEDE (Con filtro Anti-Duplicados)
+      // VALIDACIÓN Y CREACIÓN DE SEDE
       if (creandoNuevo.sede && textosNuevos.sede.trim()) {
         const nomLimpio = estandarizar(textosNuevos.sede.toUpperCase());
         const existente = sedes.find(s => s.nombre === nomLimpio);
         if (existente) {
-          sedeFinalId = existente.id; // Reutiliza si ya existe
+          sedeFinalId = existente.id; 
         } else {
           const { data, error } = await supabase.from('sedes').insert([{ nombre: nomLimpio }]).select().single();
           if (error) throw new Error("Error creando sede: " + error.message);
@@ -105,7 +106,7 @@ export default function ModalColaborador({
         }
       }
 
-      // VALIDACIÓN Y CREACIÓN DE DEPTO (Con filtro Anti-Duplicados)
+      // VALIDACIÓN Y CREACIÓN DE DEPTO
       if (creandoNuevo.depto && textosNuevos.depto.trim()) {
         const nomLimpio = estandarizar(textosNuevos.depto.toUpperCase());
         const existente = departamentos.find(d => d.nombre === nomLimpio);
@@ -206,7 +207,6 @@ export default function ModalColaborador({
     }
   };
 
-  // BUSCADOR DE SUGERENCIAS EN TIEMPO REAL
   const buscarSugerencias = (texto, lista, tipo) => {
     if (!texto.trim() || texto.length < 2) return null;
     const busqueda = texto.toUpperCase();
@@ -221,7 +221,7 @@ export default function ModalColaborador({
     if (coincidencias.length === 0) return null;
 
     return (
-      <div style={{ marginTop: '6px', background: c.inputBg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ marginTop: '6px', background: c.inputBg, border: `1.5px solid ${c.border}`, borderRadius: '8px', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <span style={{ fontSize: '10px', color: c.label, paddingLeft: '6px', fontWeight: 'bold' }}>Sugerencias (Clic para seleccionar):</span>
         {coincidencias.slice(0, 3).map((item, i) => (
           <div 
@@ -246,36 +246,42 @@ export default function ModalColaborador({
       <style>{`
         .modal-overlay {
           position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          background: ${c.overlay}; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+          background: ${c.overlay}; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
           display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
         }
 
         .modal-box {
-          background: ${c.bg}; border: 1px solid ${c.border}; border-radius: 24px;
+          background: ${c.bg}; border: 1.5px solid ${c.border}; border-radius: 20px;
           width: 100%; max-width: 740px; max-height: 90vh; display: flex; flex-direction: column;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); overflow: hidden;
+          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4); overflow: hidden;
           font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
         }
 
         .modal-header {
-          padding: 24px 32px 16px 32px; background: ${c.bg};
+          padding: 24px 32px 16px 32px; background: ${c.surfaceCard};
           display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0;
+          border-bottom: 1.5px solid ${c.border};
         }
         
         .modal-footer {
-          padding: 16px 32px 24px 32px; background: ${c.bg}; border-top: 1px solid ${c.border};
+          padding: 16px 32px 24px 32px; background: ${c.surfaceCard}; border-top: 1.5px solid ${c.border};
           display: flex; justify-content: flex-end; gap: 12px; flex-shrink: 0;
         }
 
         .modal-body {
-          padding: 16px 32px 32px 32px; overflow-y: auto; background: ${c.bg};
+          padding: 24px 32px; overflow-y: auto; background: ${c.bg};
           display: flex; flex-direction: column; gap: 36px;
         }
+
+        /* SCROLLBAR ELEGANTE */
+        .modal-body::-webkit-scrollbar { width: 6px; }
+        .modal-body::-webkit-scrollbar-track { background: transparent; }
+        .modal-body::-webkit-scrollbar-thumb { background: ${c.border}; border-radius: 10px; }
 
         .modal-title { font-size: 20px; font-weight: 800; color: ${c.text}; margin: 0; letter-spacing: -0.02em; }
         .modal-desc { font-size: 13.5px; color: ${c.label}; margin: 4px 0 0 0; font-weight: 500; }
         
-        .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid ${c.border}; }
+        .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1.5px solid ${c.border}; }
         .section-title { font-size: 12.5px; font-weight: 800; color: ${c.text}; text-transform: uppercase; letter-spacing: 0.04em; }
 
         .form-grid { display: grid; grid-template-columns: 1fr; gap: 16px 20px; }
@@ -287,42 +293,43 @@ export default function ModalColaborador({
         .input-group { display: flex; flex-direction: column; gap: 8px; }
         .clean-label { font-size: 11.5px; font-weight: 700; color: ${c.label}; text-transform: uppercase; letter-spacing: 0.02em; }
         .clean-input {
-          width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid ${c.inputBorder};
+          width: 100%; padding: 12px 14px; border-radius: 8px; border: 1.5px solid ${c.inputBorder};
           background: ${c.inputBg}; color: ${c.text}; font-size: 13.5px; outline: none; transition: all 0.2s; box-sizing: border-box;
-          text-transform: uppercase; /* FORZADO VISUAL A MAYÚSCULAS */
+          text-transform: uppercase; 
         }
         .clean-input.no-upper { text-transform: none; }
         .clean-input:focus { border-color: ${c.accent}; box-shadow: 0 0 0 3px ${c.accentGlow}; }
-        .clean-input::placeholder { color: ${modoOscuro ? '#52525b' : '#94a3b8'}; text-transform: none; }
-        .clean-input option { background: ${c.bg}; color: ${c.text}; }
+        .clean-input::placeholder { color: ${modoOscuro ? '#71717a' : '#94a3b8'}; text-transform: none; }
+        .clean-input option { background: ${c.surfaceCard}; color: ${c.text}; }
 
         .inline-create-box { display: flex; gap: 8px; align-items: center; }
         .btn-cancel-inline {
-          padding: 12px; border-radius: 10px; background: transparent; color: ${c.label}; border: 1px solid ${c.border};
+          padding: 12px; border-radius: 8px; background: transparent; color: ${c.label}; border: 1.5px solid ${c.border};
           cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .btn-cancel-inline:hover { background: ${c.border}; color: ${c.text}; }
 
         .btn-secondary {
-          padding: 12px 20px; border-radius: 10px; border: 1px solid ${c.border}; background: transparent; color: ${c.text};
-          font-size: 13.5px; font-weight: 700; cursor: pointer; transition: background 0.2s;
+          padding: 10px 16px; border-radius: 8px; border: 1.5px solid ${c.border}; background: transparent; color: ${c.text};
+          font-size: 12.5px; font-weight: 700; cursor: pointer; transition: background 0.2s;
         }
-        .btn-secondary:hover { background: ${c.inputBg}; }
+        .btn-secondary:hover { background: ${c.border}; }
         
         .btn-primary {
-          padding: 12px 24px; border-radius: 10px; border: none; background: ${c.accent}; color: #fff;
-          font-size: 13.5px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px;
+          padding: 10px 20px; border-radius: 8px; border: none; background: ${c.accent}; color: #fff;
+          font-size: 12.5px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px;
           box-shadow: 0 4px 12px ${c.accentGlow}; transition: transform 0.1s, opacity 0.2s;
         }
         .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-primary:active:not(:disabled) { transform: scale(0.98); }
 
         .avatar-squircle {
-          width: 86px; height: 86px; border-radius: 20px; overflow: hidden; border: 2px solid ${c.border};
+          width: 86px; height: 86px; border-radius: 20px; overflow: hidden; border: 1.5px solid ${c.border};
           position: relative; cursor: pointer; flex-shrink: 0; background: ${c.inputBg}; box-shadow: 0 8px 16px rgba(0,0,0,0.06);
         }
+        
         .firma-box {
-          width: 200px; height: 86px; border-radius: 20px; border: 2px dashed ${c.border}; background: ${c.inputBg};
+          width: 200px; height: 86px; border-radius: 12px; border: 2px dashed ${c.border}; background: #ffffff;
           display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: hidden;
           transition: border-color 0.2s;
         }
@@ -341,7 +348,7 @@ export default function ModalColaborador({
               <h2 className="modal-title">Nuevo Colaborador</h2>
               <p className="modal-desc">Completa los datos para registrar un elemento en el directorio corporativo.</p>
             </div>
-            <button onClick={onClose} style={{ background: c.inputBg, border: `1px solid ${c.border}`, borderRadius: '50%', color: c.label, cursor: 'pointer', padding: '6px', display: 'flex' }}>
+            <button onClick={onClose} style={{ background: c.inputBg, border: `1.5px solid ${c.border}`, borderRadius: '50%', color: c.label, cursor: 'pointer', padding: '6px', display: 'flex' }}>
               <X size={18} />
             </button>
           </div>
@@ -352,7 +359,7 @@ export default function ModalColaborador({
               
               <div className="avatar-squircle" onClick={() => setMostrarSelectorFoto(true)} title="Subir Foto de Perfil">
                 <img 
-                  src={fotoPreview || `https://ui-avatars.com/api/?name=${formData.nombre_completo || 'N'}&background=10b981&color=fff`} 
+                  src={fotoPreview || `https://ui-avatars.com/api/?name=${formData.nombre_completo || 'N'}&background=16a34a&color=fff`} 
                   alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                 />
                 <div className="avatar-overlay" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', opacity: fotoPreview ? 0 : 1, transition: 'opacity 0.2s' }}>
@@ -365,8 +372,8 @@ export default function ModalColaborador({
                   <img src={firmaPreview} alt="Firma" style={{ width: '90%', height: '90%', objectFit: 'contain' }} />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-                    <PenTool color={c.label} size={22} />
-                    <span style={{ fontSize: '11px', fontWeight: '800', color: c.label, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <PenTool color="#94a3b8" size={22} />
+                    <span style={{ fontSize: '11px', fontWeight: '800', color: "#94a3b8", textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Subir Firma
                     </span>
                   </div>
@@ -409,7 +416,7 @@ export default function ModalColaborador({
             {/* SECCIÓN 2: ESTRUCTURA */}
             <div>
               <div className="section-header">
-                <div style={{ background: 'rgba(22, 163, 74, 0.1)', padding: '8px', borderRadius: '10px', color: c.accent, display: 'flex' }}><Briefcase size={16} /></div>
+                <div style={{ background: c.accentSoft, padding: '8px', borderRadius: '10px', color: c.accent, display: 'flex' }}><Briefcase size={16} /></div>
                 <span className="section-title">Ubicación y Puesto</span>
               </div>
               
@@ -551,10 +558,10 @@ export default function ModalColaborador({
 
       {mostrarSelectorFoto && (
         <div onClick={() => setMostrarSelectorFoto(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: '20px', padding: '24px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '20px', padding: '24px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
             <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '800', color: c.text, textAlign: 'center' }}>Fotografía de Perfil</h3>
             <button onClick={() => { setMostrarSelectorFoto(false); camaraInputRef.current?.click(); }} style={{ padding: '14px', background: c.accent, color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}><Camera size={18} /> Tomar Foto</button>
-            <button onClick={() => { setMostrarSelectorFoto(false); galeriaInputRef.current?.click(); }} style={{ padding: '14px', background: c.inputBg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}><Image size={18} /> Subir Archivo</button>
+            <button onClick={() => { setMostrarSelectorFoto(false); galeriaInputRef.current?.click(); }} style={{ padding: '14px', background: c.inputBg, color: c.text, border: `1.5px solid ${c.border}`, borderRadius: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}><Image size={18} /> Subir Archivo</button>
             {fotoPreview && <button onClick={() => { setMostrarSelectorFoto(false); setFotoAmpliada(true); }} style={{ padding: '14px', background: 'transparent', color: c.label, border: 'none', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}><Eye size={18} /> Ver Actual</button>}
           </div>
         </div>

@@ -2,9 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { 
   Factory, Building2, HardHat, ChevronDown, ChevronRight, 
-  MapPin, Edit2, Crown, Check, X, Save 
+  MapPin, Edit2, Crown, UserCheck, Shield, Lock, Unlock, X, Save 
 } from 'lucide-react';
-import { obtenerIconoDepto, obtenerBadgeRol, estandarizar } from '../utils/directorioHelpers';
+import { obtenerBadgeRol, estandarizar } from '../utils/directorioHelpers';
+
+// Importamos el mismo modal de seguridad que usas en el DirectorioGrid
+import ModalSeguridadPin from './directorio/ModalSeguridadPin';
+
+// === FUNCIÓN DE APOYO PARA ORDENAR POR APELLIDOS ===
+const extraerApellidosParaOrden = (nombreCompleto) => {
+  if (!nombreCompleto) return '';
+  const partes = nombreCompleto.trim().split(/\s+/);
+  if (partes.length <= 1) return nombreCompleto;
+  if (partes.length === 2) return partes[1]; 
+  return partes.slice(-2).join(' '); 
+};
 
 export default function VistaArbol({ 
   usuarios = [], departamentos = [], deptosAbiertos = {}, toggleDepto, 
@@ -12,14 +24,26 @@ export default function VistaArbol({
 }) {
   const [filtro, setFiltro] = useState('ALL');
 
-  // Mini-edición flotante integrada
+  // Detección Responsiva (Celular / Tablet)
+  const [esMobile, setEsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setEsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Seguridad y Edición
+  const [seguridadDesbloqueada, setSeguridadDesbloqueada] = useState(false);
+  const [modalPinAbierto, setModalPinAbierto] = useState(false);
+
+  // Mini-edición flotante de departamentos
   const [deptoEditandoId, setDeptoEditandoId] = useState(null);
   const [nombreEdit, setNombreEdit] = useState('');
   const [clasifEdit, setClasifEdit] = useState('produccion');
   const [guardando, setGuardando] = useState(false);
   const popoverRef = useRef(null);
 
-  // Cerrar popover si hace clic fuera
   useEffect(() => {
     const clickFuera = (e) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target)) {
@@ -30,15 +54,16 @@ export default function VistaArbol({
     return () => document.removeEventListener('mousedown', clickFuera);
   }, []);
 
+  // === PALETA ZINC ===
   const c = {
     bg: 'transparent',
-    text: modoOscuro ? '#f8fafc' : '#0f172a',
-    subText: modoOscuro ? '#94a3b8' : '#64748b',
-    line: modoOscuro ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-    hoverBg: modoOscuro ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
-    popoverBg: modoOscuro ? '#141418' : '#ffffff',
-    popoverBorder: modoOscuro ? '#27272a' : '#e2e8f0',
-    inputBg: modoOscuro ? '#18181f' : '#f8fafc',
+    text: modoOscuro ? '#f4f4f5' : '#09090b',
+    subText: modoOscuro ? '#a1a1aa' : '#71717a',
+    line: modoOscuro ? '#3f3f46' : 'rgba(0, 0, 0, 0.08)',
+    hoverBg: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
+    popoverBg: modoOscuro ? '#27272a' : '#ffffff',
+    popoverBorder: modoOscuro ? '#52525b' : '#e2e8f0',
+    inputBg: modoOscuro ? '#18181b' : '#f8fafc',
     accent: '#16a34a'
   };
 
@@ -50,7 +75,6 @@ export default function VistaArbol({
 
   const seccionesVisibles = filtro === 'ALL' ? secciones : secciones.filter(s => s.key === filtro);
 
-  // Abrir mini-edición
   const iniciarEdicionRapida = (depto, e) => {
     e.stopPropagation();
     setDeptoEditandoId(depto.id);
@@ -58,7 +82,6 @@ export default function VistaArbol({
     setClasifEdit((depto.clasificacion || 'produccion').toLowerCase().trim());
   };
 
-  // Guardar cambio en Supabase
   const guardarDepto = async (e) => {
     e.preventDefault();
     if (!nombreEdit.trim()) return alert("Ingresa un nombre para el departamento.");
@@ -75,8 +98,6 @@ export default function VistaArbol({
         .select();
 
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("No se pudo actualizar en Supabase.");
-
       setDeptoEditandoId(null);
       if (recargarDatos) await recargarDatos();
     } catch (err) {
@@ -89,54 +110,88 @@ export default function VistaArbol({
   return (
     <div style={{ width: '100%', boxSizing: 'border-box', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif' }}>
       
-      {/* FILTRO MINIMALISTA */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
+      {/* CABECERA: CANDADO SECRETO Y FILTRO */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        
+        {/* CANDADO DISCRETO */}
+        <div>
+          {seguridadDesbloqueada ? (
+            <button 
+              onClick={() => setSeguridadDesbloqueada(false)} 
+              style={{ background: 'transparent', border: 'none', color: c.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700' }}
+            >
+              <Unlock size={14} /> Edición Habilitada
+            </button>
+          ) : (
+            <button 
+              onClick={() => setModalPinAbierto(true)} 
+              style={{ background: 'transparent', border: 'none', color: c.subText, cursor: 'pointer', opacity: 0.3, transition: 'opacity 0.2s' }} 
+              title="Desbloquear edición de áreas"
+              onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = 0.3}
+            >
+              <Lock size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* FILTRO MINIMALISTA */}
         <select 
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
           style={{
-            background: 'transparent', border: 'none', borderBottom: `1px solid ${c.line}`,
+            background: 'transparent', border: 'none', borderBottom: `1.5px solid ${c.line}`,
             color: c.text, fontSize: '12px', fontWeight: '600', padding: '4px 2px',
             outline: 'none', cursor: 'pointer'
           }}
         >
-          <option value="ALL" style={{ background: modoOscuro ? '#000' : '#fff' }}>Estructura Completa</option>
-          <option value="produccion" style={{ background: modoOscuro ? '#000' : '#fff' }}>Producción</option>
-          <option value="administrativo" style={{ background: modoOscuro ? '#000' : '#fff' }}>Administración</option>
-          <option value="obra" style={{ background: modoOscuro ? '#000' : '#fff' }}>Obra</option>
+          <option value="ALL" style={{ background: c.popoverBg }}>Estructura Completa</option>
+          <option value="produccion" style={{ background: c.popoverBg }}>Producción</option>
+          <option value="administrativo" style={{ background: c.popoverBg }}>Administración</option>
+          <option value="obra" style={{ background: c.popoverBg }}>Obra</option>
         </select>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
         {seccionesVisibles.map(sec => {
           const IconoSec = sec.icon;
-          const deptosSec = (departamentos || []).filter(d => (d.clasificacion || 'produccion').toLowerCase().includes(sec.match));
+          
+          // OCULTAMIENTO: Solo departamentos con personal ACTIVO
+          const deptosSec = (departamentos || []).filter(d => {
+            const esDeEstaRama = (d.clasificacion || 'produccion').toLowerCase().includes(sec.match);
+            if (!esDeEstaRama) return false;
+            return usuarios.some(u => u.departamento_id === d.id && u.activo === true);
+          });
 
           if (deptosSec.length === 0) return null;
 
           return (
             <div key={sec.key}>
-              {/* TÍTULO DE LA SECCIÓN */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '8px', borderBottom: `1px solid ${c.line}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '8px', borderBottom: `1.5px solid ${c.line}` }}>
                 <IconoSec size={16} color={c.text} />
                 <span style={{ fontSize: '14px', fontWeight: '800', color: c.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   {sec.label}
                 </span>
               </div>
 
-              {/* LISTA DE DEPARTAMENTOS */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {deptosSec.map(depto => {
                   const abierto = Boolean(deptosAbiertos[depto.id]);
-                  const personalDepto = (usuarios || []).filter(u => u.departamento_id === depto.id);
                   const estaEditando = deptoEditandoId === depto.id;
 
-                  // Jefatura por ID real
-                  const jefe = personalDepto.find(u => u.id === depto.jefe_id);
-                  const encargado = personalDepto.find(u => u.id === depto.encargado_id && u.id !== depto.jefe_id);
-                  const subordinados = personalDepto.filter(u => u.id !== depto.jefe_id && u.id !== depto.encargado_id);
+                  // 1. Extraemos solo los activos del departamento y ordenamos por apellidos
+                  const personalDepto = (usuarios || [])
+                    .filter(u => u.departamento_id === depto.id && u.activo === true)
+                    .sort((a, b) => extraerApellidosParaOrden(a.nombre_completo).localeCompare(extraerApellidosParaOrden(b.nombre_completo)));
 
-                  const areasMap = subordinados.reduce((acc, u) => {
+                  // 2. LÓGICA DE JERARQUÍA POR ROLES (Cascada en 4 niveles)
+                  const gerencia = personalDepto.filter(u => ['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(u.rol));
+                  const jefatura = personalDepto.filter(u => ['jefe_area'].includes(u.rol));
+                  const supervision = personalDepto.filter(u => ['encargado', 'rh_nominas', 'caseta'].includes(u.rol));
+                  const operativos = personalDepto.filter(u => !['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'jefe_area', 'encargado', 'rh_nominas', 'caseta'].includes(u.rol));
+
+                  // Agrupamos operativos por área
+                  const areasMap = operativos.reduce((acc, u) => {
                     const a = u.area?.toUpperCase() || 'GENERAL';
                     if (!acc[a]) acc[a] = [];
                     acc[a].push(u);
@@ -150,7 +205,7 @@ export default function VistaArbol({
                         onClick={() => toggleDepto(depto.id)}
                         style={{
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          padding: '8px 12px', borderRadius: '6px', cursor: 'pointer',
+                          padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
                           background: abierto ? c.hoverBg : 'transparent',
                           transition: 'background 0.15s ease'
                         }}
@@ -161,25 +216,27 @@ export default function VistaArbol({
                           <span style={{ fontSize: '11px', color: c.subText, fontWeight: '500' }}>{personalDepto.length} pers.</span>
                         </div>
 
-                        {/* BOTÓN LÁPIZ */}
-                        <button
-                          onClick={(e) => iniciarEdicionRapida(depto, e)}
-                          style={{ background: 'transparent', border: 'none', color: c.subText, cursor: 'pointer', padding: '4px' }}
-                          title="Renombrar o cambiar clasificación"
-                        >
-                          <Edit2 size={12} />
-                        </button>
+                        {/* BOTÓN LÁPIZ (SOLO APARECE SI EL CANDADO ESTÁ DESBLOQUEADO) */}
+                        {seguridadDesbloqueada && (
+                          <button
+                            onClick={(e) => iniciarEdicionRapida(depto, e)}
+                            style={{ background: 'transparent', border: 'none', color: c.accent, cursor: 'pointer', padding: '4px' }}
+                            title="Renombrar o cambiar clasificación"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                        )}
                       </div>
 
-                      {/* MINI-POPOVER FLOTANTE INTEGRADO PARA RENOMBRAR O CAMBIAR RAMA */}
+                      {/* POPOVER EDICIÓN DE DEPARTAMENTO */}
                       {estaEditando && (
                         <div 
                           ref={popoverRef}
                           onClick={e => e.stopPropagation()}
                           style={{
                             position: 'absolute', top: '38px', right: '10px',
-                            background: c.popoverBg, border: `1px solid ${c.popoverBorder}`,
-                            borderRadius: '10px', padding: '14px', zIndex: 300,
+                            background: c.popoverBg, border: `1.5px solid ${c.popoverBorder}`,
+                            borderRadius: '12px', padding: '14px', zIndex: 300,
                             boxShadow: '0 10px 30px rgba(0,0,0,0.5)', width: '260px',
                             display: 'flex', flexDirection: 'column', gap: '10px'
                           }}
@@ -191,34 +248,19 @@ export default function VistaArbol({
 
                           <form onSubmit={guardarDepto} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <input 
-                              type="text" 
-                              value={nombreEdit} 
-                              onChange={e => setNombreEdit(e.target.value)}
-                              placeholder="Nombre del depto"
-                              autoFocus
-                              style={{
-                                width: '100%', height: '32px', padding: '0 8px', borderRadius: '6px',
-                                border: `1px solid ${c.popoverBorder}`, background: c.inputBg, color: c.text,
-                                fontSize: '12px', outline: 'none', boxSizing: 'border-box'
-                              }}
+                              type="text" value={nombreEdit} onChange={e => setNombreEdit(e.target.value)}
+                              placeholder="Nombre del depto" autoFocus
+                              style={{ width: '100%', height: '32px', padding: '0 8px', borderRadius: '8px', border: `1.5px solid ${c.popoverBorder}`, background: c.inputBg, color: c.text, fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
                             />
 
                             <div style={{ display: 'flex', gap: '4px' }}>
-                              {[
-                                { key: 'produccion', label: 'Prod' },
-                                { key: 'administrativo', label: 'Admón' },
-                                { key: 'obra', label: 'Obra' }
-                              ].map(op => (
+                              {[ { key: 'produccion', label: 'Prod' }, { key: 'administrativo', label: 'Admón' }, { key: 'obra', label: 'Obra' } ].map(op => (
                                 <button
-                                  key={op.key}
-                                  type="button"
-                                  onClick={() => setClasifEdit(op.key)}
+                                  key={op.key} type="button" onClick={() => setClasifEdit(op.key)}
                                   style={{
-                                    flex: 1, padding: '5px 2px', borderRadius: '5px',
-                                    border: `1px solid ${clasifEdit === op.key ? c.accent : c.popoverBorder}`,
+                                    flex: 1, padding: '5px 2px', borderRadius: '6px', border: `1.5px solid ${clasifEdit === op.key ? c.accent : c.popoverBorder}`,
                                     background: clasifEdit === op.key ? (modoOscuro ? 'rgba(22,163,74,0.15)' : '#dcfce7') : 'transparent',
-                                    color: clasifEdit === op.key ? c.accent : c.subText,
-                                    fontSize: '10.5px', fontWeight: '700', cursor: 'pointer'
+                                    color: clasifEdit === op.key ? c.accent : c.subText, fontSize: '10.5px', fontWeight: '700', cursor: 'pointer'
                                   }}
                                 >
                                   {op.label}
@@ -228,11 +270,7 @@ export default function VistaArbol({
 
                             <button 
                               type="submit" disabled={guardando}
-                              style={{
-                                width: '100%', padding: '7px', borderRadius: '6px', border: 'none',
-                                background: c.accent, color: '#fff', fontSize: '11.5px', fontWeight: '700',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
-                              }}
+                              style={{ width: '100%', padding: '7px', borderRadius: '8px', border: 'none', background: c.accent, color: '#fff', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                             >
                               <Save size={12} /> {guardando ? 'Guardando...' : 'Guardar'}
                             </button>
@@ -240,30 +278,72 @@ export default function VistaArbol({
                         </div>
                       )}
 
-                      {/* CONTENIDO DEL DEPARTAMENTO (JERARQUÍA INDENTADA) */}
+                      {/* ÁRBOL EN CASCADA (NIVELES JERÁRQUICOS ADAPTATIVOS) */}
                       {abierto && (
-                        <div style={{ marginLeft: '20px', paddingLeft: '14px', borderLeft: `1px solid ${c.line}`, marginTop: '4px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ 
+                          marginLeft: esMobile ? '10px' : '14px', 
+                          paddingTop: '6px', paddingBottom: '8px', 
+                          display: 'flex', flexDirection: 'column', gap: '10px' 
+                        }}>
                           
-                          {/* JEFATURA Y ENCARGADOS */}
-                          {(jefe || encargado) && (
+                          {/* NIVEL 1: GERENCIA Y DIRECCIÓN */}
+                          {gerencia.length > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <div style={{ fontSize: '10px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Crown size={10} /> Jefatura y Liderazgo
+                              <div style={{ fontSize: '10px', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Crown size={11} /> Gerencia / Dirección
                               </div>
-                              {jefe && renderItemLista(jefe, c, setFotoZoom, modoOscuro, "Jefe de Área")}
-                              {encargado && renderItemLista(encargado, c, setFotoZoom, modoOscuro, "Encargado")}
+                              {gerencia.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
                             </div>
                           )}
 
-                          {/* SUBORDINADOS POR ÁREA */}
-                          {Object.keys(areasMap).sort().map(area => (
-                            <div key={area} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <div style={{ fontSize: '10px', fontWeight: '800', color: c.subText, textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <MapPin size={10} /> {area}
+                          {/* NIVEL 2: JEFATURA DE ÁREA */}
+                          {jefatura.length > 0 && (
+                            <div style={{ 
+                              display: 'flex', flexDirection: 'column', gap: '4px', 
+                              marginLeft: gerencia.length > 0 ? (esMobile ? '12px' : '16px') : '0', 
+                              borderLeft: gerencia.length > 0 ? `1.5px solid ${c.line}` : 'none', 
+                              paddingLeft: gerencia.length > 0 ? '10px' : '0' 
+                            }}>
+                              <div style={{ fontSize: '10px', fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <UserCheck size={11} /> Jefatura de Área
                               </div>
-                              {areasMap[area].map(u => renderItemLista(u, c, setFotoZoom, modoOscuro, null))}
+                              {jefatura.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
                             </div>
-                          ))}
+                          )}
+
+                          {/* NIVEL 3: SUPERVISIÓN Y ENCARGADOS */}
+                          {supervision.length > 0 && (
+                            <div style={{ 
+                              display: 'flex', flexDirection: 'column', gap: '4px', 
+                              marginLeft: (gerencia.length > 0 || jefatura.length > 0) ? (esMobile ? '20px' : '32px') : '0', 
+                              borderLeft: (gerencia.length > 0 || jefatura.length > 0) ? `1.5px solid ${c.line}` : 'none', 
+                              paddingLeft: (gerencia.length > 0 || jefatura.length > 0) ? '10px' : '0' 
+                            }}>
+                              <div style={{ fontSize: '10px', fontWeight: '800', color: '#8b5cf6', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Shield size={11} /> Supervisión / Encargados
+                              </div>
+                              {supervision.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
+                            </div>
+                          )}
+
+                          {/* NIVEL 4: PERSONAL OPERATIVO POR ÁREA */}
+                          {Object.keys(areasMap).length > 0 && (
+                            <div style={{ 
+                              display: 'flex', flexDirection: 'column', gap: '10px', 
+                              marginLeft: (gerencia.length > 0 || jefatura.length > 0 || supervision.length > 0) ? (esMobile ? '30px' : '48px') : '0', 
+                              borderLeft: (gerencia.length > 0 || jefatura.length > 0 || supervision.length > 0) ? `1.5px solid ${c.line}` : 'none', 
+                              paddingLeft: (gerencia.length > 0 || jefatura.length > 0 || supervision.length > 0) ? '10px' : '0' 
+                            }}>
+                              {Object.keys(areasMap).sort().map(area => (
+                                <div key={area} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <div style={{ fontSize: '10px', fontWeight: '800', color: c.subText, textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <MapPin size={11} /> {area}
+                                  </div>
+                                  {areasMap[area].map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
                         </div>
                       )}
@@ -275,33 +355,37 @@ export default function VistaArbol({
           );
         })}
       </div>
+
+      {/* MODAL PIN DE SEGURIDAD (Se abre con el candado) */}
+      <ModalSeguridadPin 
+        abierto={modalPinAbierto}
+        onClose={() => setModalPinAbierto(false)}
+        onAutorizado={() => setSeguridadDesbloqueada(true)}
+        c={c}
+        modoOscuro={modoOscuro}
+      />
     </div>
   );
 }
 
-function renderItemLista(u, c, setFotoZoom, modoOscuro, rolLider = null) {
+// === RENDERIZADO DEL EMPLEADO (Adaptable a celular) ===
+function renderItemLista(u, c, setFotoZoom, modoOscuro) {
   const badge = obtenerBadgeRol(u.rol, modoOscuro);
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo)}&background=16a34a&color=fff&bold=true`;
 
   return (
-    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0', opacity: u.activo ? 1 : 0.5 }}>
+    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0', transition: 'background 0.15s ease', borderRadius: '6px' }}>
       <img 
         src={urlFoto} alt="" 
         onClick={() => setFotoZoom && setFotoZoom({ url: urlFoto, nombre: u.nombre_completo, puesto: u.puesto })}
-        style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer', border: `1px solid ${rolLider ? c.accent : c.line}` }}
+        style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', cursor: 'pointer', border: `1.5px solid ${c.line}`, flexShrink: 0 }}
       />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
         <span style={{ fontSize: '12px', fontWeight: '600', color: c.text }}>{u.nombre_completo}</span>
         <span style={{ fontSize: '10.5px', color: c.subText }}>{u.puesto || 'Sin puesto'}</span>
-        {rolLider ? (
-          <span style={{ fontSize: '8.5px', fontWeight: '800', color: c.accent, background: (modoOscuro ? 'rgba(22,163,74,0.15)' : '#dcfce7'), padding: '1px 5px', borderRadius: '4px' }}>
-            ★ {rolLider}
-          </span>
-        ) : (
-          <span style={{ fontSize: '9px', fontWeight: '700', color: badge.text, border: `1px solid ${badge.border}`, padding: '1px 4px', borderRadius: '4px' }}>
-            {badge.label}
-          </span>
-        )}
+        <span style={{ fontSize: '9px', fontWeight: '700', color: badge.text, border: `1px solid ${badge.border}`, padding: '1px 4px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+          {badge.label}
+        </span>
       </div>
     </div>
   );

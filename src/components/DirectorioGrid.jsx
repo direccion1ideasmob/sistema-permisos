@@ -11,13 +11,22 @@ import ModalSeguridadPin from './directorio/ModalSeguridadPin';
 import ModalBajaColaborador from './directorio/ModalBajaColaborador';
 import DossierLateral from './directorio/DossierLateral';
 
+// === FUNCIÓN DE APOYO PARA EXTRAER APELLIDOS ===
+const extraerApellidosParaOrden = (nombreCompleto) => {
+  if (!nombreCompleto) return '';
+  const partes = nombreCompleto.trim().split(/\s+/);
+  if (partes.length <= 1) return nombreCompleto;
+  if (partes.length === 2) return partes[1]; // Ej: "Juan Perez" -> "Perez"
+  // Ej: "Juan Carlos Perez Gomez" -> "Perez Gomez"
+  return partes.slice(-2).join(' '); 
+};
+
 export default function DirectorioGrid({ 
   usuarios = [], departamentos = [], sedes = [], areas = [], puestos = [], 
   recargarDatos, onRestablecerPin, setFotoZoom, modoOscuro 
 }) {
   const c = obtenerTemaGrid(modoOscuro);
 
-  // DETECCIÓN DE PANTALLA
   const [esMobile, setEsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -31,9 +40,10 @@ export default function DirectorioGrid({
   const [filtroSede, setFiltroSede] = useState('ALL');
   const [filtroNomina, setFiltroNomina] = useState('ALL');
   const [filtroDepto, setFiltroDepto] = useState('ALL');
-const [filtroEstatus, setFiltroEstatus] = useState('activos');
+  const [filtroEstatus, setFiltroEstatus] = useState('activos');
+  
   // ORDENAMIENTO
-  const [columnaOrden, setColumnaOrden] = useState('numero_empleado');
+  const [columnaOrden, setColumnaOrden] = useState('nombre_completo'); // Lo cambiamos por defecto a nombre
   const [direccionOrden, setDireccionOrden] = useState('asc');
 
   // DOSSIER
@@ -49,6 +59,12 @@ const [filtroEstatus, setFiltroEstatus] = useState('activos');
   const [usuarioParaBaja, setUsuarioParaBaja] = useState(null);
   const [procesandoBaja, setProcesandoBaja] = useState(false);
 
+  // === DEPARTAMENTOS CON PERSONAL (Para limpiar el filtro) ===
+  const departamentosConPersonal = useMemo(() => {
+    const idsEnUso = new Set(usuarios.map(u => u.departamento_id).filter(Boolean));
+    return departamentos.filter(d => idsEnUso.has(d.id));
+  }, [usuarios, departamentos]);
+
   const cambiarOrden = (columna) => {
     if (columnaOrden === columna) setDireccionOrden(prev => prev === 'asc' ? 'desc' : 'asc');
     else { setColumnaOrden(columna); setDireccionOrden('asc'); }
@@ -59,11 +75,12 @@ const [filtroEstatus, setFiltroEstatus] = useState('activos');
     setFiltroSede('ALL');
     setFiltroNomina('ALL');
     setFiltroDepto('ALL');
-    setFiltroEstatus('activos'); // <-- Aquí el cambio
+    setFiltroEstatus('activos');
   };
 
-const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== 'ALL' || filtroDepto !== 'ALL' || filtroEstatus !== 'activos';
-  // FILTRADO
+  const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== 'ALL' || filtroDepto !== 'ALL' || filtroEstatus !== 'activos';
+  
+  // FILTRADO Y ORDENAMIENTO
   const usuariosFiltrados = useMemo(() => {
     return [...usuarios]
       .filter(u => {
@@ -87,6 +104,14 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
         return true;
       })
       .sort((a, b) => {
+        // === NUEVA LÓGICA DE ORDENAMIENTO POR APELLIDOS ===
+        if (columnaOrden === 'nombre_completo') {
+          const apellidoA = extraerApellidosParaOrden(a.nombre_completo);
+          const apellidoB = extraerApellidosParaOrden(b.nombre_completo);
+          const res = apellidoA.localeCompare(apellidoB);
+          return direccionOrden === 'asc' ? res : -res;
+        }
+
         let vA = a[columnaOrden] || '';
         let vB = b[columnaOrden] || '';
 
@@ -128,7 +153,7 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
       pin: user.pin || '',
       fecha_ingreso: user.fecha_ingreso || '',
       foto_url: user.foto_url || null,
-      firma_url: user.firma_url || null // <--- ESTO FALTABA. POR ESO LA FIRMA SE BORRABA AL EDITAR.
+      firma_url: user.firma_url || null
     });
     setDossierAbierto(true);
   };
@@ -219,7 +244,7 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
     }
   };
 
- const renderIconoOrden = (col) => {
+  const renderIconoOrden = (col) => {
     if (columnaOrden !== col) return <ArrowUpDown size={11} style={{ opacity: 0.25 }} />;
     return direccionOrden === 'asc' ? <ArrowUp size={11} color={c.accent} /> : <ArrowDown size={11} color={c.accent} />;
   };
@@ -280,12 +305,9 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
         <Search size={15} color={c.textMuted} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
       </div>
 
-      {/* =========================================================
-          FILTROS EN PÍLDORAS HORIZONTALES DESLIZABLES (SPOTIFY / MAPS)
-          ========================================================= */}
+      {/* FILTROS EN PÍLDORAS HORIZONTALES */}
       <div className="pills-scroll-container">
         
-        {/* PÍLDORA SEDE */}
         <div className={`filter-pill ${filtroSede !== 'ALL' ? 'active' : ''}`}>
           <span>📍</span>
           <select className="pill-select" value={filtroSede} onChange={e => setFiltroSede(e.target.value)}>
@@ -294,7 +316,6 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
           </select>
         </div>
 
-        {/* PÍLDORA NÓMINA */}
         <div className={`filter-pill ${filtroNomina !== 'ALL' ? 'active' : ''}`}>
           <span>💼</span>
           <select className="pill-select" value={filtroNomina} onChange={e => setFiltroNomina(e.target.value)}>
@@ -305,16 +326,14 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
           </select>
         </div>
 
-        {/* PÍLDORA DEPARTAMENTO */}
         <div className={`filter-pill ${filtroDepto !== 'ALL' ? 'active' : ''}`}>
           <span>🏢</span>
           <select className="pill-select" value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
             <option value="ALL">Todos los Deptos</option>
-            {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+            {departamentosConPersonal.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
           </select>
         </div>
 
-        {/* PÍLDORA ESTATUS */}
         <div className={`filter-pill ${filtroEstatus !== 'ALL' ? 'active' : ''}`}>
           <span>●</span>
           <select className="pill-select" value={filtroEstatus} onChange={e => setFiltroEstatus(e.target.value)}>
@@ -324,7 +343,6 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
           </select>
         </div>
 
-        {/* LIMPIAR */}
         {hayFiltros && (
           <button onClick={limpiarFiltros} className="filter-pill" style={{ color: c.danger, borderColor: c.dangerSoft }}>
             <RotateCcw size={11} /> Limpiar
@@ -332,11 +350,8 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
         )}
       </div>
 
-      {/* =========================================================
-          CONTENIDO: TARJETAS LIMPIAS (MÓVIL) O TABLA NOTION (LAPTOP)
-          ========================================================= */}
+      {/* CONTENIDO: TARJETAS O TABLA */}
       {esMobile ? (
-        /* VISTA MÓVIL BLINDADA CONTRA DESCUADRES */
         <div className="mobile-contact-list">
           {usuariosFiltrados.map(user => {
             const sedeObj = sedes.find(s => s.id === user.sede_id);
@@ -359,11 +374,9 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
                     style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `1px solid ${c.border}` }} 
                   />
                   <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-                    {/* RENGLÓN 1: NOMBRE */}
                     <div style={{ fontSize: '13.5px', fontWeight: '700', color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {user.nombre_completo}
                     </div>
-                    {/* RENGLÓN 2: PUESTO + SEDE */}
                     <div style={{ fontSize: '11px', color: c.textMuted, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <span className="mono-id">#{user.numero_empleado}</span>
                       <span>•</span>
@@ -375,8 +388,6 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
                     </div>
                   </div>
                 </div>
-
-                {/* ESTATUS Y FLECHA */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginLeft: '8px' }}>
                   {user.activo ? (
                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: c.accent }}></span>
@@ -390,7 +401,6 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
           })}
         </div>
       ) : (
-        /* VISTA LAPTOP: HOJA DE CÁLCULO MAESTRA (AIRTABLE / NOTION) */
         <div className="desktop-table-container">
           <table className="desktop-table">
             <thead>
@@ -419,7 +429,6 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
                 <th style={{ width: '30px' }}></th>
               </tr>
             </thead>
-
             <tbody>
               {usuariosFiltrados.map(user => {
                 const sedeObj = sedes.find(s => s.id === user.sede_id);
@@ -470,27 +479,28 @@ const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== '
         </div>
       )}
 
-      {/* DOSSIER LATERAL (DESKTOP) O FICHA DE PANTALLA COMPLETA (MÓVIL) */}
+      {/* DOSSIER LATERAL */}
       <DossierLateral 
-  colaborador={colaboradorDossier}
-  abierto={dossierAbierto}
-  onClose={() => setDossierAbierto(false)}
-  editando={seguridadDesbloqueada}
-  datosEdit={datosEdit}
-  setDatosEdit={setDatosEdit}
-  departamentos={departamentos}
-  sedes={sedes}
-  areas={areas}     
-  puestos={puestos} 
-  subiendoFoto={subiendoFoto}
-  onCambiarFoto={handleCambiarFoto}
-  recargarDatos={recargarDatos}
-  onRestablecerPin={onRestablecerPin}
-  onAbrirBaja={(u) => setUsuarioParaBaja(u)}
-  onReactivar={reactivar}
-  setFotoZoom={setFotoZoom}
-  c={c}
-/>
+        colaborador={colaboradorDossier}
+        abierto={dossierAbierto}
+        onClose={() => setDossierAbierto(false)}
+        editando={seguridadDesbloqueada}
+        datosEdit={datosEdit}
+        setDatosEdit={setDatosEdit}
+        departamentos={departamentos}
+        sedes={sedes}
+        areas={areas}     
+        puestos={puestos} 
+        subiendoFoto={subiendoFoto}
+        onCambiarFoto={handleCambiarFoto}
+        recargarDatos={recargarDatos}
+        onRestablecerPin={onRestablecerPin}
+        onAbrirBaja={(u) => setUsuarioParaBaja(u)}
+        onReactivar={reactivar}
+        setFotoZoom={setFotoZoom}
+        c={c}
+      />
+
       {/* MODAL PIN */}
       <ModalSeguridadPin 
         abierto={modalPinAbierto}

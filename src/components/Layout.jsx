@@ -1,40 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import imageCompression from 'browser-image-compression';
 import { useAuth } from '../context/AuthContext';
+import { Menu } from 'lucide-react';
 
-import { 
-  ClipboardList, PenLine, FileBarChart, Users, ShieldCheck, 
-  LogOut, Menu, X, Camera, Image as ImageIcon, Sun, Moon,
-  Settings, Lock, Key, FilePlus
-} from 'lucide-react';
+// === COMPONENTES MODULARES ===
+import Sidebar from './layout/Sidebar';
+import ModalSeguridad from './layout/ModalSeguridad';
 
 export default function Layout() {
-  const { usuario, cerrarSesion } = useAuth();
+  const { usuario } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate(); // <-- Agregado para poder redirigir al Inicio
 
   const [anchoVentana, setAnchoVentana] = useState(window.innerWidth);
-  // Se abre por defecto en pantallas medianas/grandes (>= 1200px)
   const [menuAbierto, setMenuAbierto] = useState(window.innerWidth >= 1200);
-  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  // MODO: 'oscuro' | 'claro'
   const [modoOscuro, setModoOscuro] = useState(() => {
     const guardado = localStorage.getItem('tema_sistema');
     return guardado ? guardado === 'oscuro' : true;
   });
 
   const [usuarioLogueado, setUsuarioLogueado] = useState(usuario);
-  const [editandoNombre, setEditandoNombre] = useState(false);
-  const [nuevoNombre, setNuevoNombre] = useState(usuario?.nombre_completo || "");
-
-  // === NUEVOS ESTADOS PARA MODAL DE SEGURIDAD (CAMBIO DE PIN) ===
   const [modalSeguridad, setModalSeguridad] = useState(false);
-  const [nuevoPin, setNuevoPin] = useState('');
-  const [confirmarPin, setConfirmarPin] = useState('');
-  const [guardandoPin, setGuardandoPin] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('tema_sistema', modoOscuro ? 'oscuro' : 'claro');
@@ -45,6 +33,20 @@ export default function Layout() {
     window.addEventListener('resize', manejarResize);
     return () => window.removeEventListener('resize', manejarResize);
   }, []);
+
+  // === LÓGICA DE REINICIO DIARIO ===
+  useEffect(() => {
+    // Obtenemos la fecha de hoy en formato local (ej. "12/10/2026")
+    const hoy = new Date().toLocaleDateString();
+    // Revisamos qué fecha tiene guardada el usuario como su última visita
+    const ultimoDiaVisitado = localStorage.getItem('ultimo_dia_visitado');
+
+    // Si no hay registro (primera vez) o si la fecha de hoy es distinta al registro
+    if (!ultimoDiaVisitado || ultimoDiaVisitado !== hoy) {
+      localStorage.setItem('ultimo_dia_visitado', hoy); // Actualizamos el registro
+      navigate('/'); // Lo mandamos al inicio para darle los buenos días
+    }
+  }, [navigate]); // Solo se ejecuta una vez al cargar el Layout
 
   useEffect(() => {
     const consultarDatosActualizados = async () => {
@@ -65,106 +67,23 @@ export default function Layout() {
   }, [usuario?.id]);
 
   const isMobile = anchoVentana < 1000;
+  const esInicio = location.pathname === '/' || location.pathname === '/inicio';
 
-  const handleUpdateFoto = async (e) => {
-    const archivo = e.target.files[0];
-    if (!archivo || !usuarioLogueado?.id) return;
-    
-    setLoading(true);
-    setShowPhotoOptions(false);
-    
-    try {
-      const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
-      const archivoComprimido = await imageCompression(archivo, options);
-      const fileName = `perfil_${usuarioLogueado.id}.jpg`;
-      
-      const { error: uploadError } = await supabase.storage.from('fotos_usuarios').upload(fileName, archivoComprimido, { contentType: archivoComprimido.type, upsert: true });
-      if (uploadError) throw uploadError;
-      
-      const { data: link } = supabase.storage.from('fotos_usuarios').getPublicUrl(fileName);
-      const urlFinal = `${link.publicUrl}?t=${new Date().getTime()}`;
-      
-      await supabase.from('usuarios').update({ foto_url: urlFinal }).eq('id', usuarioLogueado.id);
-      setUsuarioLogueado({ ...usuarioLogueado, foto_url: urlFinal });
-      
-      const sesionActual = JSON.parse(localStorage.getItem('permisos_sesion') || '{}');
-      sesionActual.foto_url = urlFinal;
-      localStorage.setItem('permisos_sesion', JSON.stringify(sesionActual));
-    } catch (err) {
-      alert("Error al subir foto: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const guardarNombre = async () => {
-    if (!nuevoNombre.trim() || nuevoNombre === usuarioLogueado.nombre_completo) {
-      setEditandoNombre(false);
-      return;
-    }
-    setLoading(true);
-    await supabase.from('usuarios').update({ nombre_completo: nuevoNombre }).eq('id', usuarioLogueado.id);
-    setUsuarioLogueado({ ...usuarioLogueado, nombre_completo: nuevoNombre });
-    setEditandoNombre(false);
-    setLoading(false);
-  };
-
-  // === LÓGICA PARA CAMBIAR PIN DE ACCESO ===
-  const handleCambiarPin = async (e) => {
-    e.preventDefault();
-    if (nuevoPin.length < 6) return alert("El nuevo PIN debe tener al menos 6 dígitos numéricos.");
-    if (nuevoPin !== confirmarPin) return alert("Los PINes no coinciden. Intenta de nuevo.");
-
-    setGuardandoPin(true);
-    try {
-      // Como tu Login es manual, SOLO actualizamos el PIN en la tabla 'usuarios'
-      const { error: dbError } = await supabase
-        .from('usuarios')
-        .update({ pin: nuevoPin })
-        .eq('id', usuarioLogueado.id);
-        
-      if (dbError) throw dbError;
-
-      alert("✅ Tu PIN de seguridad se ha actualizado con éxito.");
-      setModalSeguridad(false);
-      setNuevoPin('');
-      setConfirmarPin('');
-    } catch (err) {
-      alert("Error al actualizar PIN: " + err.message);
-    } finally {
-      setGuardandoPin(false);
-    }
-  };
-
-  // En móvil cierra el menú al navegar; en computadora permanece como lo dejó el usuario
-  const cerrarMenuMovil = () => { if (isMobile) setMenuAbierto(false); };
-
-  const rol = usuarioLogueado?.rol || 'empleado';
-  
-  // Aquí están todos los roles nuevos que tienen permiso para ver "Aprobaciones"
-  const puedeAprobar = ['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin'].includes(rol);
-  
-  // Roles que pueden ver el Kardex y Directorio
-  const esNominas = ['rh_nominas', 'gerente_rh', 'superadmin'].includes(rol);
-  
-  const esCaseta = rol === 'caseta';
-  const miFoto = usuarioLogueado?.foto_url || `https://ui-avatars.com/api/?name=${usuarioLogueado?.nombre_completo}&background=16a34a&color=fff&bold=true&size=200`;
-  // === PALETA MINIMALISTA ===
+  // === PALETA HIGH CONTRAST (ZINC / GRIS OSCURO) ===
   const tema = {
-    bgApp: modoOscuro ? '#000000' : '#f8fafc',
-    sidebarBg: modoOscuro ? '#09090b' : '#ffffff',
-    cardBg: modoOscuro ? '#0c0c0e' : '#ffffff',
-    border: modoOscuro ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-    textPrimary: modoOscuro ? '#ffffff' : '#09090b',
+    bgApp: modoOscuro ? '#18181b' : '#f8fafc',
+    sidebarBg: modoOscuro ? '#27272a' : '#ffffff',
+    cardBg: modoOscuro ? '#27272a' : '#ffffff',
+    border: modoOscuro ? '#3f3f46' : 'rgba(0, 0, 0, 0.08)',
+    textPrimary: modoOscuro ? '#f4f4f5' : '#09090b',
     textSecondary: modoOscuro ? '#a1a1aa' : '#71717a',
-    inputBg: modoOscuro ? '#121214' : '#f8fafc',
+    inputBg: modoOscuro ? '#18181b' : '#f8fafc',
     accent: '#16a34a',
     navActiveBg: modoOscuro ? 'rgba(22, 163, 74, 0.16)' : 'rgba(22, 163, 74, 0.1)',
     navActiveText: modoOscuro ? '#4ade80' : '#15803d',
     navActiveBorder: '#16a34a',
   };
 
-  // MARCA DE AGUA DEL ÁREA DE TRABAJO
   const logoAguaWorkspace = modoOscuro 
     ? "/LogoNegro-removebg-preview.png" 
     : "/LogoVerde-removebg-preview.png";
@@ -172,11 +91,15 @@ export default function Layout() {
   return (
     <div style={{ ...s.appBase, backgroundColor: tema.bgApp, color: tema.textPrimary }}>
       
-      {/* BOTÓN FLOTANTE UNIVERSAL (MÓVIL Y COMPUTADORA CUANDO EL MENÚ ESTÁ CONTRAÍDO) */}
       {!menuAbierto && (
         <button 
           onClick={() => setMenuAbierto(true)} 
-          style={{ ...s.menuOpenBtn, backgroundColor: tema.sidebarBg, color: tema.textPrimary, borderColor: tema.border }}
+          style={{ 
+            ...s.menuOpenBtn, 
+            backgroundColor: tema.sidebarBg, 
+            color: tema.textPrimary, 
+            border: `1.5px solid ${tema.border}` 
+          }}
           title="Desplegar menú"
           aria-label="Desplegar menú"
         >
@@ -186,203 +109,42 @@ export default function Layout() {
 
       <div style={s.appContainer}>
         
-        {/* SIDEBAR COLAPSABLE (50% EN CELULAR, 260px EN COMPUTADORA) */}
-        <aside style={{
-          ...s.sidebar,
-          width: isMobile ? '50vw' : '260px',
-          padding: isMobile ? '16px 12px' : '20px 16px',
-          backgroundColor: tema.sidebarBg,
-          borderColor: tema.border,
-          position: isMobile ? 'fixed' : 'relative',
-          // En móvil desliza con transform; en computadora se contrae con marginLeft
-          transform: isMobile ? (menuAbierto ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-          marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-260px')
-        }}>
+        <Sidebar 
+          usuarioLogueado={usuarioLogueado}
+          setUsuarioLogueado={setUsuarioLogueado}
+          isMobile={isMobile}
+          menuAbierto={menuAbierto}
+          setMenuAbierto={setMenuAbierto}
+          modoOscuro={modoOscuro}
+          setModoOscuro={setModoOscuro}
+          tema={tema}
+          onOpenSeguridad={() => setModalSeguridad(true)}
+        />
 
-          {/* 1. MARCA DE AGUA EN LA BARRA (CENTRO - UN POCO ABAJO) */}
-          <div style={s.sidebarWatermarkContainer}>
-            <img 
-              src="/LogoVerde-removebg-preview.png" 
-              alt="Marca de agua lateral" 
-              style={{
-                ...s.sidebarWatermarkImg,
-                opacity: modoOscuro ? 0.26 : 0.32
-              }} 
-            />
-          </div>
-
-          {/* 2. CABECERA CON BOTÓN PARA CONTRAER (DISPONIBLE EN PC Y MÓVIL) */}
-          <div style={s.brandHeader}>
-            <div style={s.headerActions}>
-              <button 
-                onClick={() => setModoOscuro(!modoOscuro)} 
-                style={{ ...s.btnIcon, borderColor: tema.border, color: tema.textSecondary }}
-                title={modoOscuro ? "Modo Claro" : "Modo Oscuro"}
-              >
-                {modoOscuro ? <Sun size={14} /> : <Moon size={14} />}
-              </button>
-
-              {/* BOTÓN PARA CONTRAER LA BARRA (PC Y CELULAR) */}
-              <button 
-                onClick={() => setMenuAbierto(false)} 
-                style={{ ...s.btnIcon, borderColor: tema.border, color: tema.textSecondary }}
-                title="Contraer menú"
-                aria-label="Contraer menú"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          </div>
-
-          {/* 3. PERFIL */}
-          <div style={{ ...s.profileBox, borderColor: tema.border, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
-            <div style={s.avatarWrapper} onClick={() => setShowPhotoOptions(!showPhotoOptions)}>
-              <img src={miFoto} alt="Perfil" style={s.avatarImg} />
-              <div style={s.avatarEditBadge}><Camera size={11} color="#fff" /></div>
-            </div>
-
-            {showPhotoOptions && (
-              <div style={{ ...s.popover, backgroundColor: tema.sidebarBg, borderColor: tema.border }}>
-                <label style={{ ...s.popBtn, color: tema.textPrimary }}><Camera size={13} /> Tomar foto <input type="file" accept="image/*" capture="environment" hidden onChange={handleUpdateFoto} /></label>
-                <label style={{ ...s.popBtn, color: tema.textPrimary }}><ImageIcon size={13} /> Subir archivo <input type="file" accept="image/*" hidden onChange={handleUpdateFoto} /></label>
-                <button onClick={() => setShowPhotoOptions(false)} style={s.popBtnCancel}>Cancelar</button>
-              </div>
-            )}
-
-            <div style={s.profileDetails}>
-              {editandoNombre ? (
-                <input 
-                  style={{ ...s.inputEdit, backgroundColor: modoOscuro ? '#000' : '#fff', color: tema.textPrimary, borderColor: tema.border }} 
-                  value={nuevoNombre} 
-                  onChange={e => setNuevoNombre(e.target.value)} 
-                  autoFocus 
-                  onBlur={guardarNombre} 
-                  onKeyDown={(e) => e.key === 'Enter' && guardarNombre()} 
-                />
-              ) : (
-                <span style={{ ...s.userName, color: tema.textPrimary }} onClick={() => setEditandoNombre(true)}>
-                  {usuarioLogueado?.nombre_completo || 'Usuario'}
-                </span>
-              )}
-              
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ ...s.userRole, color: tema.textSecondary }}>
-                  {rol.replace(/_/g, ' ')}
-                </span>
-                
-                {/* === NUEVO BOTÓN DE ENGRANAJE (SEGURIDAD) === */}
-                <button 
-                  onClick={() => setModalSeguridad(true)}
-                  style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
-                  title="Seguridad y PIN"
-                >
-                  <Settings size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. NAVEGACIÓN */}
-          <nav style={s.nav}>
-            {!esCaseta && (
-              <Link 
-                to="/solicitar" 
-                onClick={cerrarMenuMovil} 
-                style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-              >
-                <FilePlus size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Solicitar Pase</span>
-              </Link>
-            )}
-
-            {!esCaseta && (
-              <Link 
-                to="/mis-permisos" 
-                onClick={cerrarMenuMovil} 
-                style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-              >
-                <ClipboardList size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Mis Permisos</span>
-              </Link>
-            )}
-
-            {puedeAprobar && (
-              <Link 
-                to="/aprobaciones" 
-                onClick={cerrarMenuMovil} 
-                style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-              >
-                <PenLine size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Aprobaciones</span>
-              </Link>
-            )}
-
-            {esNominas && (
-  <>
-    <Link 
-      to="/control-historial" // <--- CAMBIO AQUÍ
-      onClick={cerrarMenuMovil} 
-      style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-    >
-      <FileBarChart size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-      <span style={s.navText}>Control / Historial</span>
-    </Link>
-                <Link 
-                  to="/directorio" 
-                  onClick={cerrarMenuMovil} 
-                  style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-                >
-                  <Users size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                  <span style={s.navText}>Directorio RH</span>
-                </Link>
-              </>
-            )}
-
-            {esCaseta && (
-              <Link 
-                to="/caseta" 
-                onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-              >
-                <ShieldCheck size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Control Caseta</span>
-              </Link>
-            )}
-
-            <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
-              <LogOut size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-              <span style={s.navText}>Cerrar Sesión</span>
-            </button>
-          </nav>
-
-        </aside>
-
-        {/* TELÓN DE FONDO (SOLO EN MÓVIL) */}
         {menuAbierto && isMobile && <div onClick={() => setMenuAbierto(false)} style={s.mobileBackdrop} />}
 
-        {/* CONTENEDOR PRINCIPAL */}
         <main style={s.mainArea}>
           <div style={{
             ...s.contentCard,
             backgroundColor: tema.cardBg,
-            borderColor: tema.border,
+            border: `1.5px solid ${tema.border}`,
             boxShadow: modoOscuro ? '0 10px 30px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.04)'
           }}>
 
-            {/* MARCA DE AGUA DEL ÁREA DE TRABAJO */}
-            <div style={s.watermarkInsideCard}>
-              <img 
-                src={logoAguaWorkspace} 
-                alt="Marca de agua central" 
-                style={{
-                  ...s.watermarkImg,
-                  filter: modoOscuro ? 'brightness(0) invert(1)' : 'none',
-                  opacity: modoOscuro ? 0.16 : 0.22,
-                }} 
-              />
-            </div>
+            {!esInicio && (
+              <div style={s.watermarkInsideCard}>
+                <img 
+                  src={logoAguaWorkspace} 
+                  alt="Marca de agua central" 
+                  style={{
+                    ...s.watermarkImg,
+                    filter: modoOscuro ? 'brightness(0) invert(1)' : 'none',
+                    opacity: modoOscuro ? 0.16 : 0.22,
+                  }} 
+                />
+              </div>
+            )}
 
-            {/* CONTENIDO PRINCIPAL */}
             <div style={s.outletLayer}>
               <Outlet />
             </div>
@@ -392,90 +154,13 @@ export default function Layout() {
 
       </div>
 
-      {/* =========================================================
-          MODAL: SEGURIDAD Y CAMBIO DE PIN 
-          ========================================================= */}
       {modalSeguridad && (
-        <div style={{
-          position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px'
-        }} onClick={() => setModalSeguridad(false)}>
-          
-          <div style={{
-            backgroundColor: tema.sidebarBg, border: `1px solid ${tema.border}`, borderRadius: '24px',
-            width: '100%', maxWidth: '360px', padding: '28px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-            position: 'relative'
-          }} onClick={e => e.stopPropagation()}>
-            
-            {/* ENCABEZADO DEL MODAL */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ background: 'rgba(22, 163, 74, 0.1)', padding: '10px', borderRadius: '12px', color: tema.accent }}>
-                  <Lock size={20} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: tema.textPrimary, letterSpacing: '-0.01em' }}>Seguridad</div>
-                  <div style={{ fontSize: '12px', color: tema.textSecondary, marginTop: '2px' }}>Cambia tu PIN de acceso</div>
-                </div>
-              </div>
-              <button onClick={() => setModalSeguridad(false)} style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', padding: '4px' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* FORMULARIO */}
-            <form onSubmit={handleCambiarPin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: tema.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-                  Nuevo PIN (Mínimo 6 dígitos)
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Key size={14} color={tema.textSecondary} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input 
-                    type="password" required minLength={6} maxLength={10} placeholder="••••••"
-                    value={nuevoPin} onChange={e => setNuevoPin(e.target.value.replace(/\D/g, ''))} // Solo permite números
-                    style={{
-                      width: '100%', padding: '12px 14px 12px 34px', borderRadius: '10px', border: `1px solid ${tema.border}`,
-                      background: tema.inputBg, color: tema.textPrimary, fontSize: '16px', fontFamily: 'monospace',
-                      letterSpacing: '4px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s'
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: tema.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-                  Confirmar Nuevo PIN
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Key size={14} color={tema.textSecondary} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input 
-                    type="password" required minLength={6} maxLength={10} placeholder="••••••"
-                    value={confirmarPin} onChange={e => setConfirmarPin(e.target.value.replace(/\D/g, ''))}
-                    style={{
-                      width: '100%', padding: '12px 14px 12px 34px', borderRadius: '10px', border: `1px solid ${tema.border}`,
-                      background: tema.inputBg, color: tema.textPrimary, fontSize: '16px', fontFamily: 'monospace',
-                      letterSpacing: '4px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s'
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ fontSize: '11px', color: tema.textSecondary, background: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '10px', borderRadius: '8px', lineHeight: '1.4' }}>
-                <strong>Nota:</strong> Si olvidas tu PIN en el futuro, no podrás entrar al sistema y deberás solicitar una restauración al departamento de RH.
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setModalSeguridad(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${tema.border}`, background: 'transparent', color: tema.textPrimary, fontSize: '13px', fontWeight: '700', cursor: 'pointer', transition: 'background 0.2s' }}>
-                  Cancelar
-                </button>
-                <button type="submit" disabled={guardandoPin} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', background: tema.accent, color: '#ffffff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.25)', transition: 'transform 0.1s', opacity: guardandoPin ? 0.7 : 1 }}>
-                  {guardandoPin ? 'Guardando...' : 'Actualizar PIN'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ModalSeguridad 
+          onClose={() => setModalSeguridad(false)}
+          usuarioLogueado={usuarioLogueado}
+          tema={tema}
+          modoOscuro={modoOscuro}
+        />
       )}
 
     </div>
@@ -494,154 +179,35 @@ const s = {
     position: 'relative', zIndex: 1, display: 'flex', width: '100%', height: '100%', overflow: 'hidden' 
   },
   
-  // BOTÓN UNIVERSAL PARA DESPLEGAR (MÓVIL Y ESCRITORIO)
   menuOpenBtn: { 
     position: 'fixed', top: '14px', left: '14px', zIndex: 300, 
     width: '38px', height: '38px', borderRadius: '8px', 
-    border: '1px solid', display: 'flex', alignItems: 'center', 
+    display: 'flex', alignItems: 'center', 
     justifyContent: 'center', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,0.2)'
   },
   
-  sidebar: { 
-    zIndex: 300, 
-    height: '100dvh', /* Ajuste dinámico para pantallas de celular */
-    overflowY: 'auto', /* Permite deslizar si la pantalla es chica */
-    paddingBottom: '40px', /* Espacio extra abajo para que nunca se tape */
-    display: 'flex', 
-    flexDirection: 'column', 
-    padding: '20px 20px 30px 20px', 
-    transition: 'all 0.3s ease', 
-    boxSizing: 'border-box', 
-    width: '300px', 
-    flexShrink: 0, 
-    backdropFilter: 'blur(10px)', 
-    WebkitBackdropFilter: 'blur(10px)',
-    boxShadow: '4px 0 25px rgba(0,0,0,0.1)' 
-  },
-
-  // MARCA DE AGUA LATERAL
-  sidebarWatermarkContainer: {
-    position: 'absolute',
-    top: '60%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: '90%',
-    pointerEvents: 'none',
-    zIndex: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  sidebarWatermarkImg: {
-    width: '100%',
-    maxHeight: '210px',
-    objectFit: 'contain',
-    userSelect: 'none',
-    transition: 'opacity 0.3s ease'
-  },
-  overlay: { 
-    position: 'fixed', 
-    top: 0, 
-    left: 0, 
-    width: '100vw', 
-    height: '100vh', 
-    backgroundColor: 'rgba(0,0,0,0.6)', 
-    backdropFilter: 'blur(3px)', 
-    zIndex: 200 /* <-- AHORA QUEDA POR DETRÁS DE LA BARRA */
-  },
-  // CABECERA
-  brandHeader: {
-    position: 'relative', zIndex: 1,
-    display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-    paddingBottom: '12px', marginBottom: '8px'
-  },
-  headerActions: {
-    display: 'flex', alignItems: 'center', gap: '5px'
-  },
-  btnIcon: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: '28px', height: '28px', borderRadius: '7px',
-    border: '1px solid', background: 'transparent', cursor: 'pointer'
-  },
-
-  // PERFIL
-  profileBox: {
-    position: 'relative', zIndex: 1,
-    display: 'flex', alignItems: 'center', gap: '10px',
-    padding: '10px 8px', borderRadius: '10px', border: '1px solid',
-    marginBottom: '16px'
-  },
-  avatarWrapper: {
-    width: '38px', height: '38px', borderRadius: '50%',
-    overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0
-  },
-  avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
-  avatarEditBadge: {
-    position: 'absolute', bottom: 0, left: 0, width: '100%', height: '13px',
-    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-  },
-  profileDetails: { display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 },
-  userName: { fontSize: '12.5px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' },
-  inputEdit: { fontSize: '11px', padding: '3px 5px', borderRadius: '5px', border: '1px solid', outline: 'none' },
-  userRole: { fontSize: '10.5px', textTransform: 'capitalize', marginTop: '1px' },
-
-  popover: { 
-    position: 'absolute', top: '55px', left: '6px', 
-    borderRadius: '10px', padding: '6px', display: 'flex', 
-    flexDirection: 'column', gap: '3px', boxShadow: '0 12px 30px rgba(0,0,0,0.3)', 
-    border: '1px solid', zIndex: 400, width: '155px' 
-  },
-  popBtn: { padding: '7px 8px', fontSize: '11.5px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '6px' },
-  popBtnCancel: { padding: '5px', color: '#ef4444', fontSize: '11px', fontWeight: '600', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'center' },
-
-  // NAVEGACIÓN
-  nav: { 
-    position: 'relative', zIndex: 1,
-    flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' 
-  },
-  navLink: {
-    display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
-    borderRadius: '8px', fontSize: '12.5px', fontWeight: '500', textDecoration: 'none',
-    transition: 'all 0.15s ease'
-  },
-  navLinkActive: {
-    display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
-    borderRadius: '0 8px 8px 0', fontSize: '12.5px', fontWeight: '600', textDecoration: 'none',
-    transition: 'all 0.15s ease'
-  },
-  navText: {
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-  },
-  btnLogout: {
-    marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    gap: '6px', padding: '10px', borderRadius: '8px', border: 'none',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)', color: '#ef4444',
-    fontSize: '12px', fontWeight: '600', cursor: 'pointer'
-  },
-
-  // TELÓN EN MÓVIL
   mobileBackdrop: {
     position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
     backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 200, backdropFilter: 'blur(2px)'
   },
 
-  // ÁREA DE CONTENIDO (SE EXPANDE AL 100% SUAVEMENTE)
   mainArea: { 
     flex: 1, display: 'flex', padding: '14px', boxSizing: 'border-box', 
     overflow: 'hidden', width: '100%', transition: 'all 0.25s ease'
   },
+
   contentCard: { 
     position: 'relative', flex: 1, width: '100%', height: '100%', 
-    borderRadius: '16px', border: '1px solid', padding: '22px', 
+    borderRadius: '16px', padding: '22px', 
     overflowY: 'auto', boxSizing: 'border-box', transition: 'background-color 0.2s ease'
   },
 
-  // MARCA DE AGUA EN EL ÁREA DE TRABAJO
   watermarkInsideCard: {
     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     pointerEvents: 'none', zIndex: 0, overflow: 'hidden'
   },
+
   watermarkImg: {
     width: 'min(70vw, 520px)',
     maxHeight: '60%',

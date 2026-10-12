@@ -159,9 +159,9 @@ export default function DossierLateral({
         
         {/* ==================== CABECERA LIMPIA ==================== */}
         <div style={{
-          padding: '16px 20px', borderBottom: `1px solid ${c.border}`,
+          padding: '16px 20px', borderBottom: `1.5px solid ${c.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: c.surface, flexShrink: 0
+          background: c.surfaceCard, flexShrink: 0
         }}>
           <div>
             <div style={{ fontSize: '11.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
@@ -177,14 +177,14 @@ export default function DossierLateral({
         </div>
 
         {/* ==================== CUERPO DEL EXPEDIENTE ==================== */}
-        <div className="dossier-body-scroll" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', background: c.surface }}>
+        <div className="dossier-body-scroll" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', background: c.bg }}>
           
           {/* TARJETA 1: IDENTIDAD EJECUTIVA */}
           <div style={{
             position: 'relative',
             background: c.surfaceCard,
-            borderRadius: '20px',
-            border: `1px solid ${c.border}`,
+            borderRadius: '16px',
+            border: `1.5px solid ${c.border}`,
             boxShadow: '0 8px 24px -4px rgba(0,0,0,0.04), 0 4px 8px -2px rgba(0,0,0,0.02)',
             padding: '24px',
             display: 'flex', gap: '20px', alignItems: 'center'
@@ -198,7 +198,7 @@ export default function DossierLateral({
                 title="Toca para ver foto ampliada"
                 style={{ 
                   width: '100%', height: '100%', borderRadius: '20px', objectFit: 'cover', 
-                  border: `1px solid rgba(0,0,0,0.06)`, cursor: 'pointer',
+                  border: `1.5px solid ${c.border}`, cursor: 'pointer',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
                 }} 
               />
@@ -207,7 +207,7 @@ export default function DossierLateral({
                   position: 'absolute', bottom: '-4px', right: '-4px', 
                   width: '30px', height: '30px', borderRadius: '50%',
                   background: c.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                  cursor: 'pointer', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+                  cursor: 'pointer', border: `3px solid ${c.surfaceCard}`, boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
                 }}>
                   <Camera size={14} color="#fff" />
                   <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onCambiarFoto} />
@@ -235,14 +235,16 @@ export default function DossierLateral({
                 {colaborador.puesto || 'SIN PUESTO'}
               </div>
 
-              {/* FIRMA ALINEADA A LA DERECHA */}
+              {/* FIRMA ALINEADA A LA DERECHA (Con fondo protector blanco) */}
               {!editando && colaborador.firma_url && (
                 <div style={{ marginTop: '12px', minHeight: '40px', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-                  <img 
-                    src={colaborador.firma_url} alt="Firma" 
-                    onClick={() => setFotoZoom && setFotoZoom({ url: colaborador.firma_url, nombre: `Firma de ${colaborador.nombre_completo}` })}
-                    style={{ maxHeight: '55px', maxWidth: '160px', objectFit: 'contain', cursor: 'pointer', mixBlendMode: 'darken' }} 
-                  />
+                  <div style={{ background: '#ffffff', padding: '4px 8px', borderRadius: '8px', border: `1.5px solid ${c.border}` }}>
+                    <img 
+                      src={colaborador.firma_url} alt="Firma" 
+                      onClick={() => setFotoZoom && setFotoZoom({ url: colaborador.firma_url, nombre: `Firma de ${colaborador.nombre_completo}` })}
+                      style={{ maxHeight: '50px', maxWidth: '150px', objectFit: 'contain', cursor: 'pointer' }} 
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -252,7 +254,7 @@ export default function DossierLateral({
               RECUADRO DE FIRMA (SOLO AL EDITAR)
               ========================================================= */}
           {editando && (
-            <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: `1px solid ${c.border}` }}>
+            <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: `1.5px solid ${c.border}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <div style={{ fontSize: '11px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <PenTool size={13} /> Firma Digitalizada
@@ -262,11 +264,11 @@ export default function DossierLateral({
                   <input ref={firmaInputRef} type="file" accept="image/*" hidden onChange={handleCambiarFirma} />
                 </label>
               </div>
-              <div style={{ width: '100%', height: '85px', borderRadius: '10px', backgroundColor: c.surface, border: `2px dashed ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '85px', borderRadius: '10px', backgroundColor: '#ffffff', border: `2px dashed ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                 {urlFirma ? (
                   <img src={urlFirma} alt="Firma" style={{ maxHeight: '75px', maxWidth: '90%', objectFit: 'contain' }} />
                 ) : (
-                  <div style={{ fontSize: '11px', color: c.textMuted, textAlign: 'center', fontWeight: '500' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', fontWeight: '500' }}>
                     Sin firma<br/><span style={{ color: c.accent, fontWeight: '700' }}>Toca en Cargar</span>
                   </div>
                 )}
@@ -278,10 +280,10 @@ export default function DossierLateral({
           {/* =========================================================
               BLOQUE 1: ESTRUCTURA LABORAL
               ========================================================= */}
-          <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', border: `1px solid ${c.border}` }}>
+          <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', border: `1.5px solid ${c.border}` }}>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}>
-              <div style={{ background: 'rgba(22, 163, 74, 0.1)', padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1.5px solid ${c.borderDivider}` }}>
+              <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}>
                 <Briefcase size={14} />
               </div>
               <span style={{ fontSize: '12px', fontWeight: '800', color: c.text, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estructura y Puesto</span>
@@ -322,10 +324,10 @@ export default function DossierLateral({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '13px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Sede Fija</span><strong style={{ color: c.text }}>{sedeNombre}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Departamento</span><strong style={{ color: c.text }}>{colaborador.departamentos?.nombre || 'No asignado'}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Área Física</span><strong style={{ color: c.text }}>{colaborador.area || 'General'}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Tipo de Nómina</span><strong style={{ color: c.accent, textTransform: 'uppercase' }}>{colaborador.tipo_personal}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Sede Fija</span><strong style={{ color: c.text }}>{sedeNombre}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Departamento</span><strong style={{ color: c.text }}>{colaborador.departamentos?.nombre || 'No asignado'}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Área Física</span><strong style={{ color: c.text }}>{colaborador.area || 'General'}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Tipo de Nómina</span><strong style={{ color: c.accent, textTransform: 'uppercase' }}>{colaborador.tipo_personal}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Fecha Ingreso</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_ingreso || 'No registrada'}</span></div>
               </div>
             )}
@@ -334,9 +336,9 @@ export default function DossierLateral({
           {/* =========================================================
               BLOQUE 2: COMUNICACIÓN Y ACCESOS
               ========================================================= */}
-          <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', border: `1px solid ${c.border}` }}>
+          <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', border: `1.5px solid ${c.border}` }}>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1.5px solid ${c.borderDivider}` }}>
               <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '6px', borderRadius: '8px', color: '#6366f1', display: 'flex' }}>
                 <ShieldCheck size={14} />
               </div>
@@ -352,7 +354,6 @@ export default function DossierLateral({
                 <div><label className="touch-field-label">PIN</label><input className="touch-field-input mono-id" placeholder="****" value={datosEdit.pin || ''} onChange={e => setDatosEdit({ ...datosEdit, pin: e.target.value })} /></div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="touch-field-label">Rol en ERP</label>
-                  {/* AQUÍ EL NUEVO CATÁLOGO OFICIAL DE 7 ROLES */}
                   <select className="touch-field-input" value={datosEdit.rol || 'empleado'} onChange={e => setDatosEdit({ ...datosEdit, rol: e.target.value })}>
                     <option value="empleado">EMPLEADO (OPERATIVO)</option>
                     <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
@@ -368,27 +369,27 @@ export default function DossierLateral({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '13px' }}>
                 
-                {/* LÍNEA DE CELULAR CON ICONOS INCORPORADOS AQUÍ ABAJO */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}>
+                {/* LÍNEA DE CELULAR CON BOTONES AMPLIADOS */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}>
                   <span style={{ color: c.textMuted, flexShrink: 0 }}>Celular</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <strong style={{ color: c.text }}>{colaborador.celular || 'No registrado'}</strong>
                     {!editando && colaborador.celular && (
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <a href={`tel:${colaborador.celular}`} title="Llamar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '8px', background: c.surface, border: `1px solid ${c.border}`, color: c.text, textDecoration: 'none' }}>
-                          <Phone size={13} />
+                        <a href={`tel:${colaborador.celular}`} title="Llamar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: '10px', background: c.bg, border: `1.5px solid ${c.border}`, color: c.text, textDecoration: 'none' }}>
+                          <Phone size={15} />
                         </a>
-                        <a href={`https://wa.me/${colaborador.celular.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="WhatsApp" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '8px', background: '#25D366', color: '#fff', border: 'none', textDecoration: 'none', boxShadow: '0 2px 6px rgba(37,211,102,0.2)' }}>
-                          <MessageCircle size={13} />
+                        <a href={`https://wa.me/${colaborador.celular.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" title="WhatsApp" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: '10px', background: '#25D366', color: '#fff', border: 'none', textDecoration: 'none', boxShadow: '0 4px 10px rgba(37,211,102,0.3)' }}>
+                          <MessageCircle size={16} />
                         </a>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Teléfono Fijo</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.telefono || 'No registrado'}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted, marginTop: '2px', flexShrink: 0 }}>Correo</span><strong style={{ color: c.text, textAlign: 'right', wordBreak: 'break-word', paddingLeft: '20px' }}>{colaborador.correo || 'No registrado'}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${c.borderDivider || '#f1f5f9'}` }}><span style={{ color: c.textMuted }}>Usuario ERP</span><strong style={{ color: '#6366f1' }}>{colaborador.usuario_login || 'Sin usuario'}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Teléfono Fijo</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.telefono || 'No registrado'}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted, marginTop: '2px', flexShrink: 0 }}>Correo</span><strong style={{ color: c.text, textAlign: 'right', wordBreak: 'break-word', paddingLeft: '20px' }}>{colaborador.correo || 'No registrado'}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Usuario ERP</span><strong style={{ color: '#6366f1' }}>{colaborador.usuario_login || 'Sin usuario'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Permisos</span><strong style={{ color: c.text, textTransform: 'uppercase' }}>{colaborador.rol?.replace(/_/g, ' ')}</strong></div>
               </div>
             )}
@@ -396,7 +397,7 @@ export default function DossierLateral({
 
           {/* PROTOCOLO DE BAJA MANTENIDO INTACTO */}
           {editando && (
-            <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '16px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '16px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div>
                 <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '800', marginBottom: '4px' }}>ESTATUS LABORAL</div>
                 {colaborador.activo ? (
@@ -418,12 +419,12 @@ export default function DossierLateral({
         {/* ==================== FOOTER AL EDITAR ==================== */}
         {editando && (
           <div style={{
-            padding: '16px 20px', borderTop: `1px solid ${c.border}`,
-            background: c.surface, display: 'flex', justifyContent: 'flex-end', gap: '10px', flexShrink: 0
+            padding: '16px 20px', borderTop: `1.5px solid ${c.border}`,
+            background: c.surfaceCard, display: 'flex', justifyContent: 'flex-end', gap: '10px', flexShrink: 0
           }}>
             <button 
               onClick={onClose}
-              style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted, fontSize: '12.5px', fontWeight: '600', cursor: 'pointer' }}
+              style={{ padding: '10px 16px', borderRadius: '8px', border: `1.5px solid ${c.border}`, background: 'transparent', color: c.textMuted, fontSize: '12.5px', fontWeight: '600', cursor: 'pointer' }}
             >
               Cancelar
             </button>

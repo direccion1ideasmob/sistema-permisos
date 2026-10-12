@@ -15,39 +15,43 @@ export default function AprobarDirecto() {
   const [procesando, setProcesando] = useState(false);
   const [mensajeResultado, setMensajeResultado] = useState(null);
 
-  // Estado para rechazo
   const [modoRechazo, setModoRechazo] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState('');
 
-  // Notificar por Push (Reutilizable)
-  const notificarUsuarioPush = async (usuarioId, titulo, mensaje, urlDestino) => {
+  // Notificador Push Inteligente (Acepta arreglo de usuarios o uno solo)
+  const notificarUsuariosPush = async (usuariosIds, titulo, mensaje, urlDestino) => {
     try {
+      const idsArray = Array.isArray(usuariosIds) ? usuariosIds : [usuariosIds];
+      if (idsArray.length === 0) return;
+
       const { data: subs } = await supabase
         .from('suscripciones_push')
         .select('subscription')
-        .eq('usuario_id', usuarioId);
+        .in('usuario_id', idsArray);
 
       if (subs && subs.length > 0) {
-        subs.forEach(async (item) => {
-          try {
-            let subLimpia = item.subscription;
-            if (typeof subLimpia === 'string') {
-              try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
-            }
-            await fetch('/api/notificar', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                subscription: subLimpia,
-                titulo,
-                mensaje,
-                urlDestino
-              })
-            });
-          } catch (_) {}
+        const envios = subs.map(async (item) => {
+          let subLimpia = item.subscription;
+          if (typeof subLimpia === 'string') {
+            try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+          }
+          const res = await fetch('/api/notificar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subscription: subLimpia,
+              titulo,
+              mensaje,
+              urlDestino
+            })
+          });
+          return res.json();
         });
+        await Promise.allSettled(envios);
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("Error al notificar push:", err);
+    }
   };
 
   useEffect(() => {
@@ -63,7 +67,6 @@ export default function AprobarDirecto() {
 
     setCargando(true);
     try {
-      // CONSULTA BLINDADA
       const { data, error } = await supabase
         .from('permisos')
         .select(`
@@ -85,7 +88,6 @@ export default function AprobarDirecto() {
         throw new Error('El permiso no existe o el enlace ha caducado.');
       }
 
-      // Validar si ya fue resuelto previamente
       if (data.firma_1_estado === 'autorizado') {
         setMensajeResultado({
           tipo: 'info',
@@ -106,7 +108,7 @@ export default function AprobarDirecto() {
     }
   };
 
-  // AUTORIZACIÓN (EFECTO DOMINÓ HACIA EL GERENTE)
+  // AUTORIZACIÓN (CON ENRUTADOR INTELIGENTE)
   const resolverAprobacion = async (dictamenPago) => {
     setProcesando(true);
     try {
@@ -117,22 +119,36 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      if (permiso.firma_2_id) {
+      // ENRUTADOR INTELIGENTE: ¿A quién le toca ahora?
+      let siguientesEnFirmar = [];
+      let etiquetaNotificacion = "Gerencia";
+
+      if (permiso.firma_2_estado === 'pendiente') {
+        if (permiso.firma_2_id) siguientesEnFirmar.push(permiso.firma_2_id);
+      } else if (permiso.firma_3_estado === 'pendiente') {
+        etiquetaNotificacion = "Recursos Humanos";
+        if (permiso.firma_3_id) {
+          siguientesEnFirmar.push(permiso.firma_3_id);
+        } else {
+          const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']);
+          if (rhUsers) siguientesEnFirmar = [...rhUsers.map(u => u.id)];
+        }
+      }
+
+      // DISPARO DE NOTIFICACIONES
+      if (siguientesEnFirmar.length > 0) {
         const nombreSolicitante = permiso.usuarios?.nombre_completo || 'Un colaborador';
-        
         const asuntoRaw = permiso.asunto_motivo || '';
         const matchMotivo = asuntoRaw.match(/\[(.*?)\]\s*(.*)/);
         const natClean = matchMotivo ? matchMotivo[1].toUpperCase() : '';
         const motClean = matchMotivo ? matchMotivo[2] : asuntoRaw;
         
-        // 1. TÍTULO EN MAYÚSCULAS
         let titNotif = '';
         if (permiso.tipo_permiso === 'salida') titNotif = 'SALIDA ANTICIPADA';
         else if (permiso.tipo_permiso === 'retardo') titNotif = 'RETARDO';
         else if (permiso.tipo_permiso === 'falta') titNotif = 'FALTA PROGRAMADA';
         else if (permiso.tipo_permiso === 'vacaciones') titNotif = 'VACACIONES';
 
-        // 2. ETIQUETA VISUAL
         let etiquetaNaturaleza = '🏠 PERSONAL / FAMILIAR';
         if (natClean === 'ASUNTO DE TRABAJO') etiquetaNaturaleza = '💼 ASUNTO LABORAL';
         else if (natClean === 'CITA MÉDICA') etiquetaNaturaleza = '🏥 CITA MÉDICA';
@@ -141,15 +157,15 @@ export default function AprobarDirecto() {
 
         const horarioLimpio = (permiso.observaciones || '').split(' | ')[0];
 
-        await notificarUsuarioPush(
-          permiso.firma_2_id,
+        await notificarUsuariosPush(
+          siguientesEnFirmar,
           titNotif,
           `👤 ${nombreSolicitante}\n${etiquetaNaturaleza}\n${horarioLimpio}\n💬 ${motClean}`,
           '/aprobaciones'
         );
       }
 
-      setMensajeResultado({ tipo: 'exito', texto: `¡Pase ${permiso.folio} autorizado con éxito! Notificación enviada a Gerencia.` });
+      setMensajeResultado({ tipo: 'exito', texto: `¡Pase ${permiso.folio} autorizado con éxito! Notificación enviada a ${etiquetaNotificacion}.` });
     } catch (err) {
       alert("Error al autorizar: " + err.message);
     } finally {
@@ -175,15 +191,14 @@ export default function AprobarDirecto() {
 
       if (error) throw error;
 
-      // 1. TÍTULO DE RECHAZO FULMINANTE
       let tipoPaseR = 'PASE';
       if (permiso.tipo_permiso === 'salida') tipoPaseR = 'SALIDA RECHAZADA';
       else if (permiso.tipo_permiso === 'retardo') tipoPaseR = 'RETARDO RECHAZADO';
       else if (permiso.tipo_permiso === 'falta') tipoPaseR = 'FALTA RECHAZADA';
       else if (permiso.tipo_permiso === 'vacaciones') tipoPaseR = 'VACACIONES RECHAZADAS';
 
-      await notificarUsuarioPush(
-        permiso.usuario_id,
+      await notificarUsuariosPush(
+        [permiso.usuario_id],
         `❌ ${tipoPaseR}`,
         `🚫 Motivo: ${motivoRechazo}`,
         '/mis-permisos'
@@ -237,7 +252,7 @@ export default function AprobarDirecto() {
               <div style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>{u.nombre_completo}</div>
                 <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: '700' }}>
-                  #{u.numero_empleado} • {u.departamentos?.nombre || 'General'}
+                  #{u.numero_empleado} - {u.departamentos?.nombre || 'General'}
                 </div>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>
                   {u.puesto || u.area || 'Sin puesto'}
