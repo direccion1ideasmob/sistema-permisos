@@ -168,7 +168,7 @@ const s = {
   },
   btnCancel: {
     flex: 1, padding: '12px', borderRadius: '10px', background: 'transparent', 
-    fontSize: '13px', fontWeight: '700', cursor: 'pointer', transition: 'background 0.2s'
+    fontSize: '13px', fontWeight: '700',  cursor: 'pointer', transition: 'background 0.2s'
   },
   btnSubmit: {
     flex: 1, padding: '12px', borderRadius: '10px', border: 'none', color: '#ffffff', 

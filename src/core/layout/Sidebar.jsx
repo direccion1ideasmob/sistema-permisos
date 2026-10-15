@@ -397,10 +397,10 @@ const s = {
     borderRadius: '0 8px 8px 0', fontSize: '12.5px', fontWeight: '600', textDecoration: 'none', transition: 'all 0.15s ease'
   },
   navText: {
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+    overflow: 'hidden',  textOverflow: 'ellipsis', whiteSpace: 'nowrap'
   },
   btnLogout: {
-    marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    marginTop: 'auto', display: 'flex', alignItems : 'center', justifyContent: 'center',
     gap: '6px', padding: '10px', borderRadius: '8px', border: 'none',
     backgroundColor: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
   }
