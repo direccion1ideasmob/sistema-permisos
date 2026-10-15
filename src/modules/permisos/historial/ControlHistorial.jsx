@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { supabase } from '../../../core/api/supabaseClient';
-
+import { obtenerHistorialGeneralPermisos, obtenerCatalogoDepartamentosSimple } from '../services/permisosService';
 import TablaHistorial from './TablaHistorial';
 import ModalPapeletaPDF from './ModalPapeletaPDF';
 import ModalExportarExcel from './ModalExportarExcel';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../aprobacionesStyles';
-
 import { FileSpreadsheet, RefreshCw, Shield } from 'lucide-react';
 
 export default function ControlHistorial() {
@@ -18,57 +16,23 @@ export default function ControlHistorial() {
   const [departamentos, setDepartamentos] = useState([]);
   const [cargando, setCargando] = useState(true);
 
-  // Filtros Avanzados de la Tabla en Pantalla
   const [deptoFiltro, setDeptoFiltro] = useState('todos');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState('todos');
 
-  // Control de Modales
   const [papeletaSeleccionada, setPapeletaSeleccionada] = useState(null);
   const [mostrarModalExportar, setMostrarModalExportar] = useState(false);
 
   useEffect(() => {
-    const cargarDeptos = async () => {
-      const { data } = await supabase.from('departamentos').select('id, nombre').order('nombre');
-      setDepartamentos(data || []);
-    };
-    cargarDeptos();
+    obtenerCatalogoDepartamentosSimple().then(setDepartamentos).catch(() => {});
   }, []);
 
   const cargarTodasSolicitudes = useCallback(async () => {
     setCargando(true);
     try {
-      let query = supabase
-        .from('permisos')
-        .select(`
-          *,
-          usuarios:usuario_id (
-            id, numero_empleado, nombre_completo, area, puesto, foto_url, firma_url, departamento_id,
-            departamentos:departamento_id (id, nombre, clasificacion)
-          ),
-          jefe:firma_1_id (nombre_completo, firma_url),
-          gerente:firma_2_id (nombre_completo, firma_url),
-          rh:firma_3_id (nombre_completo, firma_url)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (deptoFiltro !== 'todos') {
-        query = query.eq('usuarios.departamento_id', deptoFiltro);
-      }
-      if (tipoFiltro !== 'todos') {
-        query = query.eq('tipo_permiso', tipoFiltro);
-      }
-      if (fechaInicio) {
-        query = query.gte('fecha_permiso', fechaInicio);
-      }
-      if (fechaFin) {
-        query = query.lte('fecha_permiso', fechaFin);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setSolicitudes(data || []);
+      const data = await obtenerHistorialGeneralPermisos({ deptoFiltro, tipoFiltro, fechaInicio, fechaFin });
+      setSolicitudes(data);
     } catch (err) {
       console.error("Error al cargar historial general para RH:", err);
     } finally {
@@ -93,7 +57,6 @@ export default function ControlHistorial() {
           <p style={{ fontSize: '12px', color: c.textMuted, margin: '4px 0 0 0' }}>Auditoría central, archivo de pases y generación de reportes de nómina.</p>
         </div>
 
-        {/* BOTÓN PARA ABRIR MODAL DE EXPORTACIÓN PERSONALIZADA */}
         <button
           onClick={() => setMostrarModalExportar(true)}
           style={{
@@ -106,33 +69,18 @@ export default function ControlHistorial() {
         </button>
       </div>
 
-      {/* BARRA DE FILTROS RÁPIDOS DE PANTALLA */}
       <div style={{ background: c.surfaceCard, padding: '14px 18px', borderRadius: '14px', border: `1px solid ${c.border}`, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', alignItems: 'end' }}>
         <div>
-          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>
-            Departamento
-          </label>
-          <select
-            value={deptoFiltro}
-            onChange={(e) => setDeptoFiltro(e.target.value)}
-            style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px', fontSize: '12px', fontWeight: '700', outline: 'none' }}
-          >
+          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Departamento</label>
+          <select value={deptoFiltro} onChange={(e) => setDeptoFiltro(e.target.value)} style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px', fontSize: '12px', fontWeight: '700', outline: 'none' }}>
             <option value="todos">Todos los Departamentos</option>
-            {departamentos.map(d => (
-              <option key={d.id} value={d.id}>{d.nombre}</option>
-            ))}
+            {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
           </select>
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>
-            Tipo de Pase
-          </label>
-          <select
-            value={tipoFiltro}
-            onChange={(e) => setTipoFiltro(e.target.value)}
-            style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px', fontSize: '12px', fontWeight: '700', outline: 'none' }}
-          >
+          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Tipo de Pase</label>
+          <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)} style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px', fontSize: '12px', fontWeight: '700', outline: 'none' }}>
             <option value="todos">Todos los Tipos</option>
             <option value="salida">Salida Anticipada</option>
             <option value="retardo">Retardo</option>
@@ -142,27 +90,13 @@ export default function ControlHistorial() {
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>
-            Desde (Fecha)
-          </label>
-          <input
-            type="date"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-            style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
-          />
+          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Desde (Fecha)</label>
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
         </div>
 
         <div>
-          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>
-            Hasta (Fecha)
-          </label>
-          <input
-            type="date"
-            value={fechaFin}
-            onChange={(e) => setFechaFin(e.target.value)}
-            style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
-          />
+          <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '4px' }}>Hasta (Fecha)</label>
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} style={{ width: '100%', background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
         </div>
 
         <div>
@@ -176,34 +110,13 @@ export default function ControlHistorial() {
       </div>
 
       {cargando ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '12px' }}>
-          Cargando base de datos de pases...
-        </div>
+        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '12px' }}>Cargando base de datos de pases...</div>
       ) : (
-        <TablaHistorial
-          solicitudes={solicitudes}
-          c={c}
-          modoOscuro={modoOscuro}
-          esControlRH={true}
-          onSeleccionarPapeleta={(permiso) => setPapeletaSeleccionada(permiso)}
-        />
+        <TablaHistorial solicitudes={solicitudes} c={c} modoOscuro={modoOscuro} esControlRH={true} onSeleccionarPapeleta={(permiso) => setPapeletaSeleccionada(permiso)} />
       )}
 
-      {/* MODAL PAPELETA INDIVIDUAL/LOTES EN PDF */}
-      {papeletaSeleccionada && (
-        <ModalPapeletaPDF
-          permiso={papeletaSeleccionada}
-          onClose={() => setPapeletaSeleccionada(null)}
-        />
-      )}
-
-      {/* MODAL CONFIGURACIÓN EXPORTACIÓN A EXCEL */}
-      {mostrarModalExportar && (
-        <ModalExportarExcel
-          departamentos={departamentos}
-          onClose={() => setMostrarModalExportar(false)}
-        />
-      )}
+      {papeletaSeleccionada && <ModalPapeletaPDF permiso={papeletaSeleccionada} onClose={() => setPapeletaSeleccionada(null)} />}
+      {mostrarModalExportar && <ModalExportarExcel departamentos={departamentos} onClose={() => setMostrarModalExportar(false)} />}
     </div>
   );
 }

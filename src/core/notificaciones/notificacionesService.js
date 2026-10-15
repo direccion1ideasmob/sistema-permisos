@@ -47,3 +47,34 @@ export async function registrarSuscripcionPush() {
     return null;
   }
 }
+// === FUNCIÓN UNIVERSAL PARA ENVIAR PUSH A UNO O VARIOS USUARIOS ===
+export const enviarNotificacionPushUsuarios = async (usuariosIds, { titulo, mensaje, urlDestino = '/inicio', fotoUrl = null }) => {
+  const ids = (Array.isArray(usuariosIds) ? usuariosIds : [usuariosIds]).filter(Boolean);
+  if (ids.length === 0) return;
+
+  try {
+    const { data: subs } = await supabase
+      .from('suscripciones_push')
+      .select('subscription')
+      .in('usuario_id', ids);
+
+    if (!subs || subs.length === 0) return;
+
+    const envios = subs.map(async (item) => {
+      let subLimpia = item.subscription;
+      if (typeof subLimpia === 'string') {
+        try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+      }
+      const res = await fetch('/api/notificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: subLimpia, titulo, mensaje, fotoUrl, urlDestino })
+      });
+      return res.json();
+    });
+
+    await Promise.allSettled(envios);
+  } catch (err) {
+    console.error("Error enviando notificaciones push:", err);
+  }
+};

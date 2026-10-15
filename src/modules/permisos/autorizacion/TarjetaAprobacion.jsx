@@ -3,7 +3,7 @@ import {
   Check, X, ShieldAlert, AlertTriangle, Calendar, Clock, 
   MessageSquare, Info, LockOpen, CheckCircle2, XCircle, FastForward 
 } from 'lucide-react';
-import { supabase } from '../../../core/api/supabaseClient';
+import { contarReincidenciasRetardo } from '../services/permisosService';
 
 export default function TarjetaAprobacion({ 
   solicitud, esPendiente, onAprobar, onRechazar, onForzarFirma, usuarioActual, c, modoOscuro 
