@@ -1,41 +1,37 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Inicio from './pages/Inicio';
-import AdminUsuarios from './pages/AdminUsuarios';
-import Layout from './components/Layout'; 
-import Login from './pages/Login';
-import Solicitar from './pages/Solicitar';
-import MisPermisos from './pages/MisPermisos';
-import Aprobaciones from './pages/Aprobaciones';
-import Caseta from './pages/Caseta';
-import AprobarDirecto from './pages/AprobarDirecto';
-import ControlHistorial from './pages/ControlHistorial';
+import { AuthProvider, useAuth } from './core/auth/AuthContext';
+import Layout from './core/layout/Layout'; 
+import Login from './core/auth/Login';
 
-// 1. EL CADENERO GENERAL (Verifica si hay sesión iniciada)
+// Carga inteligente por módulo (Code Splitting para que el sistema vuele)
+const Inicio = lazy(() => import('./modules/inicio/Inicio'));
+const AdminUsuarios = lazy(() => import('./modules/directorio/AdminUsuarios'));
+const Solicitar = lazy(() => import('./modules/permisos/solicitud/Solicitar'));
+const MisPermisos = lazy(() => import('./modules/permisos/solicitud/MisPermisos'));
+const Aprobaciones = lazy(() => import('./modules/permisos/autorizacion/Aprobaciones'));
+const AprobarDirecto = lazy(() => import('./modules/permisos/autorizacion/AprobarDirecto'));
+const ControlHistorial = lazy(() => import('./modules/permisos/historial/ControlHistorial'));
+const Caseta = lazy(() => import('./modules/vigilancia/Caseta'));
+
+function PantallaCargando() {
+  return (
+    <div style={{ padding: '40px', textAlign: 'center', color: '#737373', fontSize: '13px', fontFamily: 'Inter, sans-serif' }}>
+      Cargando módulo...
+    </div>
+  );
+}
+
 function RutasProtegidas() {
   const { usuario, iniciarSesion } = useAuth();
-
-  if (!usuario) {
-    return <Login alEntrar={iniciarSesion} />;
-  }
-
+  if (!usuario) return <Login alEntrar={iniciarSesion} />;
   return <Layout />;
 }
 
-// 2. EL NUEVO CADENERO ESTRICTO (Verifica los roles autorizados)
 function RutaRol({ rolesPermitidos, children }) {
   const { usuario } = useAuth();
-  
-  // Si no hay usuario, lo saca
   if (!usuario) return <Navigate to="/" replace />;
-  
-  // Si el rol del usuario NO está en la lista de permitidos, lo expulsa al inicio
-  if (!rolesPermitidos.includes(usuario.rol)) {
-    return <Navigate to="/inicio" replace />;
-  }
-
-  // Si tiene permiso, lo deja pasar
+  if (!rolesPermitidos.includes(usuario.rol)) return <Navigate to="/inicio" replace />;
   return children;
 }
 
@@ -43,38 +39,57 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          {/* Ruta pública para aprobación directa por WhatsApp */}
-          <Route path="/aprobar-directo" element={<AprobarDirecto />} />
-          
-          {/* Rutas Privadas envueltas en Layout */}
-          <Route element={<RutasProtegidas />}>
-            <Route path="/inicio" element={<Inicio />} />
-            <Route path="/solicitar" element={<Solicitar />} />
-            <Route path="/mis-permisos" element={<MisPermisos />} />
+        <Suspense fallback={<PantallaCargando />}>
+          <Routes>
+            <Route path="/aprobar-directo" element={<AprobarDirecto />} />
             
-            {/* Puedes aplicar RutaRol a estas también si lo necesitan en un futuro */}
-            <Route path="/aprobaciones" element={<Aprobaciones />} />
-            <Route path="/control-historial" element={<ControlHistorial />} />
-            <Route path="/caseta" element={<Caseta />} />
+            <Route element={<RutasProtegidas />}>
+              <Route path="/inicio" element={<Inicio />} />
+              <Route path="/solicitar" element={<Solicitar />} />
+              <Route path="/mis-permisos" element={<MisPermisos />} />
+              
+              <Route 
+                path="/aprobaciones" 
+                element={
+                  <RutaRol rolesPermitidos={['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin']}>
+                    <Aprobaciones />
+                  </RutaRol>
+                } 
+              />
+
+              <Route 
+                path="/control-historial" 
+                element={
+                  <RutaRol rolesPermitidos={['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin']}>
+                    <ControlHistorial />
+                  </RutaRol>
+                } 
+              />
+
+              <Route 
+                path="/caseta" 
+                element={
+                  <RutaRol rolesPermitidos={['caseta', 'gerente_rh', 'rh_nominas', 'superadmin']}>
+                    <Caseta />
+                  </RutaRol>
+                } 
+              />
+              
+              <Route 
+                path="/directorio" 
+                element={
+                  <RutaRol rolesPermitidos={['superadmin', 'gerente_rh', 'rh_nominas']}>
+                    <AdminUsuarios />
+                  </RutaRol>
+                } 
+              />
+              
+              <Route path="/" element={<Navigate to="/inicio" replace />} />
+            </Route>
             
-            {/* === RUTA BLINDADA: SOLO HR Y SUPERADMIN === */}
-            <Route 
-              path="/directorio" 
-              element={
-                <RutaRol rolesPermitidos={['superadmin', 'gerente_rh', 'rh_nominas']}>
-                  <AdminUsuarios />
-                </RutaRol>
-              } 
-            />
-            
-            {/* Redirección por defecto a INICIO */}
-            <Route path="/" element={<Navigate to="/inicio" replace />} />
-          </Route>
-          
-          {/* Comodín de seguridad */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );
