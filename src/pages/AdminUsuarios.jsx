@@ -7,7 +7,7 @@ import { Plus, LayoutGrid, TableProperties } from 'lucide-react';
 export default function AdminUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
-  const [areasUnicas, setAreasUnicas] =  useState([]);
+  const [areasUnicas, setAreasUnicas] = useState([]);
   const [puestosUnicos, setPuestosUnicos] = useState([]);
   
   const [cargando, setCargando] = useState(true);
@@ -15,7 +15,6 @@ export default function AdminUsuarios() {
   const [vista, setVista] = useState('arbol');
   const [sedes, setSedes] = useState([]);
 
-  // === DETECCIÓN REACTIVA DEL TEMA (CLARO / OSCURO) ===
   const [modoOscuro, setModoOscuro] = useState(() => {
     return localStorage.getItem('tema_sistema') === 'oscuro';
   });
@@ -38,9 +37,10 @@ export default function AdminUsuarios() {
     const { data: listSedes } = await supabase.from('sedes').select('id, nombre').order('nombre', { ascending: true });
     if (listSedes) setSedes(listSedes);
 
+    // SE AGREGARON: nombre, apellido_paterno, apellido_materno, fecha_nacimiento, fecha_baja, motivo_baja
     const { data: listUsuarios, error: errU } = await supabase
       .from('usuarios')
-      .select('id, numero_empleado, nombre_completo, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, sede_id, pin, fecha_ingreso, celular, telefono, correo')
+      .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, sede_id, pin, fecha_ingreso, fecha_baja, motivo_baja, celular, telefono, correo')
       .order('nombre_completo', { ascending: true });
 
     if (errU) console.error("Error usuarios:", errU);
@@ -108,18 +108,18 @@ export default function AdminUsuarios() {
     }
   };
 
-  // === PALETA ZINC UNIFICADA CON EL LAYOUT ===
+  // === PALETA GRIS CARBÓN PURO ===
   const t = {
-    title: modoOscuro ? '#f4f4f5' : '#09090b',
-    sub: modoOscuro ? '#a1a1aa' : '#71717a',
-    switchBg: modoOscuro ? '#18181b' : '#f1f5f9',
-    switchText: modoOscuro ? '#a1a1aa' : '#64748b',
-    switchActiveBg: modoOscuro ? '#27272a' : '#ffffff',
+    title: modoOscuro ? '#ffffff' : '#171717',
+    sub: modoOscuro ? '#a3a3a3' : '#737373',
+    switchBg: modoOscuro ? '#171717' : '#f5f5f5',
+    switchText: modoOscuro ? '#a3a3a3' : '#737373',
+    switchActiveBg: modoOscuro ? '#262626' : '#ffffff',
     switchActiveText: modoOscuro ? '#4ade80' : '#15803d',
-    switchActiveBorder: modoOscuro ? '#3f3f46' : 'rgba(0, 0, 0, 0.1)',
+    switchActiveBorder: modoOscuro ? '#404040' : '#e5e5e5',
     accent: '#16a34a',
     accentHover: '#15803d',
-    loadingText: modoOscuro ? '#a1a1aa' : '#64748b'
+    loadingText: modoOscuro ? '#a3a3a3' : '#737373'
   };
 
   return (
@@ -131,9 +131,8 @@ export default function AdminUsuarios() {
           gap: 15px;
           width: 100%;
           box-sizing: border-box;
-          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
         }
-
         .admin-header {
           display: flex;
           justify-content: space-between;
@@ -141,7 +140,6 @@ export default function AdminUsuarios() {
           flex-wrap: wrap;
           gap: 12px;
         }
-
         .admin-title {
           font-size: 20px;
           font-weight: 800;
@@ -149,14 +147,12 @@ export default function AdminUsuarios() {
           margin: 0;
           letter-spacing: -0.02em;
         }
-
         .admin-sub {
           font-size: 12px;
           color: ${t.sub};
           margin: 3px 0 0 0;
           font-weight: 400;
         }
-
         .admin-actions {
           display: flex;
           gap: 10px;
@@ -164,26 +160,23 @@ export default function AdminUsuarios() {
           width: 100%;
           justify-content: space-between;
         }
-
         @media (min-width: 600px) {
           .admin-title { font-size: 22px; }
           .admin-actions { width: auto; justify-content: flex-end; }
         }
-
         .view-switch {
           display: flex;
           background: ${t.switchBg};
           border-radius: 9px;
           padding: 3px;
-          border: 1.5px solid ${t.switchActiveBorder};
+          border: 1px solid ${t.switchActiveBorder};
         }
-
         .switch-btn {
           display: flex;
           align-items: center;
           gap: 6px;
           padding: 7px 12px;
-          border: 1.5px solid transparent;
+          border: 1px solid transparent;
           border-radius: 7px;
           cursor: pointer;
           font-weight: 600;
@@ -192,14 +185,12 @@ export default function AdminUsuarios() {
           color: ${t.switchText};
           transition: all 0.15s ease;
         }
-
         .switch-btn.active {
           background: ${t.switchActiveBg};
           color: ${t.switchActiveText};
           border-color: ${t.switchActiveBorder};
           box-shadow: ${modoOscuro ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.06)'};
         }
-
         .btn-nuevo-main {
           display: flex;
           align-items: center;
@@ -215,14 +206,8 @@ export default function AdminUsuarios() {
           box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
           transition: background-color 0.15s ease, transform 0.1s ease;
         }
-
-        .btn-nuevo-main:hover {
-          background: ${t.accentHover};
-        }
-
-        .btn-nuevo-main:active {
-          transform: scale(0.98);
-        }
+        .btn-nuevo-main:hover { background: ${t.accentHover}; }
+        .btn-nuevo-main:active { transform: scale(0.98); }
       `}</style>
 
       <div className="admin-container">
@@ -255,15 +240,13 @@ export default function AdminUsuarios() {
           </div>
         </header>
 
-        {/* BUSCADOR EXTERNO ELIMINADO: DirectorioGrid ya maneja la búsqueda de forma óptima */}
-
         {cargando ? (
           <div style={{ textAlign: 'center', padding: '40px', color: t.loadingText, fontSize: '13px', fontWeight: '500' }}>
             Sincronizando estructura organizacional...
           </div>
         ) : (
           <VisorDirectorio 
-            usuarios={usuarios} // Se pasa el arreglo completo sin doble filtro
+            usuarios={usuarios} 
             vista={vista} 
             departamentos={departamentos}
             sedes={sedes}

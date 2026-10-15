@@ -7,8 +7,31 @@ export default function FichaColaborador({
   onRestablecerPin, onAbrirBaja, onReactivar, c 
 }) {
   const fileInputRef = useRef(null);
-  const urlFoto = datosEdit.foto_url || user.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.nombre_completo)}&background=16a34a&color=fff&bold=true`;
+  
+  // Nombre completo unificado para la visualización
+  const nombreMostrar = datosEdit.nombre_completo || user.nombre_completo || 'Colaborador';
+  const urlFoto = datosEdit.foto_url || user.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombreMostrar)}&background=16a34a&color=fff&bold=true`;
   const sedeNombre = sedes.find(s => s.id === user.sede_id)?.nombre || 'Sin Sede Asignada';
+
+  // Manejador para actualizar nombres por separado y auto-generar nombre_completo
+  const handleNombreChange = (campo, valor) => {
+    const nuevosDatos = { ...datosEdit, [campo]: valor };
+    
+    const nom = campo === 'nombre' ? valor : (datosEdit.nombre || '');
+    const pat = campo === 'apellido_paterno' ? valor : (datosEdit.apellido_paterno || '');
+    const mat = campo === 'apellido_materno' ? valor : (datosEdit.apellido_materno || '');
+    
+    // Unificar para retrocompatibilidad
+    const completo = `${nom.trim()} ${pat.trim()} ${mat.trim()}`.trim();
+    nuevosDatos.nombre_completo = completo || datosEdit.nombre_completo;
+
+    setDatosEdit(nuevosDatos);
+  };
+
+  // Valor actual para mostrar en el input de departamento (con soporte de sugerencias)
+  const valorDepartamento = datosEdit.departamento_texto !== undefined 
+    ? datosEdit.departamento_texto 
+    : (departamentos.find(d => d.id === datosEdit.departamento_id)?.nombre || '');
 
   return (
     <div style={{ padding: '24px', background: c.bg, borderBottom: `1.5px solid ${c.border}` }}>
@@ -30,7 +53,7 @@ export default function FichaColaborador({
 
           <div>
             <div style={{ fontSize: '15px', fontWeight: '600', color: c.text }}>
-              {estaEditando ? 'Editando expediente' : user.nombre_completo}
+              {estaEditando ? `Editando: ${nombreMostrar}` : user.nombre_completo}
             </div>
             <div style={{ fontSize: '12px', color: c.textMuted, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="mono-id">#{user.numero_empleado}</span>
@@ -63,37 +86,84 @@ export default function FichaColaborador({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
           <div>
             <label className="touch-field-label">Nº de Empleado</label>
-            <input className="touch-field-input mono-id" value={datosEdit.numero_empleado} onChange={e => setDatosEdit({...datosEdit, numero_empleado: e.target.value})} />
+            <input className="touch-field-input mono-id" value={datosEdit.numero_empleado || ''} onChange={e => setDatosEdit({...datosEdit, numero_empleado: e.target.value})} />
           </div>
-          <div style={{ gridColumn: 'span 2' }}>
-            <label className="touch-field-label">Nombre Completo</label>
-            <input className="touch-field-input" value={datosEdit.nombre_completo} onChange={e => setDatosEdit({...datosEdit, nombre_completo: e.target.value})} />
+
+          {/* CAMPOS SEPARADOS DE NOMBRE */}
+          <div>
+            <label className="touch-field-label">Nombre(s)</label>
+            <input className="touch-field-input" placeholder="Ej. Juan Carlos" value={datosEdit.nombre || ''} onChange={e => handleNombreChange('nombre', e.target.value)} />
           </div>
           <div>
+            <label className="touch-field-label">Apellido Paterno</label>
+            <input className="touch-field-input" placeholder="Ej. Pérez" value={datosEdit.apellido_paterno || ''} onChange={e => handleNombreChange('apellido_paterno', e.target.value)} />
+          </div>
+          <div>
+            <label className="touch-field-label">Apellido Materno</label>
+            <input className="touch-field-input" placeholder="Ej. López" value={datosEdit.apellido_materno || ''} onChange={e => handleNombreChange('apellido_materno', e.target.value)} />
+          </div>
+
+          {/* FECHA DE NACIMIENTO */}
+          <div>
+            <label className="touch-field-label">Fecha de Nacimiento</label>
+            <input type="date" className="touch-field-input" value={datosEdit.fecha_nacimiento || ''} onChange={e => setDatosEdit({...datosEdit, fecha_nacimiento: e.target.value})} />
+          </div>
+
+          <div>
             <label className="touch-field-label">Sede / Región</label>
-            <select className="touch-field-input" value={datosEdit.sede_id} onChange={e => setDatosEdit({...datosEdit, sede_id: e.target.value})}>
+            <select className="touch-field-input" value={datosEdit.sede_id || ''} onChange={e => setDatosEdit({...datosEdit, sede_id: e.target.value})}>
               <option value="">Sin Sede</option>
               {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
           </div>
+
+          {/* DEPARTAMENTO CON AUTOCOMPLETADO Y SUGERENCIAS */}
           <div>
             <label className="touch-field-label">Departamento</label>
-            <select className="touch-field-input" value={datosEdit.departamento_id} onChange={e => setDatosEdit({...datosEdit, departamento_id: e.target.value})}>
-              <option value="">Sin Departamento</option>
-              {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-            </select>
+            <input
+              list={`lista-deptos-${user.id}`}
+              className="touch-field-input"
+              placeholder="Escribe para buscar o crear..."
+              value={valorDepartamento}
+              onChange={e => {
+                const texto = e.target.value;
+                const deptoExistente = departamentos.find(
+                  d => d.nombre.toLowerCase() === texto.trim().toLowerCase()
+                );
+
+                if (deptoExistente) {
+                  setDatosEdit({
+                    ...datosEdit,
+                    departamento_id: deptoExistente.id,
+                    departamento_texto: deptoExistente.nombre
+                  });
+                } else {
+                  setDatosEdit({
+                    ...datosEdit,
+                    departamento_id: null,
+                    departamento_texto: texto
+                  });
+                }
+              }}
+            />
+            <datalist id={`lista-deptos-${user.id}`}>
+              {departamentos.map(d => (
+                <option key={d.id} value={d.nombre} />
+              ))}
+            </datalist>
           </div>
+
           <div>
             <label className="touch-field-label">Área Física</label>
-            <input className="touch-field-input" value={datosEdit.area} onChange={e => setDatosEdit({...datosEdit, area: e.target.value})} />
+            <input className="touch-field-input" value={datosEdit.area || ''} onChange={e => setDatosEdit({...datosEdit, area: e.target.value})} />
           </div>
           <div>
             <label className="touch-field-label">Puesto</label>
-            <input className="touch-field-input" value={datosEdit.puesto} onChange={e => setDatosEdit({...datosEdit, puesto: e.target.value})} />
+            <input className="touch-field-input" value={datosEdit.puesto || ''} onChange={e => setDatosEdit({...datosEdit, puesto: e.target.value})} />
           </div>
           <div>
             <label className="touch-field-label">Tipo de Nómina</label>
-            <select className="touch-field-input" value={datosEdit.tipo_personal} onChange={e => setDatosEdit({...datosEdit, tipo_personal: e.target.value})}>
+            <select className="touch-field-input" value={datosEdit.tipo_personal || 'produccion'} onChange={e => setDatosEdit({...datosEdit, tipo_personal: e.target.value})}>
               <option value="produccion">PRODUCCIÓN</option>
               <option value="administrativo">ADMINISTRATIVO</option>
               <option value="obra">OBRA</option>
@@ -101,7 +171,7 @@ export default function FichaColaborador({
           </div>
           <div>
             <label className="touch-field-label">Rol en el Sistema</label>
-            <select className="touch-field-input" value={datosEdit.rol} onChange={e => setDatosEdit({...datosEdit, rol: e.target.value})}>
+            <select className="touch-field-input" value={datosEdit.rol || 'empleado'} onChange={e => setDatosEdit({...datosEdit, rol: e.target.value})}>
               <option value="empleado">EMPLEADO (OPERATIVO)</option>
               <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
               <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (PLANTA)</option>
@@ -114,23 +184,23 @@ export default function FichaColaborador({
           </div>
           <div>
             <label className="touch-field-label">Teléfono Celular</label>
-            <input className="touch-field-input" value={datosEdit.celular} onChange={e => setDatosEdit({...datosEdit, celular: e.target.value})} />
+            <input className="touch-field-input" value={datosEdit.celular || ''} onChange={e => setDatosEdit({...datosEdit, celular: e.target.value})} />
           </div>
           <div>
             <label className="touch-field-label">Correo Institucional</label>
-            <input className="touch-field-input" value={datosEdit.correo} onChange={e => setDatosEdit({...datosEdit, correo: e.target.value})} />
+            <input className="touch-field-input" value={datosEdit.correo || ''} onChange={e => setDatosEdit({...datosEdit, correo: e.target.value})} />
           </div>
           <div>
             <label className="touch-field-label">Usuario Login</label>
-            <input className="touch-field-input" value={datosEdit.usuario_login} onChange={e => setDatosEdit({...datosEdit, usuario_login: e.target.value})} />
+            <input className="touch-field-input" value={datosEdit.usuario_login || ''} onChange={e => setDatosEdit({...datosEdit, usuario_login: e.target.value})} />
           </div>
           <div>
             <label className="touch-field-label">PIN de Acceso</label>
-            <input className="touch-field-input mono-id" placeholder="****" value={datosEdit.pin} onChange={e => setDatosEdit({...datosEdit, pin: e.target.value})} />
+            <input className="touch-field-input mono-id" placeholder="****" value={datosEdit.pin || ''} onChange={e => setDatosEdit({...datosEdit, pin: e.target.value})} />
           </div>
           <div>
             <label className="touch-field-label">Fecha de Ingreso</label>
-            <input type="date" className="touch-field-input" value={datosEdit.fecha_ingreso} onChange={e => setDatosEdit({...datosEdit, fecha_ingreso: e.target.value})} />
+            <input type="date" className="touch-field-input" value={datosEdit.fecha_ingreso || ''} onChange={e => setDatosEdit({...datosEdit, fecha_ingreso: e.target.value})} />
           </div>
         </div>
       ) : (
@@ -155,6 +225,10 @@ export default function FichaColaborador({
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1.5px solid ${c.borderDivider}`, paddingBottom: '8px' }}>
                 <span style={{ color: c.textMuted }}>Puesto:</span>
                 <span style={{ fontWeight: '500', color: c.text }}>{user.puesto || 'Sin puesto'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1.5px solid ${c.borderDivider}`, paddingBottom: '8px' }}>
+                <span style={{ color: c.textMuted }}>Fecha de Nacimiento:</span>
+                <span style={{ fontWeight: '500', color: c.text }}>{user.fecha_nacimiento || 'No registrada'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: c.textMuted }}>Fecha de Ingreso:</span>

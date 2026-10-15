@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import imageCompression from 'browser-image-compression';
 import { 
-  Lock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, CheckCircle2, 
-  Search, RotateCcw, MapPin, Building2, Briefcase, Filter
+  Lock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, 
+  Search, RotateCcw
 } from 'lucide-react';
 
 import { obtenerTemaGrid, generarEstilosCSS } from './directorio/gridStyles';
@@ -11,14 +11,36 @@ import ModalSeguridadPin from './directorio/ModalSeguridadPin';
 import ModalBajaColaborador from './directorio/ModalBajaColaborador';
 import DossierLateral from './directorio/DossierLateral';
 
-// === FUNCIÓN DE APOYO PARA EXTRAER APELLIDOS ===
-const extraerApellidosParaOrden = (nombreCompleto) => {
-  if (!nombreCompleto) return '';
+// === 1. APOYO PARA ORDENAR POR APELLIDOS (USA COLUMNAS NUEVAS O EXTRAE DE NOMBRE_COMPLETO) ===
+const obtenerClaveOrdenApellido = (u) => {
+  if (u.apellido_paterno) {
+    return `${u.apellido_paterno} ${u.apellido_materno || ''} ${u.nombre || ''}`.trim().toUpperCase();
+  }
+  const nombreCompleto = u.nombre_completo || '';
   const partes = nombreCompleto.trim().split(/\s+/);
-  if (partes.length <= 1) return nombreCompleto;
-  if (partes.length === 2) return partes[1]; // Ej: "Juan Perez" -> "Perez"
-  // Ej: "Juan Carlos Perez Gomez" -> "Perez Gomez"
-  return partes.slice(-2).join(' '); 
+  if (partes.length <= 1) return nombreCompleto.toUpperCase();
+  if (partes.length === 2) return `${partes[1]} ${partes[0]}`.toUpperCase();
+  return `${partes.slice(-2).join(' ')} ${partes.slice(0, -2).join(' ')}`.toUpperCase();
+};
+
+// === 2. APOYO PARA SEPARAR NOMBRE_COMPLETO EN EMPLEADOS ANTIGUOS ===
+const desglosarNombreExistente = (user) => {
+  if (user.nombre || user.apellido_paterno) {
+    return {
+      nombre: user.nombre || '',
+      apellido_paterno: user.apellido_paterno || '',
+      apellido_materno: user.apellido_materno || ''
+    };
+  }
+  const partes = (user.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return { nombre: '', apellido_paterno: '', apellido_materno: '' };
+  if (partes.length === 1) return { nombre: partes[0], apellido_paterno: '', apellido_materno: '' };
+  if (partes.length === 2) return { nombre: partes[0], apellido_paterno: partes[1], apellido_materno: '' };
+  return {
+    nombre: partes.slice(0, -2).join(' '),
+    apellido_paterno: partes[partes.length - 2],
+    apellido_materno: partes[partes.length - 1]
+  };
 };
 
 export default function DirectorioGrid({ 
@@ -43,7 +65,7 @@ export default function DirectorioGrid({
   const [filtroEstatus, setFiltroEstatus] = useState('activos');
   
   // ORDENAMIENTO
-  const [columnaOrden, setColumnaOrden] = useState('nombre_completo'); // Lo cambiamos por defecto a nombre
+  const [columnaOrden, setColumnaOrden] = useState('nombre_completo');
   const [direccionOrden, setDireccionOrden] = useState('asc');
 
   // DOSSIER
@@ -59,7 +81,6 @@ export default function DirectorioGrid({
   const [usuarioParaBaja, setUsuarioParaBaja] = useState(null);
   const [procesandoBaja, setProcesandoBaja] = useState(false);
 
-  // === DEPARTAMENTOS CON PERSONAL (Para limpiar el filtro) ===
   const departamentosConPersonal = useMemo(() => {
     const idsEnUso = new Set(usuarios.map(u => u.departamento_id).filter(Boolean));
     return departamentos.filter(d => idsEnUso.has(d.id));
@@ -88,6 +109,9 @@ export default function DirectorioGrid({
           const q = busqueda.toLowerCase().trim();
           const match = (
             u.nombre_completo?.toLowerCase().includes(q) ||
+            u.nombre?.toLowerCase().includes(q) ||
+            u.apellido_paterno?.toLowerCase().includes(q) ||
+            u.apellido_materno?.toLowerCase().includes(q) ||
             u.numero_empleado?.toLowerCase().includes(q) ||
             u.puesto?.toLowerCase().includes(q) ||
             u.area?.toLowerCase().includes(q)
@@ -104,11 +128,10 @@ export default function DirectorioGrid({
         return true;
       })
       .sort((a, b) => {
-        // === NUEVA LÓGICA DE ORDENAMIENTO POR APELLIDOS ===
         if (columnaOrden === 'nombre_completo') {
-          const apellidoA = extraerApellidosParaOrden(a.nombre_completo);
-          const apellidoB = extraerApellidosParaOrden(b.nombre_completo);
-          const res = apellidoA.localeCompare(apellidoB);
+          const claveA = obtenerClaveOrdenApellido(a);
+          const claveB = obtenerClaveOrdenApellido(b);
+          const res = claveA.localeCompare(claveB);
           return direccionOrden === 'asc' ? res : -res;
         }
 
@@ -134,14 +157,23 @@ export default function DirectorioGrid({
       });
   }, [usuarios, busqueda, filtroSede, filtroNomina, filtroDepto, filtroEstatus, columnaOrden, direccionOrden, sedes]);
 
-  // ABRIR DOSSIER
+  // ABRIR DOSSIER CON DESGLOSE INTELIGENTE DE NOMBRES
   const abrirDossier = (user) => {
+    const partes = desglosarNombreExistente(user);
+    const deptoActualNombre = departamentos.find(d => d.id === user.departamento_id)?.nombre || '';
+
     setColaboradorDossier(user);
     setDatosEdit({
+      id: user.id,
       numero_empleado: user.numero_empleado || '',
+      nombre: partes.nombre,
+      apellido_paterno: partes.apellido_paterno,
+      apellido_materno: partes.apellido_materno,
       nombre_completo: user.nombre_completo || '',
+      fecha_nacimiento: user.fecha_nacimiento || '',
       sede_id: user.sede_id || '',
       departamento_id: user.departamento_id || '',
+      departamento_texto: deptoActualNombre,
       area: user.area || '',
       puesto: user.puesto || '',
       tipo_personal: user.tipo_personal || 'produccion',
@@ -180,20 +212,63 @@ export default function DirectorioGrid({
     }
   };
 
+  // GUARDAR CAMBIOS CON VALIDACIÓN DE DEPARTAMENTO SIN DUPLICADOS
   const guardarCambios = async () => {
-    if (!datosEdit.numero_empleado?.trim() || !datosEdit.nombre_completo?.trim()) {
-      return alert("El número de empleado y nombre son obligatorios.");
+    const nom = (datosEdit.nombre || '').trim().toUpperCase();
+    const pat = (datosEdit.apellido_paterno || '').trim().toUpperCase();
+    const mat = (datosEdit.apellido_materno || '').trim().toUpperCase();
+    const nombreCompletoCalculado = [nom, pat, mat].filter(Boolean).join(' ') || (datosEdit.nombre_completo || '').trim().toUpperCase();
+
+    if (!datosEdit.numero_empleado?.trim() || !nombreCompletoCalculado) {
+      return alert("El número de empleado y el nombre son obligatorios.");
     }
 
     setGuardando(true);
     try {
+      let deptoFinalId = datosEdit.departamento_id || null;
+
+      // Si el usuario escribió un nombre de departamento en el buscador y no tenía ID asignado
+      if (!deptoFinalId && datosEdit.departamento_texto?.trim()) {
+        const nomDeptoLimpio = datosEdit.departamento_texto.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        const enMemoria = departamentos.find(
+          d => d.nombre.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === nomDeptoLimpio
+        );
+
+        if (enMemoria) {
+          deptoFinalId = enMemoria.id;
+        } else {
+          const { data: enDB } = await supabase
+            .from('departamentos')
+            .select('id')
+            .ilike('nombre', nomDeptoLimpio)
+            .maybeSingle();
+
+          if (enDB) {
+            deptoFinalId = enDB.id;
+          } else {
+            const { data: nuevoDepto, error: errDepto } = await supabase
+              .from('departamentos')
+              .insert([{ nombre: nomDeptoLimpio, clasificacion: datosEdit.tipo_personal || 'produccion' }])
+              .select('id')
+              .single();
+            if (errDepto) throw new Error("Error creando departamento: " + errDepto.message);
+            deptoFinalId = nuevoDepto.id;
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('usuarios')
         .update({
           numero_empleado: datosEdit.numero_empleado.trim().toUpperCase(),
-          nombre_completo: datosEdit.nombre_completo.trim().toUpperCase(),
+          nombre: nom || null,
+          apellido_paterno: pat || null,
+          apellido_materno: mat || null,
+          nombre_completo: nombreCompletoCalculado,
+          fecha_nacimiento: datosEdit.fecha_nacimiento || null,
           sede_id: datosEdit.sede_id || null,
-          departamento_id: datosEdit.departamento_id || null,
+          departamento_id: deptoFinalId,
           area: (datosEdit.area || '').trim().toUpperCase(),
           puesto: datosEdit.puesto ? datosEdit.puesto.trim().toUpperCase() : null,
           tipo_personal: datosEdit.tipo_personal,
@@ -292,7 +367,7 @@ export default function DirectorioGrid({
       <div style={{ position: 'relative', marginBottom: '10px' }}>
         <input 
           type="text" 
-          placeholder="Buscar por nombre, # empleado, puesto, área..." 
+          placeholder="Buscar por nombre, apellidos, # empleado, puesto, área..." 
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           style={{
@@ -487,6 +562,8 @@ export default function DirectorioGrid({
         editando={seguridadDesbloqueada}
         datosEdit={datosEdit}
         setDatosEdit={setDatosEdit}
+        onGuardar={guardarCambios}
+        guardando={guardando}
         departamentos={departamentos}
         sedes={sedes}
         areas={areas}     
