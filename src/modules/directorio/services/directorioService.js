@@ -64,7 +64,7 @@ export const obtenerDatosDirectorio = async () => {
   };
 };
 
-// 2. REGISTRAR NUEVO COLABORADOR COMPLETO
+// 2. REGISTRAR NUEVO COLABORADOR COMPLETO (SIN AUTH.SIGNUP QUE BLOQUEA CON 429)
 export const registrarNuevoColaborador = async ({
   formData, creandoNuevo, textosNuevos, sedes, departamentos, areas, puestos, fotoArchivo, firmaArchivo
 }) => {
@@ -76,6 +76,23 @@ export const registrarNuevoColaborador = async ({
   }
   if (formData.pin.length < 6) {
     throw new Error("El PIN requiere mínimo 6 dígitos.");
+  }
+
+  const numEmpLimpio = formData.numero_empleado.trim().toUpperCase();
+  const loginLimpio = formData.usuario_login.trim().toLowerCase();
+  const correoLimpio = formData.correo.trim().toLowerCase();
+
+  // VERIFICAR DUPLICADOS EN TABLA USUARIOS ANTES DE CREAR NADA
+  const { data: existentes } = await supabase
+    .from('usuarios')
+    .select('numero_empleado, usuario_login, correo')
+    .or(`numero_empleado.eq.${numEmpLimpio},usuario_login.eq.${loginLimpio},correo.eq.${correoLimpio}`);
+
+  if (existentes && existentes.length > 0) {
+    const dup = existentes[0];
+    if (dup.numero_empleado === numEmpLimpio) throw new Error(`El Número de Empleado #${numEmpLimpio} ya está registrado.`);
+    if (dup.usuario_login === loginLimpio) throw new Error(`El Usuario Login "${loginLimpio}" ya existe. Cámbialo ligeramente.`);
+    if (dup.correo === correoLimpio) throw new Error(`El Correo "${correoLimpio}" ya está asignado a otro colaborador.`);
   }
 
   let sedeFinalId = formData.sede_id;
@@ -107,23 +124,17 @@ export const registrarNuevoColaborador = async ({
   const nombreCompletoFinal = [formData.nombre.trim(), formData.apellido_paterno.trim(), formData.apellido_materno.trim()]
     .filter(Boolean).join(' ').toUpperCase();
 
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email: formData.correo.toLowerCase().trim(),
-    password: formData.pin,
-    options: { data: { nombre_completo: nombreCompletoFinal } }
-  });
-  if (authError) throw authError;
-
-  const nuevoUsuarioId = authData.user.id;
+  // Generar ID único directamente sin pasar por el límite 429 de auth.signUp
+  const nuevoUsuarioId = crypto.randomUUID();
 
   const [fotoUrl, firmaUrl] = await Promise.all([
     fotoArchivo ? subirImagenUsuario(fotoArchivo, nuevoUsuarioId, 'perfil') : Promise.resolve(null),
     firmaArchivo ? subirImagenUsuario(firmaArchivo, nuevoUsuarioId, 'firma') : Promise.resolve(null)
   ]);
 
-  const { error: dbError } = await supabase.from('usuarios').upsert([{
+  const { error: dbError } = await supabase.from('usuarios').insert([{
     id: nuevoUsuarioId,
-    numero_empleado: formData.numero_empleado.trim().toUpperCase(),
+    numero_empleado: numEmpLimpio,
     nombre: formData.nombre.trim().toUpperCase(),
     apellido_paterno: formData.apellido_paterno.trim().toUpperCase(),
     apellido_materno: formData.apellido_materno.trim() ? formData.apellido_materno.trim().toUpperCase() : null,
@@ -132,15 +143,15 @@ export const registrarNuevoColaborador = async ({
     fecha_ingreso: formData.fecha_ingreso || null,
     celular: formData.celular || null,
     telefono: formData.telefono || null,
-    correo: formData.correo.toLowerCase().trim(),
+    correo: correoLimpio,
     tipo_personal: formData.tipo_personal,
     sede_id: sedeFinalId,
     departamento_id: deptoFinalId,
     area: areaFinal.toUpperCase(),
     puesto: puestoFinal ? puestoFinal.toUpperCase() : null,
     rol: formData.rol,
-    usuario_login: formData.usuario_login.toLowerCase().trim(),
-    pin: formData.pin,
+    usuario_login: loginLimpio,
+    pin: formData.pin.trim(),
     foto_url: fotoUrl,
     firma_url: firmaUrl,
     activo: true
