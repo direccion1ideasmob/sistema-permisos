@@ -117,7 +117,11 @@ export const registrarNuevoColaborador = async ({
     puestoFinal = puestos.find(p => limpiarTexto(p) === nomLimpio) || nomLimpio;
   }
 
-  if (!sedeFinalId || !deptoFinalId || !areaFinal) {
+  if (!areaFinal && deptoFinalId) {
+    const dObj = departamentos.find(d => d.id === deptoFinalId);
+    areaFinal = dObj ? dObj.nombre : (textosNuevos.depto ? limpiarTexto(textosNuevos.depto) : 'GENERAL');
+  }
+  if (!sedeFinalId || !deptoFinalId) {
     throw new Error("Faltan campos obligatorios: Revisa Sede, Departamento y Área Física.");
   }
 
@@ -180,7 +184,7 @@ export const actualizarExpedienteColaborador = async ({
   const mat = (datosEdit.apellido_materno || '').trim().toUpperCase();
   const nombreCompletoFinal = [nom, pat, mat].filter(Boolean).join(' ') || (datosEdit.nombre_completo || '').trim().toUpperCase();
 
-  if (!datosEdit.numero_empleado?.trim() || !nombreCompletoFinal || !datosEdit.correo?.trim() || !datosEdit.area?.trim()) {
+  if (!datosEdit.numero_empleado?.trim() || !nombreCompletoFinal || !datosEdit.correo?.trim()) {
     throw new Error("Faltan campos obligatorios: Número de empleado, Nombre, Correo y Área no pueden estar vacíos.");
   }
 
@@ -207,7 +211,7 @@ export const actualizarExpedienteColaborador = async ({
       fecha_nacimiento: datosEdit.fecha_nacimiento || null,
       sede_id: sedeFinalId,
       departamento_id: deptoFinalId,
-      area: datosEdit.area.trim().toUpperCase(),
+      area: (datosEdit.area || departamentos.find(d => d.id === deptoFinalId)?.nombre || 'GENERAL').trim().toUpperCase(),
       puesto: datosEdit.puesto ? datosEdit.puesto.trim().toUpperCase() : null,
       tipo_personal: datosEdit.tipo_personal || 'produccion',
       rol: datosEdit.rol || 'empleado',

@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Factory, Building2, HardHat, ChevronDown, ChevronRight, 
-  MapPin, Edit2, Crown, UserCheck, Shield, Lock, Unlock, X, Save 
+  Layers, Edit2, Crown, UserCheck, Lock, Unlock, X, Save 
 } from 'lucide-react';
-import { obtenerBadgeRol, obtenerClaveOrdenApellido } from './utils/directorioHelpers';
+import { obtenerBadgeRol, obtenerClaveOrdenApellido, estandarizar } from './utils/directorioHelpers';
 import { actualizarDepartamentoSeguro } from './services/directorioService';
 import { obtenerTemaGlobal } from '../../core/theme/temaGlobal';
 import ModalSeguridadPin from './ModalSeguridadPin';
+
+const normalizar = (txt) => txt ? estandarizar(txt.toUpperCase()) : 'GENERAL';
 
 export default function VistaArbol({ 
   usuarios = [], departamentos = [], deptosAbiertos = {}, toggleDepto, 
@@ -131,22 +133,30 @@ export default function VistaArbol({
                 {deptosSec.map(depto => {
                   const abierto = Boolean(deptosAbiertos[depto.id]);
                   const estaEditando = deptoEditandoId === depto.id;
+                  const nombreDeptoNorm = normalizar(depto.nombre);
 
                   const personalDepto = (usuarios || [])
                     .filter(u => u.departamento_id === depto.id && u.activo === true)
                     .sort((a, b) => obtenerClaveOrdenApellido(a).localeCompare(obtenerClaveOrdenApellido(b)));
 
+                  // 1. GERENCIA DE DEPARTAMENTO (Cabeza global del departamento)
                   const gerencia = personalDepto.filter(u => ['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(u.rol));
-                  const jefatura = personalDepto.filter(u => ['jefe_area'].includes(u.rol));
-                  const supervision = personalDepto.filter(u => ['encargado', 'rh_nominas', 'caseta'].includes(u.rol));
-                  const operativos = personalDepto.filter(u => !['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'jefe_area', 'encargado', 'rh_nominas', 'caseta'].includes(u.rol));
+                  const restoPersonal = personalDepto.filter(u => !['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(u.rol));
 
-                  const areasMap = operativos.reduce((acc, u) => {
-                    const a = u.area?.toUpperCase() || 'GENERAL';
-                    if (!acc[a]) acc[a] = [];
-                    acc[a].push(u);
+                  // 2. AGRUPACIÓN ELÁSTICA POR SUBDEPARTAMENTO (ÁREA)
+                  const subdeptosMap = restoPersonal.reduce((acc, u) => {
+                    const claveArea = normalizar(u.area || depto.nombre);
+                    const etiquetaArea = (u.area || depto.nombre).trim().toUpperCase();
+                    if (!acc[claveArea]) {
+                      acc[claveArea] = { etiqueta: etiquetaArea, miembros: [] };
+                    }
+                    acc[claveArea].miembros.push(u);
                     return acc;
                   }, {});
+
+                  const clavesSubdeptos = Object.keys(subdeptosMap).sort();
+                  // Mostramos etiqueta de Subdepartamento si hay más de 1 sub-área, o si el sub-área se llama distinto al departamento
+                  const mostrarCabeceraSubdepto = clavesSubdeptos.length > 1 || (clavesSubdeptos.length === 1 && clavesSubdeptos[0] !== nombreDeptoNorm && clavesSubdeptos[0] !== 'GENERAL');
 
                   return (
                     <div key={depto.id} style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -191,7 +201,9 @@ export default function VistaArbol({
                       )}
 
                       {abierto && (
-                        <div style={{ marginLeft: esMobile ? '10px' : '14px', paddingTop: '6px', paddingBottom: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ marginLeft: esMobile ? '10px' : '16px', paddingTop: '6px', paddingBottom: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          
+                          {/* NIVEL 1: GERENCIA DEL DEPARTAMENTO */}
                           {gerencia.length > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ fontSize: '10px', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -201,36 +213,55 @@ export default function VistaArbol({
                             </div>
                           )}
 
-                          {jefatura.length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginLeft: gerencia.length > 0 ? (esMobile ? '12px' : '16px') : '0', borderLeft: gerencia.length > 0 ? `1.5px solid ${c.line}` : 'none', paddingLeft: gerencia.length > 0 ? '10px' : '0' }}>
-                              <div style={{ fontSize: '10px', fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <UserCheck size={11} /> Jefatura de Área
-                              </div>
-                              {jefatura.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
-                            </div>
-                          )}
+                          {/* NIVEL 2: CÉLULAS / SUBDEPARTAMENTOS INDEPENDIENTES */}
+                          {clavesSubdeptos.length > 0 && (
+                            <div style={{ 
+                              display: 'flex', flexDirection: 'column', gap: '12px',
+                              marginLeft: gerencia.length > 0 ? (esMobile ? '12px' : '18px') : '0',
+                              borderLeft: gerencia.length > 0 ? `1.5px solid ${c.line}` : 'none',
+                              paddingLeft: gerencia.length > 0 ? '12px' : '0'
+                            }}>
+                              {clavesSubdeptos.map(clave => {
+                                const grupo = subdeptosMap[clave];
+                                const jefesSubdepto = grupo.miembros.filter(u => u.rol === 'jefe_area');
+                                const integrantesSubdepto = grupo.miembros.filter(u => u.rol !== 'jefe_area');
 
-                          {supervision.length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginLeft: (gerencia.length > 0 || jefatura.length > 0) ? (esMobile ? '20px' : '32px') : '0', borderLeft: (gerencia.length > 0 || jefatura.length > 0) ? `1.5px solid ${c.line}` : 'none', paddingLeft: (gerencia.length > 0 || jefatura.length > 0) ? '10px' : '0' }}>
-                              <div style={{ fontSize: '10px', fontWeight: '800', color: '#8b5cf6', textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Shield size={11} /> Supervisión / Encargados
-                              </div>
-                              {supervision.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
-                            </div>
-                          )}
+                                return (
+                                  <div key={clave} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                    {/* CABECERA DEL SUBDEPARTAMENTO (Solo si aplica) */}
+                                    {mostrarCabeceraSubdepto && (
+                                      <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.subText, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.03em' }}>
+                                        <Layers size={11} color={c.accent} /> {grupo.etiqueta}
+                                      </div>
+                                    )}
 
-                          {Object.keys(areasMap).length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginLeft: (gerencia.length > 0 || jefatura.length > 0 || supervision.length > 0) ? (esMobile ? '30px' : '48px') : '0', borderLeft: (gerencia.length > 0 || jefatura.length > 0 || supervision.length > 0) ? `1.5px solid ${c.line}` : 'none', paddingLeft: (gerencia.length > 0 || jefatura.length > 0 || supervision.length > 0) ? '10px' : '0' }}>
-                              {Object.keys(areasMap).sort().map(area => (
-                                <div key={area} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                  <div style={{ fontSize: '10px', fontWeight: '800', color: c.subText, textTransform: 'uppercase', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <MapPin size={11} /> {area}
+                                    {/* SI ESTE SUBDEPARTAMENTO TIENE SU PROPIO JEFE (Ej. Mariel en Seguridad Industrial) */}
+                                    {jefesSubdepto.length > 0 && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginLeft: mostrarCabeceraSubdepto ? '8px' : '0' }}>
+                                        <div style={{ fontSize: '9.5px', fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                          <UserCheck size={11} /> Responsable / Jefatura
+                                        </div>
+                                        {jefesSubdepto.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
+                                      </div>
+                                    )}
+
+                                    {/* INTEGRANTES DE ESTE SUBDEPARTAMENTO (Debajo de su jefe si existe, o directo en el subdepto) */}
+                                    {integrantesSubdepto.length > 0 && (
+                                      <div style={{ 
+                                        display: 'flex', flexDirection: 'column', gap: '4px',
+                                        marginLeft: jefesSubdepto.length > 0 ? (esMobile ? '16px' : '22px') : (mostrarCabeceraSubdepto ? '8px' : '0'),
+                                        borderLeft: jefesSubdepto.length > 0 ? `1.5px solid ${c.line}` : 'none',
+                                        paddingLeft: jefesSubdepto.length > 0 ? '10px' : '0'
+                                      }}>
+                                        {integrantesSubdepto.map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
+                                      </div>
+                                    )}
                                   </div>
-                                  {areasMap[area].map(u => renderItemLista(u, c, setFotoZoom, modoOscuro))}
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
+
                         </div>
                       )}
                     </div>

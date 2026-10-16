@@ -266,10 +266,10 @@ export default function ModalColaborador({
                 </div>
 
                 <div className="input-group">
-                  <label className="clean-label">Área Física *</label>
+                  <label className="clean-label">Subdepto / Área (Opcional)</label>
                   {!creandoNuevo.area ? (
-                    <select required className="clean-input" value={formData.area} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, area: true}) : setFormData({...formData, area: e.target.value})}>
-                      <option value="">Seleccionar área</option>
+                    <select className="clean-input" value={formData.area} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, area: true}) : setFormData({...formData, area: e.target.value})}>
+                      <option value="">Mismo que el Departamento (General)</option>
                       {areas.map(a => <option key={a} value={a}>{a}</option>)}
                       <option value="NEW">+ Crear Nueva Área...</option>
                     </select>

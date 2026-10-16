@@ -260,10 +260,29 @@ export const crearNuevaSolicitudPermiso = async ({
     .single();
   if (errD) throw new Error("No se encontró el departamento del colaborador.");
 
-  let jefeFinalId = depto.jefe_id;
-  if (!jefeFinalId) {
-    const { data: jefeEncontrado } = await supabase.from('usuarios').select('id').eq('departamento_id', deptoId).eq('rol', 'jefe_area').limit(1).maybeSingle();
-    if (jefeEncontrado) jefeFinalId = jefeEncontrado.id;
+  // BÚSQUEDA INTELIGENTE DE JEFE POR SUBDEPARTAMENTO / ÁREA
+  const { data: usuarioSolicitante } = await supabase.from('usuarios').select('area').eq('id', userId).maybeSingle();
+  const areaSolicitante = (usuarioSolicitante?.area || '').trim().toUpperCase();
+
+  const { data: todosEmpDepto } = await supabase
+    .from('usuarios')
+    .select('id, area, rol')
+    .eq('departamento_id', deptoId)
+    .eq('activo', true);
+
+  const listaDepto = todosEmpDepto || [];
+  const areasEnDepto = new Set(listaDepto.map(u => (u.area || '').trim().toUpperCase()).filter(Boolean));
+  const jefesEnDepto = listaDepto.filter(u => u.rol === 'jefe_area');
+
+  // 1. Buscar si hay un Jefe de Área exactamente en el mismo Subdepartamento (ej. Mariel en SEGURIDAD INDUSTRIAL)
+  const jefeMismaArea = jefesEnDepto.find(j => (j.area || '').trim().toUpperCase() === areaSolicitante);
+
+  let jefeFinalId = null;
+  if (jefeMismaArea) {
+    jefeFinalId = jefeMismaArea.id;
+  } else if (areasEnDepto.size <= 1) {
+    // 2. Si es un departamento simple (1 sola área), usa el jefe del departamento
+    jefeFinalId = depto.jefe_id || jefesEnDepto[0]?.id || null;
   }
 
   const clasificacionDepto = (depto.clasificacion || tipoPersonal || 'produccion').toLowerCase();
