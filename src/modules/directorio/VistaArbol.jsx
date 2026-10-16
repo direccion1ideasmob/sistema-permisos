@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Factory, Building2, HardHat, ChevronDown, ChevronRight, 
   Edit2, Lock, Unlock, X, Save, Users, Crown, ShieldCheck, 
-  User, GitBranch, CornerDownRight, Briefcase, Hash
+  User, CornerDownRight, Briefcase, Hash, Banknote, UserPlus,
+  Cpu, Compass, Wrench, Package, FileText, ShieldAlert, Layers
 } from 'lucide-react';
 import { obtenerBadgeRol, obtenerClaveOrdenApellido, estandarizar } from './utils/directorioHelpers';
 import { actualizarDepartamentoSeguro, reubicarColaboradorEnArbol } from './services/directorioService';
@@ -10,6 +11,22 @@ import { obtenerTemaGlobal } from '../../core/theme/temaGlobal';
 import ModalSeguridadPin from './ModalSeguridadPin';
 
 const normalizar = (txt) => txt ? estandarizar(txt.toUpperCase()) : 'GENERAL';
+
+// === MOTOR INTELIGENTE DE ICONOS INDUSTRIALES POR SUBÁREA ===
+const obtenerIconoSubarea = (nombreArea = '') => {
+  const n = normalizar(nombreArea);
+  if (n.includes('NOMINA') || n.includes('FINANZA') || n.includes('CONTAB') || n.includes('TESORERIA') || n.includes('PAGO')) return Banknote;
+  if (n.includes('SEGURIDAD') || n.includes('HIGIENE') || n.includes('INDUSTRIAL') || n.includes('EHS') || n.includes('MEDICO')) return ShieldAlert;
+  if (n.includes('RECLUTAMIENTO') || n.includes('SELECCION') || n.includes('TALENTO') || n.includes('CONTRATACION')) return UserPlus;
+  if (n.includes('SISTEMA') || n.includes('DESARROLLO') || n.includes('TI') || n.includes('INFORMATICA') || n.includes('SOPORTE')) return Cpu;
+  if (n.includes('ESTIMACION') || n.includes('INGENIERIA') || n.includes('PROYECTO') || n.includes('DISENO') || n.includes('ARQUITECT')) return Compass;
+  if (n.includes('CARPINTERIA') || n.includes('PRODUCCION') || n.includes('MAQUINADO') || n.includes('ARMADO') || n.includes('BARNIZ') || n.includes('HERRERIA') || n.includes('MANTENIMIENTO')) return Wrench;
+  if (n.includes('ALMACEN') || n.includes('COMPRA') || n.includes('LOGISTICA') || n.includes('INVENTARIO') || n.includes('EMBARQUE')) return Package;
+  if (n.includes('OBRA') || n.includes('INSTALACION') || n.includes('RESIDENTE') || n.includes('CAMPO')) return HardHat;
+  if (n.includes('VIGILANCIA') || n.includes('CASETA') || n.includes('BUNKER') || n.includes('ACCESO')) return ShieldCheck;
+  if (n.includes('ADMIN') || n.includes('DOCUMENT') || n.includes('AUXILIAR') || n.includes('RECEPCION')) return FileText;
+  return Layers;
+};
 
 export default function VistaArbol({ 
   usuarios = [], departamentos = [], deptosAbiertos = {}, toggleDepto, 
@@ -53,7 +70,6 @@ export default function VistaArbol({
     line: modoOscuro ? '#404040' : '#cbd5e1',
     lineStrong: modoOscuro ? '#525252' : '#94a3b8',
     panelBg: modoOscuro ? '#141414' : '#f1f5f9',
-    headerAcero: modoOscuro ? '#262626' : '#1e293b',
     popoverBg: tema.surfaceCard,
     popoverBorder: tema.border,
   };
@@ -137,100 +153,131 @@ export default function VistaArbol({
     : [];
 
   return (
-    <div style={{ width: '100%', boxSizing: 'border-box', fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden', boxSizing: 'border-box', fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}>
       <style>{`
-        /* PLACA INDUSTRIAL DE PERSONAL */
         .placa-industrial {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 14px;
-          padding: 12px 16px;
+          gap: 12px;
+          padding: 12px 14px;
           border-radius: 6px;
           background: ${c.surfaceCard};
           border: 1.5px solid ${c.border};
           transition: border-color 0.15s ease, background 0.15s ease;
           position: relative;
+          width: 100%;
+          box-sizing: border-box;
         }
         .placa-industrial:hover {
           border-color: ${c.lineStrong};
         }
 
-        /* DISTRIBUCIÓN AMPLIA DE CÉLULAS / SUBDEPARTAMENTOS */
         .industrial-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-          gap: 28px;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+          gap: 24px;
           width: 100%;
+          box-sizing: border-box;
           align-items: start;
-          position: relative;
-        }
-        @media (max-width: 640px) {
-          .industrial-grid { grid-template-columns: 1fr; gap: 20px; }
         }
 
-        /* CONECTOR TRONCAL DESDE GERENCIA */
         .tronco-gerencia {
           position: relative;
-          padding-bottom: 24px;
+          padding-bottom: 22px;
+          width: 100%;
+          max-width: 480px;
+          box-sizing: border-box;
         }
         .tronco-gerencia::after {
           content: '';
           position: absolute;
-          left: 36px;
+          left: 32px;
           bottom: 0;
           width: 2px;
-          height: 24px;
+          height: 22px;
           background: ${c.lineStrong};
         }
 
-        /* RAMA DE SUBORDINACIÓN INDUSTRIAL (CLARAMENTE IDENTIFICABLE) */
         .rama-subordinados {
           position: relative;
-          margin-left: 34px;
-          padding-left: 28px;
+          margin-left: 28px;
+          padding-left: 24px;
           border-left: 2px solid ${c.lineStrong};
           display: flex;
           flex-direction: column;
-          gap: 14px;
-          margin-top: 14px;
-          padding-top: 4px;
+          gap: 12px;
+          margin-top: 12px;
+          padding-top: 2px;
+          box-sizing: border-box;
         }
         .nodo-subordinado {
           position: relative;
+          width: 100%;
+          box-sizing: border-box;
         }
-        /* Línea horizontal que une el tronco con la tarjeta subordinada */
         .nodo-subordinado::before {
           content: '';
           position: absolute;
-          left: -28px;
+          left: -24px;
           top: 50%;
-          width: 28px;
+          width: 24px;
           height: 2px;
           background: ${c.lineStrong};
         }
-        /* Punto de soldadura / nodo en la intersección */
         .nodo-subordinado::after {
           content: '';
           position: absolute;
-          left: -32px;
+          left: -28px;
           top: calc(50% - 3px);
           width: 6px;
           height: 6px;
           border-radius: 50%;
           background: ${c.lineStrong};
         }
+
+        /* AJUSTE RESPONSIVO ESTRICTO PARA CELULARES */
+        @media (max-width: 640px) {
+          .industrial-grid {
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+          .placa-industrial {
+            padding: 10px 12px;
+            gap: 10px;
+          }
+          .tronco-gerencia {
+            padding-bottom: 16px;
+          }
+          .tronco-gerencia::after {
+            left: 22px;
+            height: 16px;
+          }
+          .rama-subordinados {
+            margin-left: 14px;
+            padding-left: 16px;
+            gap: 10px;
+            margin-top: 10px;
+          }
+          .nodo-subordinado::before {
+            left: -16px;
+            width: 16px;
+          }
+          .nodo-subordinado::after {
+            left: -20px;
+          }
+        }
       `}</style>
 
       {/* BARRA DE CONTROL SUPERIOR */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           {seguridadDesbloqueada ? (
-            <button onClick={() => setSeguridadDesbloqueada(false)} style={{ background: c.accentSoft, border: `1.5px solid ${c.accent}`, padding: '7px 14px', borderRadius: '6px', color: c.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              <Unlock size={14} /> Modo Ingeniería: Edición Activa
+            <button onClick={() => setSeguridadDesbloqueada(false)} style={{ background: c.accentSoft, border: `1.5px solid ${c.accent}`, padding: '7px 12px', borderRadius: '6px', color: c.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              <Unlock size={13} /> Edición Activa
             </button>
           ) : (
-            <button onClick={() => setModalPinAbierto(true)} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '7px 14px', borderRadius: '6px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+            <button onClick={() => setModalPinAbierto(true)} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '7px 12px', borderRadius: '6px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
               <Lock size={13} color="#f59e0b" /> <span>Acomodar Estructura</span>
             </button>
           )}
@@ -239,7 +286,7 @@ export default function VistaArbol({
         <select 
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
-          style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '6px', color: c.text, fontSize: '12px', fontWeight: '800', padding: '7px 12px', outline: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.03em' }}
+          style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '6px', color: c.text, fontSize: '11.5px', fontWeight: '800', padding: '7px 10px', outline: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.02em', maxWidth: '100%' }}
         >
           <option value="ALL">Todas las Divisiones</option>
           <option value="produccion">Planta & Producción</option>
@@ -249,7 +296,7 @@ export default function VistaArbol({
       </div>
 
       {/* SECCIONES POR DIVISIÓN */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
         {seccionesVisibles.map(sec => {
           const IconoSec = sec.icon;
           const deptosSec = (departamentos || []).filter(d => {
@@ -261,14 +308,14 @@ export default function VistaArbol({
 
           return (
             <div key={sec.key}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', paddingBottom: '8px', borderBottom: `2px solid ${c.border}` }}>
-                <IconoSec size={16} color={c.text} />
-                <span style={{ fontSize: '13px', fontWeight: '900', color: c.text, letterSpacing: '0.08em' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '8px', borderBottom: `2px solid ${c.border}` }}>
+                <IconoSec size={16} color={c.text} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: '12.5px', fontWeight: '900', color: c.text, letterSpacing: '0.06em' }}>
                   {sec.label}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {deptosSec.map(depto => {
                   const abierto = Boolean(deptosAbiertos[depto.id]);
                   const estaEditando = deptoEditandoId === depto.id;
@@ -296,25 +343,27 @@ export default function VistaArbol({
                   const mostrarCabeceraSubdepto = clavesSubdeptos.length > 1 || (clavesSubdeptos.length === 1 && clavesSubdeptos[0] !== nombreDeptoNorm && clavesSubdeptos[0] !== 'GENERAL');
 
                   return (
-                    <div key={depto.id} style={{ background: c.panelBg, border: `1.5px solid ${c.border}`, borderRadius: '8px', position: 'relative' }}>
+                    <div key={depto.id} style={{ background: c.panelBg, border: `1.5px solid ${c.border}`, borderRadius: '8px', position: 'relative', boxSizing: 'border-box', width: '100%' }}>
                       
                       {/* CABECERA DEL DEPARTAMENTO */}
                       <div 
                         onClick={() => toggleDepto(depto.id)}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', cursor: 'pointer', background: c.surfaceCard, borderRadius: abierto ? '7px 7px 0 0' : '7px', borderBottom: abierto ? `1.5px solid ${c.border}` : 'none' }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: esMobile ? '12px 14px' : '14px 18px', cursor: 'pointer', background: c.surfaceCard, borderRadius: abierto ? '7px 7px 0 0' : '7px', borderBottom: abierto ? `1.5px solid ${c.border}` : 'none', gap: '8px' }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '26px', height: '26px', borderRadius: '4px', background: abierto ? '#171717' : c.surface, color: abierto ? '#ffffff' : c.subText, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div style={{ width: '26px', height: '26px', borderRadius: '4px', background: abierto ? '#171717' : c.surface, color: abierto ? '#ffffff' : c.subText, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {abierto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                           </div>
-                          <span style={{ fontSize: '14.5px', fontWeight: '900', color: c.text, letterSpacing: '0.02em' }}>{depto.nombre}</span>
-                          <span style={{ fontSize: '11px', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '2px 8px', borderRadius: '4px', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                          <span style={{ fontSize: esMobile ? '13.5px' : '14.5px', fontWeight: '900', color: c.text, letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {depto.nombre}
+                          </span>
+                          <span style={{ fontSize: '11px', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '2px 7px', borderRadius: '4px', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                             <Users size={11} /> {personalDepto.length}
                           </span>
                         </div>
 
                         {seguridadDesbloqueada && (
-                          <button onClick={(e) => iniciarEdicionRapidaDepto(depto, e)} style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '4px', color: c.text, cursor: 'pointer', padding: '5px 10px', fontSize: '11px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '5px', textTransform: 'uppercase' }}>
+                          <button onClick={(e) => iniciarEdicionRapidaDepto(depto, e)} style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '4px', color: c.text, cursor: 'pointer', padding: '5px 8px', fontSize: '10.5px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', flexShrink: 0 }}>
                             <Edit2 size={11} /> Depto
                           </button>
                         )}
@@ -322,7 +371,7 @@ export default function VistaArbol({
 
                       {/* POPOVER EDICIÓN DEPTO */}
                       {estaEditando && (
-                        <div ref={popoverRef} onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '50px', right: '14px', background: c.popoverBg, border: `1.5px solid ${c.popoverBorder}`, borderRadius: '8px', padding: '14px', zIndex: 300, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', width: '270px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div ref={popoverRef} onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '50px', right: '10px', background: c.popoverBg, border: `1.5px solid ${c.popoverBorder}`, borderRadius: '8px', padding: '14px', zIndex: 300, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', width: '260px', maxWidth: 'calc(100vw - 40px)', display: 'flex', flexDirection: 'column', gap: '10px', boxSizing: 'border-box' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: '11px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>Ajustar Departamento</span>
                             <button onClick={() => setDeptoEditandoId(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={14} /></button>
@@ -346,13 +395,13 @@ export default function VistaArbol({
 
                       {/* DIAGRAMA ESTRUCTURAL DEL DEPARTAMENTO */}
                       {abierto && (
-                        <div style={{ padding: esMobile ? '16px' : '24px' }}>
+                        <div style={{ padding: esMobile ? '12px' : '22px', boxSizing: 'border-box', width: '100%' }}>
                           
                           {/* 1. CABEZA DE GERENCIA CON LÍNEA TRONCAL */}
                           {gerencia.length > 0 && (
-                            <div className={clavesSubdeptos.length > 0 ? "tronco-gerencia" : ""} style={{ maxWidth: '480px' }}>
+                            <div className={clavesSubdeptos.length > 0 ? "tronco-gerencia" : ""}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {gerencia.map(u => renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'gerencia'))}
+                                {gerencia.map(u => renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'gerencia', esMobile))}
                               </div>
                             </div>
                           )}
@@ -361,12 +410,15 @@ export default function VistaArbol({
                           {clavesSubdeptos.length > 0 && (
                             <div style={{ 
                               borderTop: gerencia.length > 0 && clavesSubdeptos.length > 1 ? `2px solid ${c.lineStrong}` : 'none',
-                              paddingTop: gerencia.length > 0 && clavesSubdeptos.length > 1 ? '20px' : '0'
+                              paddingTop: gerencia.length > 0 && clavesSubdeptos.length > 1 ? (esMobile ? '14px' : '20px') : '0',
+                              width: '100%',
+                              boxSizing: 'border-box'
                             }}>
                               <div className="industrial-grid">
                                 {clavesSubdeptos.map(clave => {
                                   const grupo = subdeptosMap[clave];
                                   const idsGrupo = new Set(grupo.miembros.map(m => m.id));
+                                  const IconoArea = obtenerIconoSubarea(grupo.etiqueta);
 
                                   const tieneJefeArea = grupo.miembros.some(m => m.rol === 'jefe_area');
                                   const tieneEmpleadosBase = grupo.miembros.some(m => m.rol === 'empleado');
@@ -395,33 +447,38 @@ export default function VistaArbol({
                                         borderRadius: '6px',
                                         overflow: 'hidden',
                                         display: 'flex',
-                                        flexDirection: 'column'
+                                        flexDirection: 'column',
+                                        width: '100%',
+                                        boxSizing: 'border-box'
                                       }}
                                     >
-                                      {/* BARRA TÉCNICA DEL SUBDEPARTAMENTO */}
+                                      {/* BARRA TÉCNICA DEL SUBDEPARTAMENTO CON ICONO INTELIGENTE */}
                                       {mostrarCabeceraSubdepto && (
                                         <div style={{ 
                                           background: modoOscuro ? '#262626' : '#e2e8f0', 
-                                          padding: '9px 14px', 
+                                          padding: esMobile ? '8px 12px' : '9px 14px', 
                                           borderBottom: `1.5px solid ${c.border}`,
                                           display: 'flex', 
                                           justifyContent: 'space-between', 
-                                          alignItems: 'center' 
+                                          alignItems: 'center',
+                                          gap: '8px'
                                         }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <GitBranch size={14} color={c.text} />
-                                            <span style={{ fontSize: '11.5px', fontWeight: '900', color: c.text, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                            <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                              <IconoArea size={13} color={c.text} />
+                                            </div>
+                                            <span style={{ fontSize: '11.5px', fontWeight: '900', color: c.text, textTransform: 'uppercase', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                               {grupo.etiqueta}
                                             </span>
                                           </div>
-                                          <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.subText, background: c.surfaceCard, padding: '1px 7px', borderRadius: '4px', border: `1px solid ${c.border}` }}>
+                                          <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.subText, background: c.surfaceCard, padding: '1px 7px', borderRadius: '4px', border: `1px solid ${c.border}`, flexShrink: 0 }}>
                                             {grupo.miembros.length}
                                           </span>
                                         </div>
                                       )}
 
                                       {/* ÁRBOL INTERNO DE LA CÉLULA */}
-                                      <div style={{ padding: mostrarCabeceraSubdepto ? '16px' : '0', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                      <div style={{ padding: mostrarCabeceraSubdepto ? (esMobile ? '10px' : '16px') : '0', display: 'flex', flexDirection: 'column', gap: '12px', boxSizing: 'border-box', width: '100%' }}>
                                         {miembrosRaiz.map(titular => {
                                           const subordinados = grupo.miembros.filter(sub => {
                                             if (sub.id === titular.id) return false;
@@ -435,15 +492,15 @@ export default function VistaArbol({
                                           const tipoNodo = (titular.rol === 'jefe_area' || subordinados.length > 0) ? 'lider' : 'operativo';
 
                                           return (
-                                            <div key={titular.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                                              {renderPlacaIndustrial(titular, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, tipoNodo)}
+                                            <div key={titular.id} style={{ display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
+                                              {renderPlacaIndustrial(titular, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, tipoNodo, esMobile)}
 
                                               {/* RAMA DE SUBORDINADOS CON TUBERÍA Y NODO VISIBLE */}
                                               {subordinados.length > 0 && (
                                                 <div className="rama-subordinados">
                                                   {subordinados.map(sub => (
                                                     <div key={sub.id} className="nodo-subordinado">
-                                                      {renderPlacaIndustrial(sub, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'subordinado')}
+                                                      {renderPlacaIndustrial(sub, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'subordinado', esMobile)}
                                                     </div>
                                                   ))}
                                                 </div>
@@ -473,7 +530,7 @@ export default function VistaArbol({
       {/* MODAL PARA ACOMODAR COLABORADOR EN EL ORGANIGRAMA */}
       {userEditando && (
         <div onClick={() => setUserEditando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '16px' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '8px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '8px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
               <div>
                 <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>Reubicación Técnica</div>
@@ -497,7 +554,7 @@ export default function VistaArbol({
                       reporta_a_id: ''
                     });
                   }}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
                   {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
                 </select>
@@ -536,7 +593,7 @@ export default function VistaArbol({
                 <select
                   value={userEditando.reporta_a_id || ''}
                   onChange={e => setUserEditando({ ...userEditando, reporta_a_id: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
                   <option value="">Directo en su Área / Gerencia del Depto</option>
                   {posiblesJefesEnDepto.map(j => (
@@ -550,7 +607,7 @@ export default function VistaArbol({
                 <select
                   value={userEditando.rol}
                   onChange={e => setUserEditando({ ...userEditando, rol: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
                   <option value="empleado">EMPLEADO / AUXILIAR (No autoriza pases)</option>
                   <option value="jefe_area">JEFE DE ÁREA (Sí autoriza pases de su equipo)</option>
@@ -585,8 +642,8 @@ export default function VistaArbol({
   );
 }
 
-// === PLACA INDUSTRIAL SOBRIA CON ICONOS TÉCNICOS Y JERARQUÍA VISUAL ===
-function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, onEditarUsuario, tipoNodo = 'operativo') {
+// === PLACA INDUSTRIAL RESPONSIVA CON ICONOS TÉCNICOS ===
+function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, onEditarUsuario, tipoNodo = 'operativo', esMobile = false) {
   const badge = obtenerBadgeRol(u.rol, modoOscuro);
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo)}&background=262626&color=fff&bold=true`;
 
@@ -594,9 +651,10 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
   const esLider = tipoNodo === 'lider';
   const esSubordinado = tipoNodo === 'subordinado';
 
-  const tamanoFoto = esGerencia ? '58px' : (esLider ? '52px' : '46px');
+  const tamanoFoto = esMobile 
+    ? (esGerencia ? '46px' : '42px') 
+    : (esGerencia ? '58px' : (esLider ? '52px' : '46px'));
 
-  // Icono técnico según rango
   let IconoRango = User;
   if (esGerencia) IconoRango = Crown;
   else if (esLider) IconoRango = ShieldCheck;
@@ -611,7 +669,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
         background: esSubordinado ? (modoOscuro ? '#181818' : '#f8fafc') : c.surfaceCard
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: esMobile ? '10px' : '14px', minWidth: 0, flex: 1 }}>
         <img 
           src={urlFoto} 
           alt="" 
@@ -628,32 +686,29 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
           }}
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, flex: 1 }}>
-          {/* FILA 1: PLACA DE ID + INSIGNIA CON ICONO */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10.5px', fontWeight: '800', color: c.subText, background: modoOscuro ? '#262626' : '#f1f5f9', padding: '1px 6px', borderRadius: '4px', border: `1px solid ${c.border}` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontWeight: '800', color: c.subText, background: modoOscuro ? '#262626' : '#f1f5f9', padding: '1px 6px', borderRadius: '4px', border: `1px solid ${c.border}` }}>
               <Hash size={10} /> {u.numero_empleado}
             </span>
 
             <span style={{ 
               display: 'inline-flex', alignItems: 'center', gap: '4px',
-              fontSize: '9.5px', fontWeight: '800', color: badge.text, background: badge.bg,
-              border: `1px solid ${badge.border}`, padding: '2px 7px', borderRadius: '4px', whiteSpace: 'nowrap', letterSpacing: '0.04em'
+              fontSize: '9px', fontWeight: '800', color: badge.text, background: badge.bg,
+              border: `1px solid ${badge.border}`, padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap', letterSpacing: '0.03em'
             }}>
-              <IconoRango size={11} />
+              <IconoRango size={10} />
               {badge.label}
             </span>
           </div>
 
-          {/* FILA 2: NOMBRE COMPLETO */}
-          <div style={{ fontSize: esGerencia ? '14.5px' : '13.5px', fontWeight: '900', color: c.text, letterSpacing: '-0.01em', lineHeight: '1.25', marginTop: '1px' }}>
+          <div style={{ fontSize: esMobile ? '13px' : (esGerencia ? '14.5px' : '13.5px'), fontWeight: '900', color: c.text, letterSpacing: '-0.01em', lineHeight: '1.25', marginTop: '1px', wordBreak: 'break-word' }}>
             {u.nombre_completo}
           </div>
 
-          {/* FILA 3: PUESTO CON ICONO */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: c.subText, fontWeight: '600', lineHeight: '1.2' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: c.subText, fontWeight: '600', lineHeight: '1.2' }}>
             <Briefcase size={11} style={{ flexShrink: 0, opacity: 0.7 }} />
-            <span>{u.puesto || 'SIN PUESTO ASIGNADO'}</span>
+            <span style={{ wordBreak: 'break-word' }}>{u.puesto || 'SIN PUESTO ASIGNADO'}</span>
           </div>
         </div>
       </div>
@@ -661,10 +716,10 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
       {seguridadDesbloqueada && (
         <button
           onClick={(e) => onEditarUsuario(u, e)}
-          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '4px', color: c.text, cursor: 'pointer', padding: '6px 10px', fontSize: '10.5px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, textTransform: 'uppercase' }}
+          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '4px', color: c.text, cursor: 'pointer', padding: esMobile ? '6px 7px' : '6px 10px', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, textTransform: 'uppercase' }}
           title="Reacomodar en el organigrama"
         >
-          <Edit2 size={11} /> Mover
+          <Edit2 size={11} /> {!esMobile && 'Mover'}
         </button>
       )}
     </div>
