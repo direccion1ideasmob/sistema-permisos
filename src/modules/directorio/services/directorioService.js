@@ -16,7 +16,7 @@ export const obtenerDatosDirectorio = async () => {
     supabase.from('sedes').select('id, nombre').order('nombre', { ascending: true }),
     supabase
       .from('usuarios')
-      .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, sede_id, pin, fecha_ingreso, fecha_baja, motivo_baja, celular, telefono, correo')
+      .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, fecha_nacimiento, usuario_login, puesto, area, rol, tipo_personal, foto_url, firma_url, activo, departamento_id, sede_id, reporta_a_id, pin, fecha_ingreso, fecha_baja, motivo_baja, celular, telefono, correo')
       .order('nombre_completo', { ascending: true }),
     supabase
       .from('departamentos')
@@ -64,7 +64,7 @@ export const obtenerDatosDirectorio = async () => {
   };
 };
 
-// 2. REGISTRAR NUEVO COLABORADOR COMPLETO (SIN AUTH.SIGNUP QUE BLOQUEA CON 429)
+// 2. REGISTRAR NUEVO COLABORADOR COMPLETO
 export const registrarNuevoColaborador = async ({
   formData, creandoNuevo, textosNuevos, sedes, departamentos, areas, puestos, fotoArchivo, firmaArchivo
 }) => {
@@ -82,7 +82,6 @@ export const registrarNuevoColaborador = async ({
   const loginLimpio = formData.usuario_login.trim().toLowerCase();
   const correoLimpio = formData.correo.trim().toLowerCase();
 
-  // VERIFICAR DUPLICADOS EN TABLA USUARIOS ANTES DE CREAR NADA
   const { data: existentes } = await supabase
     .from('usuarios')
     .select('numero_empleado, usuario_login, correo')
@@ -111,24 +110,24 @@ export const registrarNuevoColaborador = async ({
     areaFinal = areas.find(a => limpiarTexto(a) === nomLimpio) || nomLimpio;
   }
 
+  if (!areaFinal && deptoFinalId) {
+    const dObj = departamentos.find(d => d.id === deptoFinalId);
+    areaFinal = dObj ? dObj.nombre : (textosNuevos.depto ? limpiarTexto(textosNuevos.depto) : 'GENERAL');
+  }
+
   let puestoFinal = formData.puesto;
   if (creandoNuevo.puesto && textosNuevos.puesto.trim()) {
     const nomLimpio = limpiarTexto(textosNuevos.puesto);
     puestoFinal = puestos.find(p => limpiarTexto(p) === nomLimpio) || nomLimpio;
   }
 
-  if (!areaFinal && deptoFinalId) {
-    const dObj = departamentos.find(d => d.id === deptoFinalId);
-    areaFinal = dObj ? dObj.nombre : (textosNuevos.depto ? limpiarTexto(textosNuevos.depto) : 'GENERAL');
-  }
   if (!sedeFinalId || !deptoFinalId) {
-    throw new Error("Faltan campos obligatorios: Revisa Sede, Departamento y Área Física.");
+    throw new Error("Faltan campos obligatorios: Revisa Sede y Departamento.");
   }
 
   const nombreCompletoFinal = [formData.nombre.trim(), formData.apellido_paterno.trim(), formData.apellido_materno.trim()]
     .filter(Boolean).join(' ').toUpperCase();
 
-  // Generar ID único directamente sin pasar por el límite 429 de auth.signUp
   const nuevoUsuarioId = crypto.randomUUID();
 
   const [fotoUrl, firmaUrl] = await Promise.all([
@@ -154,6 +153,7 @@ export const registrarNuevoColaborador = async ({
     area: areaFinal.toUpperCase(),
     puesto: puestoFinal ? puestoFinal.toUpperCase() : null,
     rol: formData.rol,
+    reporta_a_id: formData.reporta_a_id || null,
     usuario_login: loginLimpio,
     pin: formData.pin.trim(),
     foto_url: fotoUrl,
@@ -164,9 +164,9 @@ export const registrarNuevoColaborador = async ({
   if (dbError) throw dbError;
 
   const actualizacionDepto = {};
-  if (formData.rol === 'jefe_area') actualizacionDepto.jefe_id = nuevoUsuarioId;
-  else if (['gerente_produccion', 'gerente_admin'].includes(formData.rol)) actualizacionDepto.gerente_id = nuevoUsuarioId;
-  else if (['gerente_rh', 'rh_nominas'].includes(formData.rol)) actualizacionDepto.rh_id = nuevoUsuarioId;
+  if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(formData.rol)) {
+    actualizacionDepto.gerente_id = nuevoUsuarioId;
+  }
 
   if (Object.keys(actualizacionDepto).length > 0 && deptoFinalId) {
     await supabase.from('departamentos').update(actualizacionDepto).eq('id', deptoFinalId);
@@ -185,7 +185,7 @@ export const actualizarExpedienteColaborador = async ({
   const nombreCompletoFinal = [nom, pat, mat].filter(Boolean).join(' ') || (datosEdit.nombre_completo || '').trim().toUpperCase();
 
   if (!datosEdit.numero_empleado?.trim() || !nombreCompletoFinal || !datosEdit.correo?.trim()) {
-    throw new Error("Faltan campos obligatorios: Número de empleado, Nombre, Correo y Área no pueden estar vacíos.");
+    throw new Error("Faltan campos obligatorios: Número de empleado, Nombre y Correo no pueden estar vacíos.");
   }
 
   let sedeFinalId = datosEdit.sede_id || null;
@@ -200,6 +200,9 @@ export const actualizarExpedienteColaborador = async ({
     deptoFinalId = await resolverDepartamentoId(datosEdit.departamento_texto, datosEdit.tipo_personal, departamentos);
   }
 
+  const nombreDeptoSeleccionado = departamentos.find(d => d.id === deptoFinalId)?.nombre || textosNuevos.depto || 'GENERAL';
+  const areaFinal = (datosEdit.area || nombreDeptoSeleccionado).trim().toUpperCase();
+
   const { error } = await supabase
     .from('usuarios')
     .update({
@@ -211,10 +214,11 @@ export const actualizarExpedienteColaborador = async ({
       fecha_nacimiento: datosEdit.fecha_nacimiento || null,
       sede_id: sedeFinalId,
       departamento_id: deptoFinalId,
-      area: (datosEdit.area || departamentos.find(d => d.id === deptoFinalId)?.nombre || 'GENERAL').trim().toUpperCase(),
+      area: areaFinal,
       puesto: datosEdit.puesto ? datosEdit.puesto.trim().toUpperCase() : null,
       tipo_personal: datosEdit.tipo_personal || 'produccion',
       rol: datosEdit.rol || 'empleado',
+      reporta_a_id: datosEdit.reporta_a_id || null,
       celular: datosEdit.celular ? datosEdit.celular.trim() : null,
       telefono: datosEdit.telefono ? datosEdit.telefono.trim() : null,
       correo: datosEdit.correo.trim().toLowerCase(),
@@ -229,7 +233,23 @@ export const actualizarExpedienteColaborador = async ({
   if (error) throw error;
 };
 
-// 4. BAJA Y REACTIVACIÓN LABORAL
+// 4. REUBICACIÓN RÁPIDA DE EMPLEADO DESDE EL ÁRBOL (Depto, Área, Puesto, Rol y Superior)
+export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId, area, puesto, rol, reportaAId }) => {
+  const { error } = await supabase
+    .from('usuarios')
+    .update({
+      departamento_id: departamentoId || null,
+      area: (area || 'GENERAL').trim().toUpperCase(),
+      puesto: puesto ? puesto.trim().toUpperCase() : null,
+      rol: rol || 'empleado',
+      reporta_a_id: reportaAId || null
+    })
+    .eq('id', colaboradorId);
+
+  if (error) throw error;
+};
+
+// 5. BAJA Y REACTIVACIÓN LABORAL
 export const tramitarBajaColaborador = async (id, fechaBaja, motivoBaja) => {
   const { error } = await supabase
     .from('usuarios')
@@ -246,8 +266,8 @@ export const reactivarColaborador = async (id) => {
   if (error) throw error;
 };
 
-// 5. RENOMBRAR DEPARTAMENTO CON PROTECCIÓN ANTI-DUPLICADOS (Usado en VistaArbol)
-export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaClasif) => {
+// 6. RENOMBRAR DEPARTAMENTO Y SINCRONIZAR ÁREAS DE EMPLEADOS SIMPLES
+export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaClasif, nombreAnterior = '') => {
   const nomLimpio = limpiarTexto(nuevoNombre);
   const clasifLimpia = (nuevaClasif || 'produccion').toLowerCase().trim();
 
@@ -268,4 +288,13 @@ export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaCl
     .eq('id', deptoId);
 
   if (error) throw error;
+
+  // Si el departamento tenía empleados cuya área se llamaba igual al departamento anterior, actualizarlos también
+  if (nombreAnterior && limpiarTexto(nombreAnterior) !== nomLimpio) {
+    await supabase
+      .from('usuarios')
+      .update({ area: nomLimpio })
+      .eq('departamento_id', deptoId)
+      .ilike('area', limpiarTexto(nombreAnterior));
+  }
 };

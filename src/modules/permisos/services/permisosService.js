@@ -261,7 +261,7 @@ export const crearNuevaSolicitudPermiso = async ({
   if (errD) throw new Error("No se encontró el departamento del colaborador.");
 
   // BÚSQUEDA INTELIGENTE DE JEFE POR SUBDEPARTAMENTO / ÁREA
-  const { data: usuarioSolicitante } = await supabase.from('usuarios').select('area').eq('id', userId).maybeSingle();
+  const { data: usuarioSolicitante } = await supabase.from('usuarios').select('area, reporta_a_id').eq('id', userId).maybeSingle();
   const areaSolicitante = (usuarioSolicitante?.area || '').trim().toUpperCase();
 
   const { data: todosEmpDepto } = await supabase
