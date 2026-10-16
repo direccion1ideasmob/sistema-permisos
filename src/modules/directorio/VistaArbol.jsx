@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Factory, Building2, HardHat, ChevronDown, ChevronRight, 
-  Layers, Edit2, Crown, UserCheck, Lock, Unlock, X, Save, Users
+  Edit2, Lock, Unlock, X, Save, Users
 } from 'lucide-react';
 import { obtenerBadgeRol, obtenerClaveOrdenApellido, estandarizar } from './utils/directorioHelpers';
 import { actualizarDepartamentoSeguro, reubicarColaboradorEnArbol } from './services/directorioService';
@@ -50,15 +50,14 @@ export default function VistaArbol({
     ...tema,
     subText: tema.textMuted,
     line: tema.border,
-    hoverBg: modoOscuro ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
     popoverBg: tema.surfaceCard,
     popoverBorder: tema.border,
   };
 
   const secciones = [
-    { key: 'produccion', label: 'División Planta & Producción', icon: Factory, match: 'prod' },
-    { key: 'administrativo', label: 'División Corporativa & Administración', icon: Building2, match: 'admin' },
-    { key: 'obra', label: 'División Operaciones en Obra', icon: HardHat, match: 'obra' }
+    { key: 'produccion', label: 'Planta & Producción', icon: Factory, match: 'prod' },
+    { key: 'administrativo', label: 'Corporativo & Administración', icon: Building2, match: 'admin' },
+    { key: 'obra', label: 'Operaciones en Obra', icon: HardHat, match: 'obra' }
   ];
 
   const seccionesVisibles = filtro === 'ALL' ? secciones : secciones.filter(s => s.key === filtro);
@@ -136,62 +135,54 @@ export default function VistaArbol({
   return (
     <div style={{ width: '100%', boxSizing: 'border-box', fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}>
       <style>{`
-        .org-card {
+        .credencial-card {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          padding: 10px 14px;
+          gap: 14px;
+          padding: 14px 16px;
           border-radius: 12px;
           background: ${c.surfaceCard};
           border: 1px solid ${c.border};
           transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-          box-shadow: ${modoOscuro ? '0 2px 8px rgba(0,0,0,0.25)' : '0 2px 6px rgba(0,0,0,0.03)'};
+          box-shadow: ${modoOscuro ? '0 4px 14px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.03)'};
         }
-        .org-card:hover {
+        .credencial-card:hover {
           transform: translateY(-1px);
-          border-color: ${modoOscuro ? '#525252' : '#d4d4d4'};
-          box-shadow: ${modoOscuro ? '0 6px 16px rgba(0,0,0,0.4)' : '0 6px 16px rgba(0,0,0,0.06)'};
-        }
-        .org-card.gerencia {
-          background: ${modoOscuro ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(38, 38, 38, 0.9))' : 'linear-gradient(135deg, #fffbeb, #ffffff)'};
-          border: 1.5px solid ${modoOscuro ? 'rgba(245, 158, 11, 0.35)' : '#fcd34d'};
-          padding: 12px 16px;
-        }
-        .org-card.lider {
-          background: ${modoOscuro ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(38, 38, 38, 0.9))' : 'linear-gradient(135deg, #eff6ff, #ffffff)'};
-          border: 1px solid ${modoOscuro ? 'rgba(59, 130, 246, 0.3)' : '#bfdbfe'};
+          border-color: ${modoOscuro ? '#525252' : '#cbd5e1'};
+          box-shadow: ${modoOscuro ? '0 8px 20px rgba(0,0,0,0.45)' : '0 6px 16px rgba(0,0,0,0.06)'};
         }
         .subdepto-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+          gap: 20px;
           width: 100%;
+          align-items: start;
         }
         @media (max-width: 640px) {
           .subdepto-grid { grid-template-columns: 1fr; }
         }
-        .subordinados-tree {
+        .subordinados-branch {
           position: relative;
-          margin-left: 22px;
-          padding-left: 18px;
-          border-left: 2px solid ${modoOscuro ? '#404040' : '#cbd5e1'};
+          margin-left: 28px;
+          padding-left: 20px;
+          border-left: 2px solid ${modoOscuro ? '#404040' : '#d4d4d4'};
           display: flex;
           flex-direction: column;
-          gap: 8px;
-          margin-top: 6px;
+          gap: 10px;
+          margin-top: 10px;
         }
-        .subordinado-item {
+        .subordinado-node {
           position: relative;
         }
-        .subordinado-item::before {
+        .subordinado-node::before {
           content: '';
           position: absolute;
-          left: -18px;
+          left: -20px;
           top: 50%;
-          width: 14px;
+          width: 16px;
           height: 2px;
-          background: ${modoOscuro ? '#404040' : '#cbd5e1'};
+          background: ${modoOscuro ? '#404040' : '#d4d4d4'};
         }
       `}</style>
 
@@ -200,7 +191,7 @@ export default function VistaArbol({
         <div>
           {seguridadDesbloqueada ? (
             <button onClick={() => setSeguridadDesbloqueada(false)} style={{ background: c.accentSoft, border: `1px solid ${c.accent}`, padding: '6px 12px', borderRadius: '8px', color: c.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '700' }}>
-              <Unlock size={14} /> Modo Edición de Organigrama Activo
+              <Unlock size={14} /> Modo Edición Activo
             </button>
           ) : (
             <button onClick={() => setModalPinAbierto(true)} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, padding: '6px 14px', borderRadius: '8px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '700' }}>
@@ -215,9 +206,9 @@ export default function VistaArbol({
           style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '8px', color: c.text, fontSize: '12.5px', fontWeight: '700', padding: '7px 12px', outline: 'none', cursor: 'pointer' }}
         >
           <option value="ALL">Todas las Divisiones</option>
-          <option value="produccion">División Producción</option>
-          <option value="administrativo">División Administración</option>
-          <option value="obra">División Obra</option>
+          <option value="produccion">Planta & Producción</option>
+          <option value="administrativo">Corporativo & Administración</option>
+          <option value="obra">Operaciones en Obra</option>
         </select>
       </div>
 
@@ -234,16 +225,14 @@ export default function VistaArbol({
 
           return (
             <div key={sec.key}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: `2px solid ${c.line}` }}>
-                <div style={{ background: c.accentSoft, color: c.accent, padding: '7px', borderRadius: '8px', display: 'flex' }}>
-                  <IconoSec size={18} />
-                </div>
-                <span style={{ fontSize: '15px', fontWeight: '900', color: c.text, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: `1px solid ${c.line}` }}>
+                <IconoSec size={17} color={c.subText} />
+                <span style={{ fontSize: '13.5px', fontWeight: '800', color: c.subText, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   {sec.label}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {deptosSec.map(depto => {
                   const abierto = Boolean(deptosAbiertos[depto.id]);
                   const estaEditando = deptoEditandoId === depto.id;
@@ -271,25 +260,25 @@ export default function VistaArbol({
                   const mostrarCabeceraSubdepto = clavesSubdeptos.length > 1 || (clavesSubdeptos.length === 1 && clavesSubdeptos[0] !== nombreDeptoNorm && clavesSubdeptos[0] !== 'GENERAL');
 
                   return (
-                    <div key={depto.id} style={{ background: abierto ? (modoOscuro ? 'rgba(255,255,255,0.015)' : '#f8fafc') : c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', overflow: 'visible', position: 'relative', transition: 'all 0.2s' }}>
+                    <div key={depto.id} style={{ background: abierto ? (modoOscuro ? '#1c1c1c' : '#f5f5f5') : c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', position: 'relative' }}>
                       
                       {/* CABECERA DEL DEPARTAMENTO */}
                       <div 
                         onClick={() => toggleDepto(depto.id)}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', cursor: 'pointer', borderBottom: abierto ? `1px solid ${c.border}` : 'none' }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', cursor: 'pointer', background: c.surfaceCard, borderRadius: abierto ? '13px 13px 0 0' : '13px', borderBottom: abierto ? `1px solid ${c.border}` : 'none' }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: abierto ? c.accent : c.surface, color: abierto ? '#fff' : c.subText, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: abierto ? c.text : c.surface, color: abierto ? c.bg : c.subText, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
                             {abierto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </div>
-                          <span style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, letterSpacing: '-0.01em' }}>{depto.nombre}</span>
-                          <span style={{ fontSize: '11.5px', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '2px 8px', borderRadius: '20px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: '15px', fontWeight: '800', color: c.text, letterSpacing: '-0.01em' }}>{depto.nombre}</span>
+                          <span style={{ fontSize: '11.5px', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '2px 9px', borderRadius: '20px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <Users size={11} /> {personalDepto.length}
                           </span>
                         </div>
 
                         {seguridadDesbloqueada && (
-                          <button onClick={(e) => iniciarEdicionRapidaDepto(depto, e)} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '8px', color: c.accent, cursor: 'pointer', padding: '5px 10px', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <button onClick={(e) => iniciarEdicionRapidaDepto(depto, e)} style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '8px', color: c.text, cursor: 'pointer', padding: '5px 10px', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <Edit2 size={12} /> Editar Depto
                           </button>
                         )}
@@ -297,7 +286,7 @@ export default function VistaArbol({
 
                       {/* POPOVER EDICIÓN DEPTO */}
                       {estaEditando && (
-                        <div ref={popoverRef} onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '52px', right: '14px', background: c.popoverBg, border: `1.5px solid ${c.popoverBorder}`, borderRadius: '12px', padding: '14px', zIndex: 300, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', width: '270px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div ref={popoverRef} onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '52px', right: '14px', background: c.popoverBg, border: `1px solid ${c.popoverBorder}`, borderRadius: '12px', padding: '14px', zIndex: 300, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', width: '270px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: '11px', fontWeight: '800', color: c.text }}>Renombrar / Reclasificar Depto</span>
                             <button onClick={() => setDeptoEditandoId(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={14} /></button>
@@ -319,31 +308,24 @@ export default function VistaArbol({
                         </div>
                       )}
 
-                      {/* CUERPO EXPANDIDO DEL ORGANIGRAMA */}
+                      {/* CUERPO DEL ORGANIGRAMA */}
                       {abierto && (
-                        <div style={{ padding: esMobile ? '14px' : '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div style={{ padding: esMobile ? '16px' : '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                           
-                          {/* 1. NIVEL GERENCIA / DIRECCIÓN */}
+                          {/* 1. GERENCIA / DIRECCIÓN */}
                           {gerencia.length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '520px' }}>
-                              <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <Crown size={13} /> Titular de Gerencia / Dirección
-                              </div>
-                              {gerencia.map(u => renderTarjetaPersona(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'gerencia'))}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '16px' }}>
+                              {gerencia.map(u => renderCredencialPersona(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, true))}
                             </div>
                           )}
 
-                          {/* 2. GRID DE SUBDEPARTAMENTOS / EQUIPOS */}
+                          {/* 2. BLOQUES DE SUBDEPARTAMENTOS */}
                           {clavesSubdeptos.length > 0 && (
-                            <div className={mostrarCabeceraSubdepto ? "subdepto-grid" : ""} style={{ display: mostrarCabeceraSubdepto ? undefined : 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div className="subdepto-grid">
                               {clavesSubdeptos.map(clave => {
                                 const grupo = subdeptosMap[clave];
                                 const idsGrupo = new Set(grupo.miembros.map(m => m.id));
 
-                                // Determinar quién es líder/titular dentro de este subdepartamento:
-                                // A) Quien tenga subordinados apuntándole con reporta_a_id
-                                // B) Quien tenga rol 'jefe_area'
-                                // C) Si hay auxiliares ('empleado') y un titular ('rh_nominas' o 'encargado'), el titular encabeza al auxiliar
                                 const tieneJefeArea = grupo.miembros.some(m => m.rol === 'jefe_area');
                                 const tieneEmpleadosBase = grupo.miembros.some(m => m.rol === 'empleado');
 
@@ -356,11 +338,8 @@ export default function VistaArbol({
 
                                 const liderPrincipal = grupo.miembros.find(esTitularDeSubdepto);
 
-                                // Cabezas de nivel superior en este subdepto
                                 const miembrosRaiz = grupo.miembros.filter(m => {
-                                  // Si tiene reporta_a_id apuntando a alguien dentro de este mismo subdepto, es subordinado
                                   if (m.reporta_a_id && idsGrupo.has(m.reporta_a_id)) return false;
-                                  // Si hay un líder principal en este subdepto y este miembro es un operativo sin otro jefe asignado, cuelga del líder principal
                                   if (liderPrincipal && m.id !== liderPrincipal.id && !esTitularDeSubdepto(m)) return false;
                                   return true;
                                 });
@@ -369,22 +348,18 @@ export default function VistaArbol({
                                   <div 
                                     key={clave} 
                                     style={{ 
-                                      background: mostrarCabeceraSubdepto ? (modoOscuro ? 'rgba(0,0,0,0.2)' : '#ffffff') : 'transparent',
-                                      border: mostrarCabeceraSubdepto ? `1px solid ${c.border}` : 'none',
-                                      borderRadius: '14px',
-                                      padding: mostrarCabeceraSubdepto ? '14px' : '0',
                                       display: 'flex',
                                       flexDirection: 'column',
                                       gap: '10px'
                                     }}
                                   >
                                     {mostrarCabeceraSubdepto && (
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '8px' }}>
-                                        <div style={{ fontSize: '11.5px', fontWeight: '800', color: c.text, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px', letterSpacing: '0.03em' }}>
-                                          <Layers size={13} color={c.accent} /> {grupo.etiqueta}
-                                        </div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px 4px 4px', borderBottom: `1.5px solid ${c.border}` }}>
+                                        <span style={{ fontSize: '11px', fontWeight: '900', color: c.subText, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                          {grupo.etiqueta}
+                                        </span>
                                         <span style={{ fontSize: '10.5px', fontWeight: '700', color: c.subText }}>
-                                          {grupo.miembros.length} {grupo.miembros.length === 1 ? 'integrante' : 'integrantes'}
+                                          {grupo.miembros.length}
                                         </span>
                                       </div>
                                     )}
@@ -400,24 +375,15 @@ export default function VistaArbol({
                                           return false;
                                         });
 
-                                        const esTarjetaLider = titular.rol === 'jefe_area' || subordinados.length > 0;
-
                                         return (
                                           <div key={titular.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                                            {esTarjetaLider && (
-                                              <div style={{ fontSize: '10px', fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <UserCheck size={12} /> {titular.rol === 'jefe_area' ? 'Jefatura de Área' : 'Responsable de Área'}
-                                              </div>
-                                            )}
+                                            {renderCredencialPersona(titular, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, false)}
 
-                                            {renderTarjetaPersona(titular, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, esTarjetaLider ? 'lider' : 'normal')}
-
-                                            {/* SUBORDINADOS CONECTADOS CON LÍNEA EN "L" */}
                                             {subordinados.length > 0 && (
-                                              <div className="subordinados-tree">
+                                              <div className="subordinados-branch">
                                                 {subordinados.map(sub => (
-                                                  <div key={sub.id} className="subordinado-item">
-                                                    {renderTarjetaPersona(sub, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'subordinado')}
+                                                  <div key={sub.id} className="subordinado-node">
+                                                    {renderCredencialPersona(sub, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, false)}
                                                   </div>
                                                 ))}
                                               </div>
@@ -558,17 +524,22 @@ export default function VistaArbol({
   );
 }
 
-// === TARJETA EJECUTIVA DE COLABORADOR EN EL ORGANIGRAMA ===
-function renderTarjetaPersona(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, onEditarUsuario, nivel = 'normal') {
+// === PROPUESTA 3 + 5: CREDENCIAL CON FOTO GRANDE + SOBRIEDAD EJECUTIVO CARBÓN ===
+function renderCredencialPersona(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, onEditarUsuario, esGerencia = false) {
   const badge = obtenerBadgeRol(u.rol, modoOscuro);
-  const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo)}&background=16a34a&color=fff&bold=true`;
+  const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo)}&background=262626&color=fff&bold=true`;
 
-  const tamanoFoto = nivel === 'gerencia' ? '46px' : (nivel === 'lider' ? '42px' : '38px');
-  const claseExtra = nivel === 'gerencia' ? 'gerencia' : (nivel === 'lider' ? 'lider' : '');
+  const tamanoFoto = esGerencia ? '60px' : '54px';
 
   return (
-    <div key={u.id} className={`org-card ${claseExtra}`}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+    <div 
+      key={u.id} 
+      className="credencial-card"
+      style={{
+        borderLeft: `4px solid ${badge.accentBar}`
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
         <img 
           src={urlFoto} 
           alt="" 
@@ -577,34 +548,33 @@ function renderTarjetaPersona(u, c, setFotoZoom, modoOscuro, seguridadDesbloquea
           style={{ 
             width: tamanoFoto, 
             height: tamanoFoto, 
-            borderRadius: '12px', 
+            borderRadius: '14px', 
             objectFit: 'cover', 
             cursor: 'pointer', 
-            border: `2px solid ${badge.border}`, 
-            flexShrink: 0,
-            boxShadow: '0 2px 6px rgba(0,0,0,0.12)'
+            border: `1px solid ${c.border}`, 
+            flexShrink: 0
           }}
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: nivel === 'gerencia' ? '14.5px' : '13.5px', fontWeight: '800', color: c.text, letterSpacing: '-0.01em' }}>
-              {u.nombre_completo}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.subText, letterSpacing: '0.03em' }}>
+              ID #{u.numero_empleado}
             </span>
             <span style={{ 
               fontSize: '9.5px', fontWeight: '800', color: badge.text, background: badge.bg,
-              border: `1px solid ${badge.border}`, padding: '2px 7px', borderRadius: '6px', whiteSpace: 'nowrap', letterSpacing: '0.02em'
+              border: `1px solid ${badge.border}`, padding: '2px 7px', borderRadius: '6px', whiteSpace: 'nowrap', letterSpacing: '0.03em'
             }}>
               {badge.label}
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: c.subText, fontWeight: '600' }}>
-            <span style={{ color: c.accent, fontWeight: '700' }}>#{u.numero_empleado}</span>
-            <span>•</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {u.puesto || 'SIN PUESTO ASIGNADO'}
-            </span>
+          <div style={{ fontSize: esGerencia ? '15px' : '14px', fontWeight: '800', color: c.text, letterSpacing: '-0.01em', lineHeight: '1.25' }}>
+            {u.nombre_completo}
+          </div>
+
+          <div style={{ fontSize: '12px', color: c.subText, fontWeight: '500', lineHeight: '1.3' }}>
+            {u.puesto || 'SIN PUESTO ASIGNADO'}
           </div>
         </div>
       </div>
@@ -612,7 +582,7 @@ function renderTarjetaPersona(u, c, setFotoZoom, modoOscuro, seguridadDesbloquea
       {seguridadDesbloqueada && (
         <button
           onClick={(e) => onEditarUsuario(u, e)}
-          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '8px', color: c.accent, cursor: 'pointer', padding: '6px 10px', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}
+          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '8px', color: c.text, cursor: 'pointer', padding: '7px 10px', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}
           title="Reacomodar persona en el organigrama"
         >
           <Edit2 size={12} /> Mover
