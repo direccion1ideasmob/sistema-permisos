@@ -203,6 +203,10 @@ export const actualizarExpedienteColaborador = async ({
   const nombreDeptoSeleccionado = departamentos.find(d => d.id === deptoFinalId)?.nombre || textosNuevos.depto || 'GENERAL';
   const areaFinal = (datosEdit.area || nombreDeptoSeleccionado).trim().toUpperCase();
 
+  // Verificar si el PIN cambió para limpiar suscripciones Push de dispositivos viejos
+  const { data: usuarioPrevio } = await supabase.from('usuarios').select('pin').eq('id', colaboradorId).maybeSingle();
+  const pinCambio = usuarioPrevio && datosEdit.pin?.trim() && String(usuarioPrevio.pin).trim() !== String(datosEdit.pin).trim();
+
   const { error } = await supabase
     .from('usuarios')
     .update({
@@ -231,6 +235,10 @@ export const actualizarExpedienteColaborador = async ({
     .eq('id', colaboradorId);
 
   if (error) throw error;
+
+  if (pinCambio) {
+    await supabase.from('suscripciones_push').delete().eq('usuario_id', colaboradorId);
+  }
 };
 
 // 4. REUBICACIÓN RÁPIDA DE EMPLEADO DESDE EL ÁRBOL (Depto, Área, Puesto, Rol y Superior)

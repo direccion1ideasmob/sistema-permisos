@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import { useAuth } from '../auth/AuthContext';
 import { Menu } from 'lucide-react';
 
-// === COMPONENTES MODULARES ===
 import Sidebar from './Sidebar';
 import ModalSeguridad from './ModalSeguridad';
 
 export default function Layout() {
-  const { usuario } = useAuth();
+  const { usuario, cerrarSesion } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate(); // <-- Agregado para poder redirigir al Inicio
+  const navigate = useNavigate();
 
   const [anchoVentana, setAnchoVentana] = useState(window.innerWidth);
   const [menuAbierto, setMenuAbierto] = useState(window.innerWidth >= 1200);
@@ -36,48 +35,69 @@ export default function Layout() {
 
   // === LÓGICA DE REINICIO DIARIO ===
   useEffect(() => {
-    // Obtenemos la fecha de hoy en formato local (ej. "12/10/2026")
     const hoy = new Date().toLocaleDateString();
-    // Revisamos qué fecha tiene guardada el usuario como su última visita
     const ultimoDiaVisitado = localStorage.getItem('ultimo_dia_visitado');
 
-    // Si no hay registro (primera vez) o si la fecha de hoy es distinta al registro
     if (!ultimoDiaVisitado || ultimoDiaVisitado !== hoy) {
-      localStorage.setItem('ultimo_dia_visitado', hoy); // Actualizamos el registro
-      navigate('/'); // Lo mandamos al inicio para darle los buenos días
+      localStorage.setItem('ultimo_dia_visitado', hoy);
+      navigate('/');
     }
-  }, [navigate]); // Solo se ejecuta una vez al cargar el Layout
+  }, [navigate]);
+
+  // === GUARDIÁN DE SESIÓN Y PIN EN TIEMPO REAL ===
+  // Si el PIN cambia en la base de datos o el usuario es dado de baja, expulsa a este dispositivo
+  const verificarIntegridadSesion = useCallback(async () => {
+    if (!usuario?.id) return;
+
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('nombre_completo, foto_url, rol, pin, activo, departamento_id, area, puesto')
+      .eq('id', usuario.id)
+      .single();
+
+    if (error || !data) return;
+
+    const sesionLocal = JSON.parse(localStorage.getItem('permisos_sesion') || '{}');
+
+    // 1. Si el empleado fue dado de baja en el sistema -> Expulsar
+    if (data.activo === false) {
+      alert('Tu cuenta ha sido desactivada por Recursos Humanos.');
+      cerrarSesion();
+      return;
+    }
+
+    // 2. Si el dispositivo tenía un PIN guardado y ya no coincide con el PIN actual en Supabase -> Expulsar
+    if (sesionLocal.pin && data.pin && String(sesionLocal.pin).trim() !== String(data.pin).trim()) {
+      alert('🔒 Sesión finalizada: El PIN de seguridad fue modificado desde otro dispositivo o por Recursos Humanos.');
+      cerrarSesion();
+      return;
+    }
+
+    // 3. Sincronizar datos actualizados (y sellar el pin actual si no estaba en el objeto local)
+    const datosSincronizados = { ...sesionLocal, ...data, pin: data.pin };
+    setUsuarioLogueado(prev => ({ ...prev, ...data }));
+    localStorage.setItem('permisos_sesion', JSON.stringify(datosSincronizados));
+  }, [usuario?.id, cerrarSesion]);
 
   useEffect(() => {
-    const consultarDatosActualizados = async () => {
-      if (!usuario?.id) return;
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('nombre_completo, foto_url, rol')
-        .eq('id', usuario.id)
-        .single();
-
-      if (data && !error) {
-        setUsuarioLogueado(prev => ({ ...prev, ...data }));
-        const sesionActual = JSON.parse(localStorage.getItem('permisos_sesion') || '{}');
-        localStorage.setItem('permisos_sesion', JSON.stringify({ ...sesionActual, ...data }));
-      }
-    };
-    consultarDatosActualizados();
-  }, [usuario?.id]);
+    verificarIntegridadSesion();
+    // Verificar también cada 20 segundos por si cambian el PIN mientras la pantalla está quieta
+    const intervalo = setInterval(verificarIntegridadSesion, 20000);
+    return () => clearInterval(intervalo);
+  }, [location.pathname, verificarIntegridadSesion]);
 
   const isMobile = anchoVentana < 1000;
   const esInicio = location.pathname === '/' || location.pathname === '/inicio';
 
-  // === PALETA HIGH CONTRAST (ZINC / GRIS OSCURO) ===
+  // === PALETA GRIS CARBÓN PURO UNIFICADA ===
   const tema = {
-    bgApp: modoOscuro ? '#18181b' : '#f8fafc',
-    sidebarBg: modoOscuro ? '#27272a' : '#ffffff',
-    cardBg: modoOscuro ? '#27272a' : '#ffffff',
-    border: modoOscuro ? '#3f3f46' : 'rgba(0, 0, 0, 0.08)',
-    textPrimary: modoOscuro ? '#f4f4f5' : '#09090b',
-    textSecondary: modoOscuro ? '#a1a1aa' : '#71717a',
-    inputBg: modoOscuro ? '#18181b' : '#f8fafc',
+    bgApp: modoOscuro ? '#171717' : '#fafafa',
+    sidebarBg: modoOscuro ? '#262626' : '#ffffff',
+    cardBg: modoOscuro ? '#262626' : '#ffffff',
+    border: modoOscuro ? '#404040' : '#e5e5e5',
+    textPrimary: modoOscuro ? '#ffffff' : '#171717',
+    textSecondary: modoOscuro ? '#a3a3a3' : '#737373',
+    inputBg: modoOscuro ? '#171717' : '#fafafa',
     accent: '#16a34a',
     navActiveBg: modoOscuro ? 'rgba(22, 163, 74, 0.16)' : 'rgba(22, 163, 74, 0.1)',
     navActiveText: modoOscuro ? '#4ade80' : '#15803d',
@@ -139,7 +159,7 @@ export default function Layout() {
                   style={{
                     ...s.watermarkImg,
                     filter: modoOscuro ? 'brightness(0) invert(1)' : 'none',
-                    opacity: modoOscuro ? 0.16 : 0.22,
+                    opacity: modoOscuro ? 0.14 : 0.20,
                   }} 
                 />
               </div>
@@ -170,44 +190,37 @@ export default function Layout() {
 const s = {
   appBase: { 
     position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', 
-    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif',
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
     letterSpacing: '-0.015em',
     transition: 'background-color 0.2s ease'
   },
-  
   appContainer: { 
     position: 'relative', zIndex: 1, display: 'flex', width: '100%', height: '100%', overflow: 'hidden' 
   },
-  
   menuOpenBtn: { 
     position: 'fixed', top: '14px', left: '14px', zIndex: 300, 
     width: '38px', height: '38px', borderRadius: '8px', 
     display: 'flex', alignItems: 'center', 
     justifyContent: 'center', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,0.2)'
   },
-  
   mobileBackdrop: {
     position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
     backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 200, backdropFilter: 'blur(2px)'
   },
-
   mainArea: { 
     flex: 1, display: 'flex', padding: '14px', boxSizing: 'border-box', 
     overflow: 'hidden', width: '100%', transition: 'all 0.25s ease'
   },
-
   contentCard: { 
     position: 'relative', flex: 1, width: '100%', height: '100%', 
     borderRadius: '16px', padding: '22px', 
     overflowY: 'auto', boxSizing: 'border-box', transition: 'background-color 0.2s ease'
   },
-
   watermarkInsideCard: {
     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     pointerEvents: 'none', zIndex: 0, overflow: 'hidden'
   },
-
   watermarkImg: {
     width: 'min(70vw, 520px)',
     maxHeight: '60%',
@@ -215,7 +228,6 @@ const s = {
     userSelect: 'none',
     transition: 'all 0.3s ease'
   },
-
   outletLayer: {
     position: 'relative', zIndex: 1, width: '100%'
   }

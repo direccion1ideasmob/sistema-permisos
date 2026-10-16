@@ -7,7 +7,6 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
   const [confirmarPin, setConfirmarPin] = useState('');
   const [guardandoPin, setGuardandoPin] = useState(false);
 
-  // === LÓGICA PARA CAMBIAR PIN DE ACCESO ===
   const handleCambiarPin = async (e) => {
     e.preventDefault();
     if (nuevoPin.length < 6) return alert("El nuevo PIN debe tener al menos 6 dígitos numéricos.");
@@ -15,15 +14,27 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
 
     setGuardandoPin(true);
     try {
-      // Como tu Login es manual, SOLO actualizamos el PIN en la tabla 'usuarios'
+      const pinLimpio = nuevoPin.trim();
+
+      // 1. Actualizar el PIN en Supabase (esto invalidará automáticamente la sesión en otros dispositivos)
       const { error: dbError } = await supabase
         .from('usuarios')
-        .update({ pin: nuevoPin })
+        .update({ pin: pinLimpio })
         .eq('id', usuarioLogueado.id);
         
       if (dbError) throw dbError;
 
-      alert("✅ Tu PIN de seguridad se ha actualizado con éxito.");
+      // 2. Limpiar suscripciones Push antiguas para que otros celulares/PCs dejen de recibir alertas
+      await supabase
+        .from('suscripciones_push')
+        .delete()
+        .eq('usuario_id', usuarioLogueado.id);
+
+      // 3. Actualizar el PIN en este dispositivo actual para que NO nos cierre la sesión a nosotros
+      const sesionActual = JSON.parse(localStorage.getItem('permisos_sesion') || '{}');
+      localStorage.setItem('permisos_sesion', JSON.stringify({ ...sesionActual, pin: pinLimpio }));
+
+      alert("✅ PIN actualizado con éxito.\n\nPor seguridad, se ha cerrado tu sesión y desvinculado las alertas en todos los demás dispositivos.");
       onClose();
     } catch (err) {
       alert("Error al actualizar PIN: " + err.message);
@@ -34,7 +45,6 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
 
   return (
     <div style={s.overlay} onClick={onClose}>
-      
       <div style={{
         ...s.modalBox,
         backgroundColor: tema.sidebarBg, 
@@ -42,7 +52,6 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
         boxShadow: modoOscuro ? '0 20px 25px -5px rgba(0, 0, 0, 0.6)' : '0 25px 50px -12px rgba(0,0,0,0.3)'
       }} onClick={e => e.stopPropagation()}>
         
-        {/* ENCABEZADO DEL MODAL */}
         <div style={s.header}>
           <div style={s.headerLeft}>
             <div style={{ ...s.iconWrapper, color: tema.accent }}>
@@ -50,7 +59,7 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
             </div>
             <div>
               <div style={{ ...s.title, color: tema.textPrimary }}>Seguridad</div>
-              <div style={{ ...s.subtitle, color: tema.textSecondary }}>Cambia tu PIN de acceso</div>
+              <div style={{ ...s.subtitle, color: tema.textSecondary }}>Cambia tu PIN y cierra otras sesiones</div>
             </div>
           </div>
           <button onClick={onClose} style={{ ...s.closeBtn, color: tema.textSecondary }}>
@@ -58,7 +67,6 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
           </button>
         </div>
 
-        {/* FORMULARIO */}
         <form onSubmit={handleCambiarPin} style={s.form}>
           <div>
             <label style={{ ...s.label, color: tema.textSecondary }}>
@@ -68,7 +76,7 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
               <Key size={14} color={tema.textSecondary} style={s.inputIcon} />
               <input 
                 type="password" required minLength={6} maxLength={10} placeholder="••••••"
-                value={nuevoPin} onChange={e => setNuevoPin(e.target.value.replace(/\D/g, ''))} // Solo permite números
+                value={nuevoPin} onChange={e => setNuevoPin(e.target.value.replace(/\D/g, ''))}
                 style={{
                   ...s.input,
                   border: `1.5px solid ${tema.border}`,
@@ -99,7 +107,7 @@ export default function ModalSeguridad({ onClose, usuarioLogueado, tema, modoOsc
           </div>
 
           <div style={{ ...s.nota, color: tema.textSecondary, background: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
-            <strong>Nota:</strong> Si olvidas tu PIN en el futuro, no podrás entrar al sistema y deberás solicitar una restauración al departamento de RH.
+            <strong>Nota de seguridad:</strong> Al cambiar tu PIN, cualquier celular o computadora donde hayas dejado tu cuenta abierta cerrará sesión automáticamente.
           </div>
 
           <div style={s.actionRow}>
@@ -123,10 +131,11 @@ const s = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px'
   },
   modalBox: {
-    borderRadius: '24px', width: '100%', maxWidth: '360px', padding: '28px', position: 'relative'
+    borderRadius: '20px', width: '100%', maxWidth: '360px', padding: '26px', position: 'relative',
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif'
   },
   header: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px'
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '22px'
   },
   headerLeft: {
     display: 'flex', alignItems: 'center', gap: '12px'
@@ -157,7 +166,7 @@ const s = {
   },
   input: {
     width: '100%', padding: '12px 14px 12px 34px', borderRadius: '10px', 
-    fontSize: '16px', fontFamily: 'monospace', letterSpacing: '4px', 
+    fontSize: '16px', letterSpacing: '4px', fontWeight: '700',
     outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s'
   },
   nota: {
@@ -168,7 +177,7 @@ const s = {
   },
   btnCancel: {
     flex: 1, padding: '12px', borderRadius: '10px', background: 'transparent', 
-    fontSize: '13px', fontWeight: '700',  cursor: 'pointer', transition: 'background 0.2s'
+    fontSize: '13px', fontWeight: '700', cursor: 'pointer', transition: 'background 0.2s'
   },
   btnSubmit: {
     flex: 1, padding: '12px', borderRadius: '10px', border: 'none', color: '#ffffff', 
