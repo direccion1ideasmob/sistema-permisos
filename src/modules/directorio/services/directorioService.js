@@ -298,3 +298,33 @@ export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaCl
       .ilike('area', limpiarTexto(nombreAnterior));
   }
 };
+
+// 7. ELIMINACIÓN FÍSICA DEFINITIVA (LIMPIA BUCKET DE FOTOS + REFERENCIAS + TABLA USUARIOS)
+export const eliminarColaboradorDefinitivo = async (usuarioId) => {
+  if (!usuarioId) throw new Error("ID de usuario inválido.");
+
+  // A) Borrar foto de perfil y firma digitalizada del Bucket para liberar espacio
+  const archivos = [`perfil_${usuarioId}.jpg`, `firma_${usuarioId}.png`];
+  await supabase.storage.from('fotos_usuarios').remove(archivos);
+
+  // B) Desvincular si era jefe, gerente o RH en la tabla departamentos (evita error Foreign Key)
+  await Promise.all([
+    supabase.from('departamentos').update({ jefe_id: null }).eq('jefe_id', usuarioId),
+    supabase.from('departamentos').update({ gerente_id: null }).eq('gerente_id', usuarioId),
+    supabase.from('departamentos').update({ rh_id: null }).eq('rh_id', usuarioId),
+    supabase.from('usuarios').update({ reporta_a_id: null }).eq('reporta_a_id', usuarioId)
+  ]);
+
+  // C) Limpiar suscripciones push y permisos asociados a este usuario
+  await Promise.all([
+    supabase.from('suscripciones_push').delete().eq('usuario_id', usuarioId),
+    supabase.from('permisos').delete().eq('usuario_id', usuarioId),
+    supabase.from('permisos').update({ firma_1_id: null }).eq('firma_1_id', usuarioId),
+    supabase.from('permisos').update({ firma_2_id: null }).eq('firma_2_id', usuarioId),
+    supabase.from('permisos').update({ firma_3_id: null }).eq('firma_3_id', usuarioId)
+  ]);
+
+  // D) Eliminar definitivamente el registro de la tabla usuarios
+  const { error } = await supabase.from('usuarios').delete().eq('id', usuarioId);
+  if (error) throw error;
+};

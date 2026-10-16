@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle } from 'lucide-react';
 import { estandarizar } from './utils/directorioHelpers';
-import { actualizarExpedienteColaborador } from './services/directorioService';
+import { actualizarExpedienteColaborador, eliminarColaboradorDefinitivo } from './services/directorioService';
 import { subirImagenUsuario } from '../../core/services/storageService';
 
 export default function DossierLateral({
@@ -139,9 +139,30 @@ export default function DossierLateral({
   };
 
   const tramitarBajaSegura = (colab) => {
-    const palabra = window.prompt('Para continuar con la baja, escribe la palabra "BAJA" (en mayúsculas):');
+    const palabra = window.prompt('Para continuar con la baja laboral (conservando su historial), escribe "BAJA":');
     if (palabra === 'BAJA') onAbrirBaja(colab);
     else if (palabra !== null) alert('Palabra incorrecta. Operación cancelada.');
+  };
+
+  const handleEliminarDefinitivo = async (colab) => {
+    const confirmacion = window.prompt(
+      `⚠️ ELIMINACIÓN DEFINITIVA DE BASE DE DATOS Y FOTOS\n\nEstás por borrar para siempre a ${colab.nombre_completo}, incluyendo su foto, su firma del servidor y sus registros.\n\nEscribe "ELIMINAR" (en mayúsculas) para confirmar:`
+    );
+    if (confirmacion !== 'ELIMINAR') {
+      if (confirmacion !== null) alert('Cancelado. No se escribió la palabra ELIMINAR.');
+      return;
+    }
+    setGuardando(true);
+    try {
+      await eliminarColaboradorDefinitivo(colab.id);
+      alert('🗑️ Registro, fotografía y firma eliminados permanentemente del servidor.');
+      onClose();
+      if (recargarDatos) await recargarDatos();
+    } catch (err) {
+      alert('Error al eliminar registro: ' + err.message);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const handleGuardarExpediente = async () => {
@@ -481,11 +502,20 @@ export default function DossierLateral({
                 <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '800', marginBottom: '4px' }}>ESTATUS LABORAL</div>
                 {colaborador.activo ? <span style={{ fontSize: '12px', color: c.accent, fontWeight: '800' }}>● ACTIVO EN NÓMINA</span> : <div style={{ fontSize: '12px', color: c.danger, fontWeight: '800' }}>● BAJA ({colaborador.motivo_baja || 'Separado'})</div>}
               </div>
-              {colaborador.activo ? (
-                <button onClick={() => tramitarBajaSegura(colaborador)} style={{ background: c.dangerSoft, color: c.danger, border: 'none', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}>Tramitar Baja</button>
-              ) : (
-                <button onClick={() => onReactivar(colaborador)} style={{ background: c.accentSoft, color: c.accent, border: 'none', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}>Reactivar</button>
-              )}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {colaborador.activo ? (
+                  <button type="button" onClick={() => tramitarBajaSegura(colaborador)} style={{ background: c.warningSoft || 'rgba(245,158,11,0.15)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)', padding: '8px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}>
+                    Tramitar Baja
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => onReactivar(colaborador)} style={{ background: c.accentSoft, color: c.accent, border: 'none', padding: '8px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}>
+                    Reactivar
+                  </button>
+                )}
+                <button type="button" onClick={() => handleEliminarDefinitivo(colaborador)} disabled={guardando} style={{ background: c.dangerSoft, color: c.danger, border: `1px solid ${c.danger}`, padding: '8px 14px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer' }}>
+                  Eliminar Registro y Fotos
+                </button>
+              </div>
             </div>
           )}
         </div>

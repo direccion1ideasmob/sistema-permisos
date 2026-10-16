@@ -29,3 +29,18 @@ export const subirImagenUsuario = async (archivo, usuarioId, tipo = 'perfil') =>
   const { data } = supabase.storage.from('fotos_usuarios').getPublicUrl(fileName);
   return `${data.publicUrl}?t=${Date.now()}`;
 };
+
+export const eliminarImagenesUsuario = async (usuarioId) => {
+  if (!usuarioId) return;
+  const archivosABorrar = [
+    `perfil_${usuarioId}.jpg`,
+    ` perfil_${usuarioId}.png`,
+    `firma_${usuarioId}.png`,
+    `firma_${usuarioId}.jpg`
+  ];
+  try {
+    await supabase.storage.from('fotos_usuarios').remove(archivosABorrar);
+  } catch (err) {
+    console.warn("Aviso al limpiar bucket de fotos:", err);
+  }
+};
