@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle } from 'lucide-react';
 import { estandarizar } from './utils/directorioHelpers';
 import { actualizarExpedienteColaborador } from './services/directorioService';
@@ -6,7 +6,7 @@ import { subirImagenUsuario } from '../../core/services/storageService';
 
 export default function DossierLateral({
   colaborador, abierto, onClose, editando, datosEdit, setDatosEdit,
-  departamentos = [], sedes = [], areas = [], puestos = [], subiendoFoto, onCambiarFoto,
+  usuarios = [], departamentos = [], sedes = [], areas = [], puestos = [], subiendoFoto, onCambiarFoto,
   recargarDatos, onAbrirBaja, onReactivar, setFotoZoom, c
 }) {
   const fileInputRef = useRef(null);
@@ -14,8 +14,48 @@ export default function DossierLateral({
 
   const [guardando, setGuardando] = useState(false);
   const [subiendoFirma, setSubiendoFirma] = useState(false);
-  const [creandoNuevo, setCreandoNuevo] = useState({ sede: false, depto: false });
-  const [textosNuevos, setTextosNuevos] = useState({ sede: '', depto: '' });
+  
+  // Estados para "+ Crear Nuevo..." en cualquiera de los 4 catálogos
+  const [creandoNuevo, setCreandoNuevo] = useState({ sede: false, depto: false, area: false, puesto: false });
+  const [textosNuevos, setTextosNuevos] = useState({ sede: '', depto: '', area: '', puesto: '' });
+
+  const limpiarTexto = (txt) => txt ? estandarizar(txt.toUpperCase()) : '';
+
+  // === CASCADA COHERENTE: Filtrar Subdepartamentos, Puestos y Superiores según el Departamento seleccionado ===
+  const deptoActualId = datosEdit?.departamento_id || colaborador?.departamento_id || '';
+  const deptoActualObj = departamentos.find(d => d.id === deptoActualId);
+
+  const personalMismoDepto = useMemo(() => {
+    if (!deptoActualId) return [];
+    return usuarios.filter(u => u.departamento_id === deptoActualId && u.activo !== false);
+  }, [usuarios, deptoActualId]);
+
+  // Subdepartamentos que existen en este Departamento (+ el actual del empleado por si es único)
+  const subdeptosDelDepto = useMemo(() => {
+    const conjunto = new Set();
+    if (deptoActualObj?.nombre) conjunto.add(deptoActualObj.nombre.trim().toUpperCase());
+    personalMismoDepto.forEach(u => {
+      if (u.area) conjunto.add(u.area.trim().toUpperCase());
+    });
+    if (datosEdit?.area) conjunto.add(datosEdit.area.trim().toUpperCase());
+    return [...conjunto].filter(Boolean).sort();
+  }, [personalMismoDepto, deptoActualObj, datosEdit?.area]);
+
+  // Puestos que existen en este Departamento (+ el actual del empleado)
+  const puestosDelDepto = useMemo(() => {
+    const conjunto = new Set();
+    personalMismoDepto.forEach(u => {
+      if (u.puesto) conjunto.add(u.puesto.trim().toUpperCase());
+    });
+    if (datosEdit?.puesto) conjunto.add(datosEdit.puesto.trim().toUpperCase());
+    return [...conjunto].filter(Boolean).sort();
+  }, [personalMismoDepto, datosEdit?.puesto]);
+
+  // Posibles superiores en el organigrama dentro de este mismo Departamento
+  const posiblesSuperiores = useMemo(() => {
+    if (!colaborador) return [];
+    return personalMismoDepto.filter(u => u.id !== colaborador.id);
+  }, [personalMismoDepto, colaborador]);
 
   if (!colaborador || !abierto) return null;
 
@@ -24,8 +64,7 @@ export default function DossierLateral({
     `https://ui-avatars.com/api/?name=${encodeURIComponent(nombreMostrar)}&background=16a34a&color=fff&bold=true`;
   const urlFirma = editando ? datosEdit.firma_url : colaborador.firma_url;
   const sedeNombre = sedes.find(s => s.id === (editando ? datosEdit.sede_id : colaborador.sede_id))?.nombre || 'Sin Sede';
-
-  const limpiarTexto = (txt) => txt ? estandarizar(txt.toUpperCase()) : '';
+  const superiorNombre = usuarios.find(u => u.id === colaborador.reporta_a_id)?.nombre_completo || 'Directo a Gerencia / Titular';
 
   const handleNombrePartes = (campo, valor) => {
     const valUpper = valor.toUpperCase();
@@ -37,34 +76,49 @@ export default function DossierLateral({
     setDatosEdit(nuevo);
   };
 
+  // Buscador de sugerencias globales cuando el usuario elige "+ Crear Nuevo..."
   const renderSugerencias = (texto, lista, tipo) => {
     if (!texto || texto.trim().length < 1) return null;
     const busq = limpiarTexto(texto);
-    const coincidencias = lista.filter(item => limpiarTexto(item.nombre).includes(busq));
+    const coincidencias = lista.filter(item => {
+      const nom = typeof item === 'string' ? item : item.nombre;
+      return limpiarTexto(nom).includes(busq);
+    });
     if (coincidencias.length === 0) return null;
 
     return (
       <div style={{ marginTop: '6px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span style={{ fontSize: '10px', color: c.textMuted, paddingLeft: '4px', fontWeight: '700' }}>Sugerencias (Toca para elegir):</span>
-        {coincidencias.slice(0, 3).map(item => (
-          <div
-            key={item.id}
-            onClick={() => {
-              if (tipo === 'sede') {
-                setDatosEdit({ ...datosEdit, sede_id: item.id });
-                setCreandoNuevo({ ...creandoNuevo, sede: false });
-                setTextosNuevos({ ...textosNuevos, sede: '' });
-              } else {
-                setDatosEdit({ ...datosEdit, departamento_id: item.id });
-                setCreandoNuevo({ ...creandoNuevo, depto: false });
-                setTextosNuevos({ ...textosNuevos, depto: '' });
-              }
-            }}
-            style={{ fontSize: '11.5px', padding: '6px 8px', background: c.surfaceCard, borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: c.text, fontWeight: '600', border: `1px solid ${c.border}` }}
-          >
-            <CheckCircle size={13} color={c.accent} /> {item.nombre}
-          </div>
-        ))}
+        <span style={{ fontSize: '9.5px', color: c.textMuted, paddingLeft: '4px', fontWeight: '700' }}>Existentes en la empresa (Toca para usar):</span>
+        {coincidencias.slice(0, 4).map((item, idx) => {
+          const etiqueta = typeof item === 'string' ? item : item.nombre;
+          return (
+            <div
+              key={item.id || idx}
+              onClick={() => {
+                if (tipo === 'sede') {
+                  setDatosEdit({ ...datosEdit, sede_id: item.id });
+                  setCreandoNuevo({ ...creandoNuevo, sede: false });
+                  setTextosNuevos({ ...textosNuevos, sede: '' });
+                } else if (tipo === 'depto') {
+                  setDatosEdit({ ...datosEdit, departamento_id: item.id, area: item.nombre, puesto: '', reporta_a_id: '' });
+                  setCreandoNuevo({ ...creandoNuevo, depto: false });
+                  setTextosNuevos({ ...textosNuevos, depto: '' });
+                } else if (tipo === 'area') {
+                  setDatosEdit({ ...datosEdit, area: etiqueta });
+                  setCreandoNuevo({ ...creandoNuevo, area: false });
+                  setTextosNuevos({ ...textosNuevos, area: '' });
+                } else if (tipo === 'puesto') {
+                  setDatosEdit({ ...datosEdit, puesto: etiqueta });
+                  setCreandoNuevo({ ...creandoNuevo, puesto: false });
+                  setTextosNuevos({ ...textosNuevos, puesto: '' });
+                }
+              }}
+              style={{ fontSize: '11.5px', padding: '6px 8px', background: c.surfaceCard, borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: c.text, fontWeight: '600', border: `1px solid ${c.border}` }}
+            >
+              <CheckCircle size={13} color={c.accent} /> {etiqueta}
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -93,16 +147,24 @@ export default function DossierLateral({
   const handleGuardarExpediente = async () => {
     setGuardando(true);
     try {
+      const datosFinales = { ...datosEdit };
+      if (creandoNuevo.area && textosNuevos.area.trim()) {
+        datosFinales.area = limpiarTexto(textosNuevos.area);
+      }
+      if (creandoNuevo.puesto && textosNuevos.puesto.trim()) {
+        datosFinales.puesto = limpiarTexto(textosNuevos.puesto);
+      }
+
       await actualizarExpedienteColaborador({
         colaboradorId: colaborador.id,
-        datosEdit,
+        datosEdit: datosFinales,
         creandoNuevo,
         textosNuevos,
         sedes,
         departamentos
       });
-      setCreandoNuevo({ sede: false, depto: false });
-      setTextosNuevos({ sede: '', depto: '' });
+      setCreandoNuevo({ sede: false, depto: false, area: false, puesto: false });
+      setTextosNuevos({ sede: '', depto: '', area: '', puesto: '' });
       onClose();
       if (recargarDatos) await recargarDatos();
     } catch (err) {
@@ -202,6 +264,9 @@ export default function DossierLateral({
             </div>
           )}
 
+          {/* =========================================================
+              BLOQUE 1: ESTRUCTURA Y PUESTO (EN CASCADA COHERENTE)
+              ========================================================= */}
           <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', border: `1.5px solid ${c.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1.5px solid ${c.borderDivider}` }}>
               <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Briefcase size={14} /></div>
@@ -210,26 +275,32 @@ export default function DossierLateral({
 
             {editando ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-                <div><label className="touch-field-label">Nº Empleado</label><input className="touch-field-input mono-id" value={datosEdit.numero_empleado || ''} onChange={e => setDatosEdit({ ...datosEdit, numero_empleado: e.target.value })} /></div>
+                <div>
+                  <label className="touch-field-label">Nº Empleado</label>
+                  <input className="touch-field-input mono-id" value={datosEdit.numero_empleado || ''} onChange={e => setDatosEdit({ ...datosEdit, numero_empleado: e.target.value })} />
+                </div>
                 <div>
                   <label className="touch-field-label">Nómina</label>
                   <select className="touch-field-input" value={datosEdit.tipo_personal || 'produccion'} onChange={e => setDatosEdit({ ...datosEdit, tipo_personal: e.target.value })}>
-                    <option value="produccion">PRODUCCIÓN</option><option value="administrativo">ADMINISTRATIVO</option><option value="obra">OBRA</option>
+                    <option value="produccion">PRODUCCIÓN</option>
+                    <option value="administrativo">ADMINISTRATIVO</option>
+                    <option value="obra">OBRA</option>
                   </select>
                 </div>
 
+                {/* 1. SEDE */}
                 <div>
                   <label className="touch-field-label">Sede / Región</label>
                   {!creandoNuevo.sede ? (
                     <select className="touch-field-input" value={datosEdit.sede_id || ''} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, sede: true }) : setDatosEdit({ ...datosEdit, sede_id: e.target.value })}>
                       <option value="">Sin Sede</option>
                       {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                      <option value="NEW">+ Crear o Buscar...</option>
+                      <option value="NEW">+ Crear Nueva Sede...</option>
                     </select>
                   ) : (
                     <div>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                        <input type="text" autoFocus className="touch-field-input" placeholder="Escribe sede..." value={textosNuevos.sede} onChange={e => setTextosNuevos({ ...textosNuevos, sede: e.target.value.toUpperCase() })} />
+                        <input type="text" autoFocus className="touch-field-input" placeholder="Nueva sede..." value={textosNuevos.sede} onChange={e => setTextosNuevos({ ...textosNuevos, sede: e.target.value.toUpperCase() })} />
                         <button type="button" onClick={() => { setCreandoNuevo({ ...creandoNuevo, sede: false }); setTextosNuevos({ ...textosNuevos, sede: '' }); }} style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}><X size={14} /></button>
                       </div>
                       {renderSugerencias(textosNuevos.sede, sedes, 'sede')}
@@ -237,18 +308,36 @@ export default function DossierLateral({
                   )}
                 </div>
 
+                {/* 2. DEPARTAMENTO (Manda sobre Subdepto, Puesto y Superior) */}
                 <div>
                   <label className="touch-field-label">Departamento</label>
                   {!creandoNuevo.depto ? (
-                    <select className="touch-field-input" value={datosEdit.departamento_id || ''} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, depto: true }) : setDatosEdit({ ...datosEdit, departamento_id: e.target.value })}>
+                    <select 
+                      className="touch-field-input" 
+                      value={datosEdit.departamento_id || ''} 
+                      onChange={e => {
+                        if (e.target.value === 'NEW') {
+                          setCreandoNuevo({ ...creandoNuevo, depto: true });
+                        } else {
+                          const nuevoDepto = departamentos.find(d => d.id === e.target.value);
+                          // Al cambiar de Departamento, sincronizamos Subdepto al nombre del nuevo depto y limpiamos Superior
+                          setDatosEdit({ 
+                            ...datosEdit, 
+                            departamento_id: e.target.value,
+                            area: nuevoDepto ? nuevoDepto.nombre : '',
+                            reporta_a_id: ''
+                          });
+                        }
+                      }}
+                    >
                       <option value="">Sin Depto</option>
                       {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                      <option value="NEW">+ Crear o Buscar...</option>
+                      <option value="NEW">+ Crear Nuevo Depto...</option>
                     </select>
                   ) : (
                     <div>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                        <input type="text" autoFocus className="touch-field-input" placeholder="Ej. SISTEMAS..." value={textosNuevos.depto} onChange={e => setTextosNuevos({ ...textosNuevos, depto: e.target.value.toUpperCase() })} />
+                        <input type="text" autoFocus className="touch-field-input" placeholder="Nuevo depto..." value={textosNuevos.depto} onChange={e => setTextosNuevos({ ...textosNuevos, depto: e.target.value.toUpperCase() })} />
                         <button type="button" onClick={() => { setCreandoNuevo({ ...creandoNuevo, depto: false }); setTextosNuevos({ ...textosNuevos, depto: '' }); }} style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}><X size={14} /></button>
                       </div>
                       {renderSugerencias(textosNuevos.depto, departamentos, 'depto')}
@@ -256,16 +345,71 @@ export default function DossierLateral({
                   )}
                 </div>
 
+                {/* 3. SUBDEPARTAMENTO / ÁREA (Select filtrado por el Departamento + opción de crear nuevo) */}
                 <div>
                   <label className="touch-field-label">Subdepto / Área</label>
-                  <input list="lista-areas-sugeridas" className="touch-field-input" value={datosEdit.area || ''} onChange={e => setDatosEdit({ ...datosEdit, area: e.target.value })} />
-                  <datalist id="lista-areas-sugeridas">{areas.map(a => <option key={a} value={a} />)}</datalist>
+                  {!creandoNuevo.area ? (
+                    <select 
+                      className="touch-field-input" 
+                      value={datosEdit.area || ''} 
+                      onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, area: true }) : setDatosEdit({ ...datosEdit, area: e.target.value })}
+                    >
+                      <option value="">Seleccionar Subdepto / Área</option>
+                      {subdeptosDelDepto.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                      <option value="NEW">+ Crear Nuevo Subdepto...</option>
+                    </select>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <input type="text" autoFocus className="touch-field-input" placeholder="Nuevo subdepto..." value={textosNuevos.area} onChange={e => setTextosNuevos({ ...textosNuevos, area: e.target.value.toUpperCase() })} />
+                        <button type="button" onClick={() => { setCreandoNuevo({ ...creandoNuevo, area: false }); setTextosNuevos({ ...textosNuevos, area: '' }); }} style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}><X size={14} /></button>
+                      </div>
+                      {renderSugerencias(textosNuevos.area, areas, 'area')}
+                    </div>
+                  )}
                 </div>
+
+                {/* 4. PUESTO REAL (Select filtrado por el Departamento + opción de crear nuevo) */}
                 <div>
                   <label className="touch-field-label">Puesto Real</label>
-                  <input list="lista-puestos-sugeridos" className="touch-field-input" value={datosEdit.puesto || ''} onChange={e => setDatosEdit({ ...datosEdit, puesto: e.target.value })} />
-                  <datalist id="lista-puestos-sugeridos">{puestos.map(p => <option key={p} value={p} />)}</datalist>
+                  {!creandoNuevo.puesto ? (
+                    <select 
+                      className="touch-field-input" 
+                      value={datosEdit.puesto || ''} 
+                      onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, puesto: true }) : setDatosEdit({ ...datosEdit, puesto: e.target.value })}
+                    >
+                      <option value="">Sin Puesto Asignado</option>
+                      {puestosDelDepto.map(p => <option key={p} value={p}>{p}</option>)}
+                      <option value="NEW">+ Crear Nuevo Puesto...</option>
+                    </select>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <input type="text" autoFocus className="touch-field-input" placeholder="Nuevo puesto..." value={textosNuevos.puesto} onChange={e => setTextosNuevos({ ...textosNuevos, puesto: e.target.value.toUpperCase() })} />
+                        <button type="button" onClick={() => { setCreandoNuevo({ ...creandoNuevo, puesto: false }); setTextosNuevos({ ...textosNuevos, puesto: '' }); }} style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}><X size={14} /></button>
+                      </div>
+                      {renderSugerencias(textosNuevos.puesto, puestos, 'puesto')}
+                    </div>
+                  )}
                 </div>
+
+                {/* 5. SUPERIOR EN EL ORGANIGRAMA (Para acomodar quién está debajo de quién en este Depto) */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="touch-field-label">Superior en Organigrama (De quién depende en el árbol)</label>
+                  <select 
+                    className="touch-field-input" 
+                    value={datosEdit.reporta_a_id || ''} 
+                    onChange={e => setDatosEdit({ ...datosEdit, reporta_a_id: e.target.value })}
+                  >
+                    <option value="">Directo a Gerencia / Titular de su Área</option>
+                    {posiblesSuperiores.map(sup => (
+                      <option key={sup.id} value={sup.id}>
+                        {sup.nombre_completo} — ({sup.puesto || sup.area})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div><label className="touch-field-label">Fecha de Nacimiento</label><input type="date" className="touch-field-input" value={datosEdit.fecha_nacimiento || ''} onChange={e => setDatosEdit({ ...datosEdit, fecha_nacimiento: e.target.value })} /></div>
                 <div><label className="touch-field-label">Fecha de Ingreso</label><input type="date" className="touch-field-input" value={datosEdit.fecha_ingreso || ''} onChange={e => setDatosEdit({ ...datosEdit, fecha_ingreso: e.target.value })} /></div>
               </div>
@@ -274,6 +418,7 @@ export default function DossierLateral({
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Sede Fija</span><strong style={{ color: c.text }}>{sedeNombre}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Departamento</span><strong style={{ color: c.text }}>{colaborador.departamentos?.nombre || 'No asignado'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Subdepto / Área</span><strong style={{ color: c.text }}>{colaborador.area || 'General'}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Superior en Árbol</span><strong style={{ color: c.text }}>{superiorNombre}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Tipo de Nómina</span><strong style={{ color: c.accent, textTransform: 'uppercase' }}>{colaborador.tipo_personal}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Fecha Nacimiento</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_nacimiento || 'No registrada'}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Fecha Ingreso</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_ingreso || 'No registrada'}</span></div>

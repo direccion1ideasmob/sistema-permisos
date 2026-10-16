@@ -124,6 +124,7 @@ export default function DirectorioGrid({
       puesto: user.puesto || '',
       tipo_personal: user.tipo_personal || 'produccion',
       rol: user.rol || 'empleado',
+      reporta_a_id: user.reporta_a_id || '',
       celular: user.celular || '',
       telefono: user.telefono || '',
       correo: user.correo || '',
@@ -356,6 +357,7 @@ export default function DirectorioGrid({
         editando={seguridadDesbloqueada}
         datosEdit={datosEdit}
         setDatosEdit={setDatosEdit}
+        usuarios={usuarios}
         departamentos={departamentos}
         sedes={sedes}
         areas={areas}     
