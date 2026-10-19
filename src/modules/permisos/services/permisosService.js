@@ -64,12 +64,12 @@ export const obtenerSolicitudesAprobacion = async () => {
     .select(`
       *,
       usuarios:usuario_id (
-        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, departamento_id, reporta_a_id,
+        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, firma_url, departamento_id, reporta_a_id, sedes:sede_id (nombre),
         departamentos:departamento_id (id, nombre, clasificacion, jefe_id)
       ),
-      firmante1:firma_1_id (id, nombre_completo, rol, puesto),
-      firmante2:firma_2_id (id, nombre_completo, rol, puesto),
-      firmante3:firma_3_id (id, nombre_completo, rol, puesto)
+      firmante1:firma_1_id (id, nombre_completo, rol, puesto, firma_url),
+      firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),
+      firmante3:firma_3_id (id, nombre_completo, rol, puesto, firma_url)
     `)
     .order("created_at", { ascending: false });
 
@@ -508,10 +508,15 @@ export const obtenerHistorialGeneralPermisos = async ({ deptoFiltro = 'todos', t
     .select(`
       *,
       usuarios:usuario_id (
-        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, departamento_id,
-        departamentos:departamento_id (id, nombre, clasificacion)
-      )
+        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, firma_url, departamento_id,
+        departamentos:departamento_id (id, nombre, clasificacion),
+        sedes:sede_id (nombre)
+      ),
+      firmante1:firma_1_id (id, nombre_completo, rol, puesto, firma_url),
+      firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),
+      firmante3:firma_3_id (id, nombre_completo, rol, puesto, firma_url)
     `)
+    .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta', 'rechazado'])
     .order('created_at', { ascending: false });
 
   if (tipoFiltro && tipoFiltro !== 'todos') {
