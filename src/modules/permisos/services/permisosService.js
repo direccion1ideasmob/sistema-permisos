@@ -60,15 +60,18 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
 // 4. OBTENER TODAS LAS SOLICITUDES PARA BANDEJA DE APROBACIONES
 export const obtenerSolicitudesAprobacion = async () => {
   const { data, error } = await supabase
-    .from('permisos')
+    .from("permisos")
     .select(`
       *,
       usuarios:usuario_id (
         id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, departamento_id, reporta_a_id,
         departamentos:departamento_id (id, nombre, clasificacion, jefe_id)
-      )
+      ),
+      firmante1:firma_1_id (id, nombre_completo, rol, puesto),
+      firmante2:firma_2_id (id, nombre_completo, rol, puesto),
+      firmante3:firma_3_id (id, nombre_completo, rol, puesto)
     `)
-    .order('created_at', { ascending: false });
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   return data || [];
@@ -168,8 +171,12 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
     // CASO B: Si es Jefe de Departamento (o un encargado sin otro jefe_area arriba, o Victoria como jefa de Nora), cierra Firma 1
     if (!huboRelevoSubareaADepto) {
-      updates.firma_1_estado = 'autorizado';
+      updates.firma_1_estado = "autorizado";
       if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
+      const obsBase1 = updates.observaciones || solicitud.observaciones || "";
+      if (!obsBase1.includes(usuario.nombre_completo)) {
+        updates.observaciones = `${obsBase1} | ✅ VoBo Jefe: ${usuario.nombre_completo}`;
+      }
 
       if (solicitud.firma_2_estado === 'pendiente' && solicitud.firma_2_id) {
         siguientesEnFirmar.push(solicitud.firma_2_id);
@@ -184,7 +191,11 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
       }
     }
   } else if (esGerente) {
-    updates.firma_2_estado = 'autorizado';
+    updates.firma_2_estado = "autorizado";
+    const obsBase2 = updates.observaciones || solicitud.observaciones || "";
+    if (!obsBase2.includes(usuario.nombre_completo)) {
+      updates.observaciones = `${obsBase2} | ✅ VoBo Gerencia: ${usuario.nombre_completo}`;
+    }
     if (solicitud.firma_3_estado === 'pendiente') {
       const rhUsers = await obtenerUsuariosRH();
       if (rhUsers.length > 0) siguientesEnFirmar.push(...rhUsers.map(u => u.id));
