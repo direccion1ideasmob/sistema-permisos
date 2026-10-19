@@ -17,14 +17,16 @@ export default function TarjetaAprobacion({
   const fechaCreacion = new Date(solicitud.created_at);
   const esUrgente = esRetardo && solicitud.fecha_permiso === solicitud.fecha_elaboracion && fechaCreacion.getHours() >= 6;
 
-  // Lógica de Override para RH
-  const esRH = usuarioActual?.rol === 'rh_nominas' || usuarioActual?.rol === 'gerente_rh';
+  // Lógica de Override para RH y validación de turno directo
+  const esRH = usuarioActual?.rol === 'rh_nominas' || usuarioActual?.rol === 'gerente_rh' || usuarioActual?.rol === 'superadmin';
+  const soyFirmante1Directo = solicitud.firma_1_id === usuarioActual?.id && solicitud.firma_1_estado === 'pendiente';
   const estaAtoradoConJefe = solicitud.firma_1_estado === 'pendiente';
   const estaAtoradoConGerente = solicitud.firma_1_estado !== 'pendiente' && solicitud.firma_2_estado === 'pendiente';
-  const mostrarOverride = esRH && esPendiente && (estaAtoradoConJefe || estaAtoradoConGerente);
+  const mostrarOverride = esRH && esPendiente && !soyFirmante1Directo && (estaAtoradoConJefe || estaAtoradoConGerente);
 
   // Saber a quién le toca realmente
   const esMiTurno = () => {
+    if (soyFirmante1Directo) return true;
     if (['jefe_area', 'encargado'].includes(usuarioActual?.rol) && solicitud.firma_1_estado === 'pendiente') return true;
     if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
     if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_2_estado !== 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
@@ -32,29 +34,24 @@ export default function TarjetaAprobacion({
   };
 
   useEffect(() => {
+    let montado = true;
     const checarReincidencia = async () => {
       if (esRetardo && solicitud.usuario_id) {
-        const fechaLimite = new Date(fechaCreacion);
-        fechaLimite.setDate(fechaLimite.getDate() - 15);
-        const { count } = await supabase
-          .from('permisos')
-          .select('id', { count: 'exact', head: true })
-          .eq('usuario_id', solicitud.usuario_id)
-          .eq('tipo_permiso', 'retardo')
-          .neq('estado_general', 'rechazado')
-          .neq('id', solicitud.id)
-          .gte('fecha_permiso', fechaLimite.toISOString().split('T')[0]);
-        setReincidencias(count || 0);
+        try {
+          const total = await contarReincidenciasRetardo(solicitud.usuario_id, solicitud.id, new Date(solicitud.created_at));
+          if (montado) setReincidencias(total || 0);
+        } catch (err) {
+          console.error("Error verificando reincidencia:", err);
+        }
       }
     };
     checarReincidencia();
-  }, [esRetardo, solicitud, fechaCreacion]);
+    return () => { montado = false; };
+  }, [esRetardo, solicitud.usuario_id, solicitud.id, solicitud.created_at]);
 
   const procesarMotivo = (textoCrudo = '') => {
     if (!textoCrudo) return { etiqueta: '', redaccion: 'No se ingresaron detalles.' };
     const txt = String(textoCrudo).trim();
-    
-    // FÓRMULA CORREGIDA: Busca [ALGO] al inicio y separa el resto
     const match = txt.match(/^\[(.*?)\]\s*(.*)/);
     
     if (match) {
@@ -120,7 +117,7 @@ export default function TarjetaAprobacion({
         }
         .stepper-item { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .stepper-pill {
-          display: inline-flex; alignItems: center; gap: 5px; padding: 4px 8px; borderRadius: 8px;
+          display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 8px;
           font-size: 11px; font-weight: 700; border: 1px solid; white-space: nowrap;
         }
 
