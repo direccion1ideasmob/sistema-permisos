@@ -1,26 +1,89 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../api/supabaseClient';
+import { registrarSuscripcionPush } from '../notificaciones/notificacionesService';
 
 const AuthContext = createContext();
+
+// Función auxiliar: Desvincula por completo este navegador de Supabase y apaga el Push local
+export const desvincularPushDispositivoActual = async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && reg.pushManager) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub && sub.endpoint) {
+          // 1. Borrar de Supabase para que nadie le envíe alertas a este navegador sin sesión
+          await supabase
+            .from('suscripciones_push')
+            .delete()
+            .eq('endpoint', sub.endpoint);
+
+          // 2. Desuscribir el navegador localmente para matar cualquier rastro del usuario anterior
+          await sub.unsubscribe();
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Aviso al desvincular notificaciones al cerrar sesión:', err);
+  }
+};
+
+// Función auxiliar: Si el navegador ya tiene permiso concedido, asegura que el endpoint pertenezca SOLO al usuario actual
+export const sincronizarPushUsuarioActivo = async (usuarioId) => {
+  if (!usuarioId) return;
+  try {
+    if (
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'granted' &&
+      'serviceWorker' in navigator
+    ) {
+      await navigator.serviceWorker.register('/sw.js');
+      const sub = await registrarSuscripcionPush();
+      if (sub && sub.endpoint) {
+        // Borra este navegador de cualquier otro usuario que haya iniciado sesión antes aquí
+        await supabase
+          .from('suscripciones_push')
+          .delete()
+          .eq('endpoint', sub.endpoint);
+
+        // Registra este navegador exclusivamente para el usuario logueado actualmente
+        await supabase
+          .from('suscripciones_push')
+          .insert([{
+            usuario_id: usuarioId,
+            subscription: sub,
+            endpoint: sub.endpoint
+          }]);
+      }
+    }
+  } catch (err) {
+    console.warn('Aviso al sincronizar notificaciones con el usuario activo:', err);
+  }
+};
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    // Al cargar la app, revisamos si ya hay una sesión guardada en el navegador
     const sesionGuardada = localStorage.getItem('permisos_sesion');
     if (sesionGuardada) {
-      setUsuario(JSON.parse(sesionGuardada));
+      const parsed = JSON.parse(sesionGuardada);
+      setUsuario(parsed);
+      sincronizarPushUsuarioActivo(parsed.id);
     }
     setCargando(false);
   }, []);
 
-  const iniciarSesion = (datosUsuario) => {
+  const iniciarSesion = async (datosUsuario) => {
     localStorage.setItem('permisos_sesion', JSON.stringify(datosUsuario));
     setUsuario(datosUsuario);
+    await sincronizarPushUsuarioActivo(datosUsuario.id);
   };
 
-  const cerrarSesion = () => {
+  const cerrarSesion = async () => {
+    await desvincularPushDispositivoActual();
     localStorage.removeItem('permisos_sesion');
     setUsuario(null);
   };
