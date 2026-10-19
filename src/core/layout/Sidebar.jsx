@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../auth/AuthContext';
-import { registrarSuscripcionPush } from '../notificaciones/notificacionesService'; // <-- Importado aquí
+import { registrarSuscripcionPush } from '../notificaciones/notificacionesService';
 
 import { 
   ClipboardList, PenLine, FileBarChart, Users, ShieldCheck, 
@@ -28,8 +28,6 @@ export default function Sidebar({
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState(usuarioLogueado?.nombre_completo || "");
   const [loading, setLoading] = useState(false);
-  
-  // Estado para la campanita
   const [suscribiendo, setSuscribiendo] = useState(false);
 
   const handleUpdateFoto = async (e) => {
@@ -75,8 +73,9 @@ export default function Sidebar({
     setLoading(false);
   };
 
-  // === LÓGICA DE SUSCRIPCIÓN GLOBAL (Doble Clic) ===
+  // === ACTIVACIÓN DE NOTIFICACIONES PUSH (1 CLIC EN PC Y CELULAR) ===
   const activarAlertas = async () => {
+    if (suscribiendo) return;
     setSuscribiendo(true);
     try {
       if ('serviceWorker' in navigator) {
@@ -98,13 +97,13 @@ export default function Sidebar({
         .delete()
         .eq('endpoint', endpointActual);
 
-     // 2. Inserción limpia
+      // 2. Inserción limpia vinculada al usuario actual
       const { error } = await supabase
         .from('suscripciones_push')
         .insert([{ 
           usuario_id: usuarioLogueado.id, 
           subscription: sub,
-          endpoint: endpointActual // <--- ESTA ES LA LÍNEA QUE ME TRAGUÉ
+          endpoint: endpointActual
         }]);
 
       if (error) throw error;
@@ -117,7 +116,10 @@ export default function Sidebar({
     }
   };
 
-  const cerrarMenuMovil = () => { if (isMobile) setMenuAbierto(false); };
+  const cerrarMenuMovil = () => {
+    setShowPhotoOptions(false);
+    if (isMobile) setMenuAbierto(false);
+  };
 
   const rol = usuarioLogueado?.rol || 'empleado';
   const puedeAprobar = ['encargado', 'jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin'].includes(rol);
@@ -130,7 +132,8 @@ export default function Sidebar({
   return (
     <aside style={{
       ...s.sidebar,
-      width: isMobile ? '50vw' : '260px',
+      width: isMobile ? '72vw' : '260px',
+      maxWidth: isMobile ? '280px' : '260px',
       padding: isMobile ? '16px 12px' : '20px 16px',
       backgroundColor: tema.sidebarBg,
       borderRight: `1.5px solid ${tema.border}`,
@@ -165,9 +168,9 @@ export default function Sidebar({
             {modoOscuro ? <Sun size={14} /> : <Moon size={14} />}
           </button>
 
-          {/* Botón Global de Notificaciones (DOBLE CLIC) */}
+          {/* Botón Global de Notificaciones (1 CLIC) */}
           <button 
-            onDoubleClick={activarAlertas} 
+            onClick={activarAlertas} 
             disabled={suscribiendo}
             style={{ 
               ...s.btnIcon, 
@@ -175,7 +178,7 @@ export default function Sidebar({
               color: suscribiendo ? '#16a34a' : tema.textSecondary,
               cursor: suscribiendo ? 'wait' : 'pointer'
             }}
-            title="Doble clic para activar Notificaciones Push en este dispositivo"
+            title="Activar Notificaciones Push en este dispositivo"
           >
             <Bell size={14} className={suscribiendo ? "animate-pulse" : ""} />
           </button>
@@ -192,21 +195,25 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* 3. PERFIL */}
-      <div style={{ ...s.profileBox, border: `1.5px solid ${tema.border}`, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }}>
+      {/* 3. PERFIL (zIndex superior para que el menú de foto nunca se traslape con los botones de abajo) */}
+      <div style={{ ...s.profileBox, border: `1.5px solid ${tema.border}`, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
         <div style={s.avatarWrapper} onClick={() => setShowPhotoOptions(!showPhotoOptions)}>
           <img src={miFoto} alt="Perfil" style={s.avatarImg} />
           <div style={s.avatarEditBadge}><Camera size={11} color="#fff" /></div>
         </div>
 
         {showPhotoOptions && (
-          <div style={{ ...s.popover, backgroundColor: tema.sidebarBg, border: `1.5px solid ${tema.border}` }}>
+          <div style={{
+            ...s.popover,
+            backgroundColor: modoOscuro ? '#18181b' : '#ffffff',
+            border: `1.5px solid ${tema.border}`
+          }}>
             <label style={{ ...s.popBtn, color: tema.textPrimary }}>
-              <Camera size={13} /> Tomar foto 
+              <Camera size={13} color="#16a34a" /> Tomar foto 
               <input type="file" accept="image/*" capture="environment" hidden onChange={handleUpdateFoto} />
             </label>
             <label style={{ ...s.popBtn, color: tema.textPrimary }}>
-              <ImageIcon size={13} /> Subir archivo 
+              <ImageIcon size={13} color="#0ea5e9" /> Subir archivo 
               <input type="file" accept="image/*" hidden onChange={handleUpdateFoto} />
             </label>
             <button onClick={() => setShowPhotoOptions(false)} style={s.popBtnCancel}>Cancelar</button>
@@ -242,7 +249,6 @@ export default function Sidebar({
               {rol.replace(/_/g, ' ')}
             </span>
             
-            {/* BOTÓN DE ENGRANAJE (SEGURIDAD) */}
             <button 
               onClick={onOpenSeguridad}
               style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
@@ -353,7 +359,7 @@ const s = {
     width: '100%', maxHeight: '210px', objectFit: 'contain', userSelect: 'none', transition: 'opacity 0.3s ease'
   },
   brandHeader: {
-    position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+    position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
     paddingBottom: '12px', marginBottom: '8px'
   },
   headerActions: {
@@ -364,7 +370,7 @@ const s = {
     borderRadius: '7px', background: 'transparent', cursor: 'pointer'
   },
   profileBox: {
-    position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '10px',
+    position: 'relative', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px',
     padding: '10px 8px', borderRadius: '10px', marginBottom: '16px'
   },
   avatarWrapper: {
@@ -380,11 +386,11 @@ const s = {
   inputEdit: { fontSize: '11px', padding: '3px 5px', borderRadius: '5px', outline: 'none' },
   userRole: { fontSize: '10.5px', textTransform: 'capitalize', marginTop: '1px' },
   popover: { 
-    position: 'absolute', top: '55px', left: '6px', borderRadius: '10px', padding: '6px', 
-    display: 'flex', flexDirection: 'column', gap: '3px', boxShadow: '0 12px 30px rgba(0,0,0,0.3)', zIndex: 400, width: '155px' 
+    position: 'absolute', top: '58px', left: '6px', borderRadius: '10px', padding: '6px', 
+    display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '0 14px 32px rgba(0,0,0,0.35)', zIndex: 999, width: '165px' 
   },
-  popBtn: { padding: '7px 8px', fontSize: '11.5px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '6px' },
-  popBtnCancel: { padding: '5px', color: '#ef4444', fontSize: '11px', fontWeight: '600', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'center' },
+  popBtn: { padding: '8px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '7px' },
+  popBtnCancel: { padding: '6px', color: '#ef4444', fontSize: '11.5px', fontWeight: '700', border: 'none', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', cursor: 'pointer', textAlign: 'center', marginTop: '2px' },
   nav: { 
     position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' 
   },
@@ -397,7 +403,7 @@ const s = {
     borderRadius: '0 8px 8px 0', fontSize: '12.5px', fontWeight: '600', textDecoration: 'none', transition: 'all 0.15s ease'
   },
   navText: {
-    overflow: 'hidden',  textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
   },
   btnLogout: {
     marginTop: 'auto', display: 'flex', alignItems : 'center', justifyContent: 'center',
