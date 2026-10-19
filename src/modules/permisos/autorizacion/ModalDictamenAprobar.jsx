@@ -83,7 +83,7 @@ export default function ModalDictamenAprobar({
               <div style={{ fontSize: '13px', color: c.textMuted, marginTop: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 Autorizando a <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo?.split(' ')[0]}</strong>
                 <span style={{ background: c.accentSoft, color: c.accent, padding: '2px 6px', borderRadius: '6px', fontWeight: '800', fontSize: '10.5px', letterSpacing: '0.02em' }}>
-                  {solicitud.folio}
+                  {solicitud.tipo_permiso?.toUpperCase()}
                 </span>
               </div>
             </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { obtenerPermisosUsuario, escalarPermisoAGerencia } from '../services/permisosService';
 import { obtenerTemaPermisos, generarEstilosPermisos } from '../permisosStyles';
+import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHistorial';
 import { Clock, CheckCircle2, FileText, AlertTriangle, ShieldCheck, XCircle, FastForward } from 'lucide-react';
 
 export default function MisPermisos() {
@@ -11,7 +12,7 @@ export default function MisPermisos() {
 
   const [misPermisos, setMisPermisos] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
-  const [pestaña, setPestaña] = useState('proceso'); 
+  const [pestaña, setPestaña] = useState('proceso');
   const [procesandoEscalamiento, setProcesandoEscalamiento] = useState(false);
   const [horaActual, setHoraActual] = useState(new Date());
 
@@ -32,7 +33,7 @@ export default function MisPermisos() {
       setCargandoHistorial(false);
     }
   }, [usuario?.id]);
-  
+
   useEffect(() => { cargarHistorial(); }, [cargarHistorial]);
 
   const escalarPermiso = async (permiso) => {
@@ -58,9 +59,9 @@ export default function MisPermisos() {
     let config = { bg: modoOscuro ? 'rgba(255, 255, 255, 0.03)' : '#f5f5f5', border: c.border, color: c.textMuted, texto: 'EN REVISIÓN', icono: <Clock size={12} /> };
 
     if (['autorizado', 'auto_aprobado', 'aprobado'].includes(est)) {
-      config = { bg: 'rgba(34, 197, 94, 0.08)', border: 'rgba(34, 197, 94, 0.3)', color: '#16a34a', texto: 'SELLO APROBADO', icono: <ShieldCheck size={13} /> };
+      config = { bg: 'rgba(34, 197, 94, 0.08)', border: 'rgba(34, 197, 94, 0.3)', color: '#16a34a', texto: 'APROBADO', icono: <ShieldCheck size={13} /> };
     } else if (['escalado', 'omitido'].includes(est)) {
-      config = { bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.3)', color: '#2563eb', texto: est === 'escalado' ? 'ESCALADO' : 'OMITIDO', icono: <FastForward size={13} /> };
+      config = { bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.3)', color: '#2563eb', texto: est === 'escalado' ? 'ESCALADO' : 'NO APLICA', icono: <FastForward size={13} /> };
     } else if (est === 'rechazado') {
       config = { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', color: '#dc2626', texto: 'RECHAZADO', icono: <XCircle size={13} /> };
     }
@@ -82,7 +83,7 @@ export default function MisPermisos() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h2 style={{ fontSize: '20px', fontWeight: '800', color: c.text, margin: 0 }}>Mis Solicitudes de Pase</h2>
-          <p style={{ fontSize: '12px', color: c.textMuted, margin: '4px 0 0 0' }}>Testigo digital y estatus de autorización.</p>
+          <p style={{ fontSize: '12px', color: c.textMuted, margin: '4px 0 0 0' }}>Estatus de autorización y sellos de vigilancia.</p>
         </div>
 
         <div style={{ display: 'flex', background: c.surfaceCard, padding: '4px', borderRadius: '10px', border: `1px solid ${c.border}` }}>
@@ -109,28 +110,35 @@ export default function MisPermisos() {
             {enProceso.map(p => {
               const horasTranscurridas = (horaActual - new Date(p.created_at)) / (1000 * 60 * 60);
               const puedeEscalar = p.firma_1_estado === 'pendiente' && horasTranscurridas >= 1;
+              const { horarioSolicitado, supervisorSubarea } = parsearDatosObservaciones(p.observaciones);
+              const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
 
               return (
                 <div key={p.id} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: modoOscuro ? '0 4px 15px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                       <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>{p.tipo_permiso}</span>
-                      <span style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>Fecha: {p.fecha_permiso}</span>
+                      <span style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>
+                        Fecha: {p.fecha_permiso}{p.fecha_fin && p.fecha_fin !== p.fecha_permiso ? ` al ${p.fecha_fin}` : ''} • {horarioSolicitado}
+                      </span>
                     </div>
-                    {p.asunto_motivo && p.asunto_motivo.includes('[') && (
+                    {categoria && (
                       <span style={{ background: c.accentSoft, color: c.accent, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '800' }}>
-                        {p.asunto_motivo.substring(p.asunto_motivo.indexOf('[') + 1, p.asunto_motivo.indexOf(']'))}
+                        {categoria}
                       </span>
                     )}
                   </div>
 
-                  <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.5' }}>
-                    {p.asunto_motivo && p.asunto_motivo.includes(']') ? p.asunto_motivo.substring(p.asunto_motivo.indexOf(']') + 1).trim() : p.asunto_motivo}
-                    {p.observaciones && <div style={{ fontSize: '12px', color: c.textMuted, marginTop: '4px', background: c.surface, padding: '6px 8px', borderRadius: '6px' }}>{p.observaciones}</div>}
+                  <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.45' }}>
+                    {motivoLimpio}
+                    {supervisorSubarea && (
+                      <div style={{ fontSize: '11.5px', color: '#16a34a', fontWeight: '700', marginTop: '6px' }}>
+                        ✓ Avalado por Supervisor de Subárea: {supervisorSubarea}
+                      </div>
+                    )}
                   </div>
 
-                  <div style={{ marginTop: '4px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '6px' }}>Validación Institucional</div>
+                  <div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                       {renderSelloArea('Jefatura', p.firma_1_estado)}
                       {renderSelloArea('Gerencia', p.firma_2_estado)}
@@ -138,14 +146,13 @@ export default function MisPermisos() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: `1px dashed ${c.border}`, paddingTop: '10px' }}>
-                    <span style={{ fontSize: '10.5px', color: c.textSubtle, fontWeight: '700' }}>REF: {p.folio}</span>
-                    {puedeEscalar && (
+                  {puedeEscalar && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', borderTop: `1px dashed ${c.border}`, paddingTop: '10px' }}>
                       <button onClick={() => escalarPermiso(p)} disabled={procesandoEscalamiento} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#d97706', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <AlertTriangle size={13} /> {procesandoEscalamiento ? 'Escalando...' : 'Escalar inactividad'}
+                        <AlertTriangle size={13} /> {procesandoEscalamiento ? 'Escalando...' : 'Escalar por inactividad'}
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -155,46 +162,57 @@ export default function MisPermisos() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {finalizados.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', background: c.surfaceCard, borderRadius: '12px', border: `1px dashed ${c.border}` }}>
-              <p style={{ fontSize: '12px', color: c.textMuted, margin: 0 }}>No tienes historial de pases autorizados o rechazados.</p>
+              <p style={{ fontSize: '12px', color: c.textMuted, margin: 0 }}>No tienes historial de pases concluidos.</p>
             </div>
           ) : (
             finalizados.map(p => {
-              const esAutorizado = ['autorizado', 'aprobado'].includes(p.estado_general);
+              const esAutorizado = ['autorizado', 'aprobado', 'completado_caseta'].includes(p.estado_general);
+              const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, motivoRechazo } = parsearDatosObservaciones(p.observaciones);
+              const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
+
               return (
-                <div key={p.id} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: modoOscuro ? '0 4px 15px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div key={p.id} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: modoOscuro ? '0 4px 15px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {esAutorizado && p.folio && !p.folio.startsWith('REQ-') && !p.folio.startsWith('CAS-') && (
+                          <span style={{ fontFamily: 'monospace', fontSize: '11.5px', fontWeight: '900', color: c.accent, background: c.accentSoft, padding: '2px 7px', borderRadius: '5px' }}>
+                            {p.folio}
+                          </span>
+                        )}
                         <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>{p.tipo_permiso}</span>
-                        <span style={{ fontSize: '10px', fontWeight: '800', color: esAutorizado ? c.accent : c.danger, background: esAutorizado ? c.accentSoft : c.dangerSoft, padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
-                          {esAutorizado ? 'AUTORIZADO' : 'RECHAZADO'}
+                        <span style={{ fontSize: '10px', fontWeight: '800', color: esAutorizado ? c.accent : c.danger, background: esAutorizado ? c.accentSoft : c.dangerSoft, padding: '2px 7px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                          {esAutorizado ? (p.pago || 'AUTORIZADO') : 'RECHAZADO'}
                         </span>
                       </div>
-                      <span style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>Fecha: {p.fecha_permiso}</span>
+                      <span style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>
+                        Fecha: {p.fecha_permiso}{p.fecha_fin && p.fecha_fin !== p.fecha_permiso ? ` al ${p.fecha_fin}` : ''} • {horarioSolicitado}
+                      </span>
                     </div>
-                    {p.asunto_motivo && p.asunto_motivo.includes('[') && (
+
+                    {categoria && (
                       <span style={{ background: c.accentSoft, color: c.accent, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '800' }}>
-                        {p.asunto_motivo.substring(p.asunto_motivo.indexOf('[') + 1, p.asunto_motivo.indexOf(']'))}
+                        {categoria}
                       </span>
                     )}
                   </div>
 
-                  <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.5' }}>
-                    {p.asunto_motivo && p.asunto_motivo.includes(']') ? p.asunto_motivo.substring(p.asunto_motivo.indexOf(']') + 1).trim() : p.asunto_motivo}
-                    {p.observaciones && <div style={{ fontSize: '12px', color: c.textMuted, marginTop: '4px', background: c.surface, padding: '6px 8px', borderRadius: '6px' }}>{p.observaciones}</div>}
+                  <div style={{ fontSize: '13px', color: c.text, lineHeight: '1.45' }}>
+                    {motivoLimpio}
                   </div>
 
-                  <div style={{ marginTop: '4px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                      {renderSelloArea('Jefatura', p.firma_1_estado)}
-                      {renderSelloArea('Gerencia', p.firma_2_estado)}
-                      {renderSelloArea('R. Humanos', p.firma_3_estado)}
+                  {(horaSalidaCaseta || horaEntradaCaseta) && (
+                    <div style={{ fontSize: '11.5px', fontWeight: '800', color: '#16a34a', background: 'rgba(22,163,74,0.08)', padding: '6px 10px', borderRadius: '7px', display: 'inline-flex', gap: '12px', width: 'fit-content' }}>
+                      {horaSalidaCaseta && <span>✓ Salida Caseta: {horaSalidaCaseta}</span>}
+                      {horaEntradaCaseta && <span>✓ Entrada Caseta: {horaEntradaCaseta}</span>}
                     </div>
-                  </div>
+                  )}
 
-                  <div style={{ marginTop: '4px', borderTop: `1px dashed ${c.border}`, paddingTop: '10px' }}>
-                    <span style={{ fontSize: '10.5px', color: c.textSubtle, fontWeight: '700' }}>REF: {p.folio}</span>
-                  </div>
+                  {!esAutorizado && motivoRechazo && (
+                    <div style={{ fontSize: '11.5px', fontWeight: '700', color: '#ef4444', background: 'rgba(239,68,68,0.08)', padding: '6px 10px', borderRadius: '7px' }}>
+                      Motivo de rechazo: {motivoRechazo}
+                    </div>
+                  )}
                 </div>
               );
             })

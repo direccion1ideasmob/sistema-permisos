@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { 
-  obtenerSolicitudesAprobacion, 
-  aprobarSolicitudPermiso, 
-  rechazarSolicitudPermiso, 
-  forzarSaltoFirmaRH 
+import {
+  obtenerSolicitudesAprobacion,
+  aprobarSolicitudPermiso,
+  rechazarSolicitudPermiso,
+  forzarSaltoFirmaRH
 } from '../services/permisosService';
 
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../aprobacionesStyles';
@@ -16,7 +16,7 @@ import { Inbox, Radar, Archive } from 'lucide-react';
 
 export default function Aprobaciones() {
   const { usuario } = useAuth();
-  const [tabActiva, setTabActiva] = useState('pendientes'); 
+  const [tabActiva, setTabActiva] = useState('pendientes');
   const [solicitudes, setSolicitudes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
@@ -27,18 +27,23 @@ export default function Aprobaciones() {
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);
 
+  const esRH = usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh' || usuario?.rol === 'superadmin';
+  const esGerente = usuario?.rol?.includes('gerente') && !esRH;
+  const esMandoArea = usuario?.rol === 'jefe_area' || usuario?.rol === 'encargado';
+
   const cargarSolicitudes = useCallback(async () => {
     if (!usuario?.id) return;
     setCargando(true);
     try {
-      const data = await obtenerSolicitudesAprobacion();
+      // Si es RH, solo descarga las solicitudes vivas ('en_firmas') porque su historial maestro vive en Control / Historial
+      const data = await obtenerSolicitudesAprobacion({ soloEnFirmas: esRH, usuarioId: usuario.id, rol: usuario.rol });
       setSolicitudes(data);
     } catch (err) {
       console.error("Error al cargar aprobaciones:", err);
     } finally {
       setCargando(false);
     }
-  }, [usuario?.id]);
+  }, [usuario?.id, usuario?.rol, esRH]);
 
   useEffect(() => {
     if (usuario?.id) cargarSolicitudes();
@@ -71,24 +76,20 @@ export default function Aprobaciones() {
   };
 
   const ejecutarForzarFirma = async (solicitud) => {
-    if (!window.confirm("⚠️ ATENCIÓN: Estás a punto de forzar el salto de una autoridad que no ha respondido.\n\nEl pase avanzará a la siguiente etapa. ¿Deseas continuar?")) return;
-    
+    if (!window.confirm("⚠️ ATENCIÓN: Estás a punto de saltar una firma pendiente que no ha respondido.\n\nEl pase avanzará a la siguiente etapa. ¿Deseas continuar?")) return;
+
     setProcesando(true);
     try {
       await forzarSaltoFirmaRH(solicitud);
-      alert("✅ Autoridad saltada exitosamente. El pase ha avanzado.");
+      alert("✅ Firma saltada exitosamente. El pase ha avanzado.");
       await cargarSolicitudes();
     } catch (error) {
       console.error("Error forzando salto:", error);
-      alert("Hubo un error al forzar la firma.");
+      alert("Hubo un error al saltar la firma.");
     } finally {
       setProcesando(false);
     }
   };
-
-  const esRH = usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh' || usuario?.rol === 'superadmin';
-  const esGerente = usuario?.rol?.includes('gerente') && !esRH;
-  const esMandoArea = usuario?.rol === 'jefe_area' || usuario?.rol === 'encargado';
 
   const solicitudesDelUsuario = solicitudes.filter(s => {
     if (esRH) return true;
@@ -98,12 +99,11 @@ export default function Aprobaciones() {
   });
 
   const solicitudesPendientes = solicitudesDelUsuario.filter(s => {
-    if (['rechazado', 'autorizado', 'aprobado'].includes(s.estado_general)) return false;
+    if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general)) return false;
 
     const firma1OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado);
     const firma2OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_2_estado);
 
-    // Si alguien (incluso Victoria en RH) es el firma_1_id directo y está pendiente, le aparece en Por Autorizar
     if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return true;
 
     if (esRH) return firma1OK && firma2OK && s.firma_3_estado === 'pendiente';
@@ -114,13 +114,13 @@ export default function Aprobaciones() {
 
   const solicitudesTransito = solicitudesDelUsuario.filter(s => {
     if (!esRH) return false;
-    if (['rechazado', 'autorizado', 'aprobado'].includes(s.estado_general)) return false;
+    if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general)) return false;
     if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return false;
     return s.firma_1_estado === 'pendiente' || s.firma_2_estado === 'pendiente';
   });
 
-  const solicitudesHistorial = solicitudesDelUsuario.filter(s => 
-    ['autorizado', 'rechazado', 'aprobado'].includes(s.estado_general)
+  const solicitudesHistorial = solicitudesDelUsuario.filter(s =>
+    ['autorizado', 'rechazado', 'aprobado', 'completado_caseta'].includes(s.estado_general)
   );
 
   const listadoActual = tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesTransito;
@@ -129,7 +129,7 @@ export default function Aprobaciones() {
     <div className="aprobaciones-container">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
 
-      {/* BARRA SEGMENTADA MINIMALISTA Y ENCUADRADA */}
+      {/* BARRA SEGMENTADA: RH SOLO VE BANDEJAS VIVAS (SU HISTORIAL ESTÁ EN CONTROL / HISTORIAL) */}
       <div className="tabs-aprobacion-bar">
         <button
           onClick={() => setTabActiva('pendientes')}
@@ -159,20 +159,22 @@ export default function Aprobaciones() {
           </button>
         )}
 
-        <button
-          onClick={() => setTabActiva('historial')}
-          className={`tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
-        >
-          <Archive size={15} />
-          <span>Historial</span>
-        </button>
+        {!esRH && (
+          <button
+            onClick={() => setTabActiva('historial')}
+            className={`tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
+          >
+            <Archive size={15} />
+            <span>Historial de mi Área</span>
+          </button>
+        )}
       </div>
 
       {cargando ? (
         <div style={{ textAlign: 'center', padding: '30px', color: c.textMuted, fontSize: '12px' }}>
           Cargando solicitudes...
         </div>
-      ) : tabActiva === 'historial' ? (
+      ) : (!esRH && tabActiva === 'historial') ? (
         <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} />
       ) : listadoActual.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '13px', background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px' }}>

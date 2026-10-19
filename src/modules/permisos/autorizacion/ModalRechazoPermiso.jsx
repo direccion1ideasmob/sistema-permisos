@@ -40,7 +40,7 @@ export default function ModalRechazoPermiso({
               RECHAZAR SOLICITUD
             </div>
             <div style={{ fontSize: '11px', color: c.textMuted }}>
-              Folio: {solicitud.folio} • {solicitud.usuarios?.nombre_completo}
+              {solicitud.tipo_permiso?.toUpperCase()} • {solicitud.usuarios?.nombre_completo}
             </div>
           </div>
         </div>

@@ -140,7 +140,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         esRetardoUrgente
       });
 
-      alert(`✅ Solicitud enviada correctamente.\n\nFolio Temporal: ${folioTemporal}\n(El folio oficial se asignará tras la aprobación final)`);
+      alert(`✅ Solicitud enviada correctamente a revisión.\n(Tu folio oficial se asignará al concluir las firmas)`);
       
       setTipoPermiso('');
       setNaturaleza('');
