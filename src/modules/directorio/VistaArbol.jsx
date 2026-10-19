@@ -182,7 +182,7 @@ export default function VistaArbol({
     : [];
 
   const posiblesJefesEnDepto = userEditando
-    ? usuarios.filter(u => u.departamento_id === userEditando.departamento_id && u.activo && u.id !== userEditando.id && ![empleado, caseta].includes(u.rol))
+    ? usuarios.filter(u => u.departamento_id === userEditando.departamento_id && u.activo && u.id !== userEditando.id && !["empleado", "caseta"].includes(u.rol))
     : [];
 
   return (

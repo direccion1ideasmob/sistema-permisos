@@ -13,36 +13,36 @@ const limpiarTexto = (txt) => {
 
 // AUXILIAR: Sincronizar vínculos de mando cuando cambia el rol de un colaborador
 const sincronizarVinculosPorRol = async ({ colaboradorId, rolNuevo, departamentoId, areaFinal }) => {
-  const rol = (rolNuevo || empleado).toLowerCase();
+  const rol = (rolNuevo || "empleado").toLowerCase();
 
   // Caso A: Si ahora es empleado o caseta, NO puede tener subordinados ni ser jefe_id de un departamento
-  if (rol === empleado || rol === caseta) {
+  if (rol === "empleado" || rol === "caseta") {
     let nuevoJefeParaSubordinados = null;
     if (departamentoId) {
-      const { data: depto } = await supabase.from(departamentos).select(jefe_id).eq(id, departamentoId).maybeSingle();
+      const { data: depto } = await supabase.from("departamentos").select("jefe_id").eq("id", departamentoId).maybeSingle();
       if (depto?.jefe_id && depto.jefe_id !== colaboradorId) {
         nuevoJefeParaSubordinados = depto.jefe_id;
       }
     }
     await Promise.all([
-      supabase.from(usuarios).update({ reporta_a_id: nuevoJefeParaSubordinados }).eq(reporta_a_id, colaboradorId),
-      supabase.from(departamentos).update({ jefe_id: null }).eq(jefe_id, colaboradorId)
+      supabase.from("usuarios").update({ reporta_a_id: nuevoJefeParaSubordinados }).eq("reporta_a_id", colaboradorId),
+      supabase.from("departamentos").update({ jefe_id: null }).eq("jefe_id", colaboradorId)
     ]);
   }
 
   // Caso B: Si es encargado (Supervisor de Subárea), los empleados base de su misma subárea le reportan a él, y él reporta al jefe_id del depto
-  if (rol === encargado && departamentoId && areaFinal) {
-    const { data: depto } = await supabase.from(departamentos).select(jefe_id).eq(id, departamentoId).maybeSingle();
+  if (rol === "encargado" && departamentoId && areaFinal) {
+    const { data: depto } = await supabase.from("departamentos").select("jefe_id").eq("id", departamentoId).maybeSingle();
     if (depto?.jefe_id && depto.jefe_id !== colaboradorId) {
-      await supabase.from(usuarios).update({ reporta_a_id: depto.jefe_id }).eq(id, colaboradorId);
+      await supabase.from("usuarios").update({ reporta_a_id: depto.jefe_id }).eq("id", colaboradorId);
     }
     await supabase
-      .from(usuarios)
+      .from("usuarios")
       .update({ reporta_a_id: colaboradorId })
-      .eq(departamento_id, departamentoId)
-      .ilike(area, areaFinal)
-      .eq(rol, empleado)
-      .neq(id, colaboradorId);
+      .eq("departamento_id", departamentoId)
+      .ilike("area", areaFinal)
+      .eq("rol", "empleado")
+      .neq("id", colaboradorId);
   }
 };
 
