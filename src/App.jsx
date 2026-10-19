@@ -51,7 +51,7 @@ export default function App() {
               <Route 
                 path="/aprobaciones" 
                 element={
-                  <RutaRol rolesPermitidos={['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin']}>
+                  <RutaRol rolesPermitidos={['encargado', 'jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin']}>
                     <Aprobaciones />
                   </RutaRol>
                 } 
@@ -60,7 +60,7 @@ export default function App() {
               <Route 
                 path="/control-historial" 
                 element={
-                  <RutaRol rolesPermitidos={['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin']}>
+                  <RutaRol rolesPermitidos={['encargado', 'jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin']}>
                     <ControlHistorial />
                   </RutaRol>
                 } 

@@ -96,7 +96,7 @@ export default function Sidebar({
       await supabase
         .from('suscripciones_push')
         .delete()
-        .eq('subscription->>endpoint', endpointActual);
+        .eq('endpoint', endpointActual);
 
      // 2. Inserción limpia
       const { error } = await supabase
@@ -120,7 +120,7 @@ export default function Sidebar({
   const cerrarMenuMovil = () => { if (isMobile) setMenuAbierto(false); };
 
   const rol = usuarioLogueado?.rol || 'empleado';
-  const puedeAprobar = ['jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin'].includes(rol);
+  const puedeAprobar = ['encargado', 'jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin'].includes(rol);
   const esNominas = ['rh_nominas', 'gerente_rh', 'superadmin'].includes(rol);
   const esCaseta = rol === 'caseta';
   const miFoto = usuarioLogueado?.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(usuarioLogueado?.nombre_completo || 'Usuario')}&background=16a34a&color=fff&bold=true&size=200`;
