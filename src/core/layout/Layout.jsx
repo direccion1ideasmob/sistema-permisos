@@ -166,7 +166,34 @@ export default function Layout() {
             )}
 
             <div style={s.outletLayer}>
-              <Outlet />
+              <div style={{ flex: 1 }}>
+                <Outlet />
+              </div>
+
+              <footer style={{
+                marginTop: "36px",
+                paddingTop: "14px",
+                borderTop: `1px solid ${tema.border}`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "10px",
+                fontSize: "11px",
+                fontWeight: "600",
+                color: tema.textSecondary,
+                letterSpacing: "0.02em",
+                opacity: 0.9,
+                userSelect: "none"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px rgba(34,197,94,0.6)" }} />
+                  <span>RH Control & Management System v1.0 &nbsp;•&nbsp; © 2026</span>
+                </div>
+                <div>
+                  Powered by <strong style={{ color: tema.textPrimary, fontWeight: "800" }}>Ing. Alejandro Valenzo</strong>
+                </div>
+              </footer>
             </div>
 
           </div>
@@ -229,6 +256,6 @@ const s = {
     transition: 'all 0.3s ease'
   },
   outletLayer: {
-    position: 'relative', zIndex: 1, width: '100%'
+    position: 'relative', zIndex: 1, width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
   }
 };
