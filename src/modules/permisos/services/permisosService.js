@@ -64,7 +64,7 @@ export const obtenerSolicitudesAprobacion = async () => {
     .select(`
       *,
       usuarios:usuario_id (
-        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, firma_url, departamento_id, reporta_a_id, sedes:sede_id (nombre),
+        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, firma_url, departamento_id, reporta_a_id, sedes:sede_id (nombre), supervisor:reporta_a_id (id, nombre_completo, rol, puesto, firma_url),
         departamentos:departamento_id (id, nombre, clasificacion, jefe_id)
       ),
       firmante1:firma_1_id (id, nombre_completo, rol, puesto, firma_url),
@@ -510,7 +510,8 @@ export const obtenerHistorialGeneralPermisos = async ({ deptoFiltro = 'todos', t
       usuarios:usuario_id (
         id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, firma_url, departamento_id,
         departamentos:departamento_id (id, nombre, clasificacion),
-        sedes:sede_id (nombre)
+        sedes:sede_id (nombre),
+        supervisor:reporta_a_id (id, nombre_completo, rol, puesto, firma_url)
       ),
       firmante1:firma_1_id (id, nombre_completo, rol, puesto, firma_url),
       firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),

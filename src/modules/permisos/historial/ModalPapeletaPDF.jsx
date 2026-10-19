@@ -1,9 +1,11 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { X, Printer } from 'lucide-react';
+import { supabase } from '../../../core/api/supabaseClient';
 import { parsearDatosObservaciones, limpiarMotivo } from './TablaHistorial';
 
 export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
   const contenedorRef = useRef(null);
+  const [mapaFirmasExtra, setMapaFirmasExtra] = useState({});
 
   let listaPermisos = [];
   if (Array.isArray(permiso)) {
@@ -13,6 +15,40 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
   } else if (permiso) {
     listaPermisos = [permiso];
   }
+
+  // Cargar firma_url de supervisores de subárea por nombre o id si no vienen embebidos
+  useEffect(() => {
+    const cargarFirmasSubarea = async () => {
+      const nombresBuscar = new Set();
+      listaPermisos.forEach(p => {
+        const { supervisorSubarea } = parsearDatosObservaciones(p.observaciones);
+        if (supervisorSubarea && !p.usuarios?.supervisor?.firma_url) {
+          nombresBuscar.add(supervisorSubarea.trim());
+        }
+      });
+
+      if (nombresBuscar.size === 0) return;
+
+      const { data } = await supabase
+        .from('usuarios')
+        .select('nombre_completo, firma_url')
+        .in('nombre_completo', Array.from(nombresBuscar));
+
+      if (data && data.length > 0) {
+        const nuevoMapa = {};
+        data.forEach(u => {
+          if (u.nombre_completo && u.firma_url) {
+            nuevoMapa[u.nombre_completo.trim().toUpperCase()] = u.firma_url;
+          }
+        });
+        setMapaFirmasExtra(nuevoMapa);
+      }
+    };
+
+    if (listaPermisos.length > 0) {
+      cargarFirmasSubarea();
+    }
+  }, [permiso, permisos]);
 
   if (listaPermisos.length === 0) return null;
 
@@ -145,6 +181,10 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
               const firmanteGerente = p.firmante2 || p.gerente;
               const firmanteRH = p.firmante3 || p.rh;
 
+              const firmaUrlSubarea =
+                p.usuarios?.supervisor?.firma_url ||
+                (supervisorSubarea ? mapaFirmasExtra[supervisorSubarea.trim().toUpperCase()] : null);
+
               return (
                 <div
                   key={p.id || index}
@@ -255,7 +295,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                   {/* FIRMAS REALES */}
                   <div style={{ display: 'flex', gap: '8px', paddingBottom: '2px' }}>
                     {renderFirmaTradicional('Solicitante', p.usuarios?.nombre_completo, p.usuarios?.firma_url, 'autorizado', true)}
-                    {supervisorSubarea && renderFirmaTradicional('Supervisor Subárea', supervisorSubarea, null, 'autorizado')}
+                    {supervisorSubarea && renderFirmaTradicional('Supervisor Subárea', supervisorSubarea, firmaUrlSubarea, 'autorizado')}
                     {!debeOcultarFirma(p.firma_1_estado) && firmanteJefe?.nombre_completo && (
                       renderFirmaTradicional('Jefe de Área', firmanteJefe.nombre_completo, firmanteJefe.firma_url, p.firma_1_estado)
                     )}
