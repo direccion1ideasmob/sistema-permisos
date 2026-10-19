@@ -74,9 +74,10 @@ export default function VistaArbol({
   };
 
   const secciones = [
-    { key: 'produccion', label: 'PLANTA & PRODUCCIÓN', icon: Factory, match: 'prod', rolGerenteDiv: 'gerente_produccion' },
-    { key: 'administrativo', label: 'CORPORATIVO & ADMINISTRACIÓN', icon: Building2, match: 'admin', rolGerenteDiv: 'gerente_admin' },
-    { key: 'obra', label: 'OPERACIONES EN OBRA', icon: HardHat, match: 'obra', rolGerenteDiv: null }
+    { key: 'produccion', label: 'DIVISIÓN PLANTA & PRODUCCIÓN', icon: Factory, match: 'prod', rolGerenteDiv: 'gerente_produccion' },
+    { key: 'administrativo', label: 'DIVISIÓN CORPORATIVO & ADMINISTRACIÓN', icon: Building2, match: 'admin', rolGerenteDiv: 'gerente_admin' },
+    { key: 'rh', label: 'DIVISIÓN CAPITAL HUMANO & SEGURIDAD', icon: ShieldCheck, match: 'rh', rolGerenteDiv: 'gerente_rh' },
+    { key: 'obra', label: 'DIVISIÓN OPERACIONES EN OBRA', icon: HardHat, match: 'obra', rolGerenteDiv: null }
   ];
 
   const seccionesVisibles = filtro === 'ALL' ? secciones : secciones.filter(s => s.key === filtro);
@@ -289,6 +290,7 @@ export default function VistaArbol({
           <option value="ALL">Todas las Divisiones</option>
           <option value="produccion">Planta & Producción</option>
           <option value="administrativo">Corporativo & Administración</option>
+          <option value="rh">Capital Humano & Seguridad (RH)</option>
           <option value="obra">Operaciones en Obra</option>
         </select>
       </div>
@@ -360,7 +362,7 @@ export default function VistaArbol({
                   // 1) Gerente propio del depto (ej. José Coca en RH)
                   // 2) O el Jefe General del Departamento (jefe_area cuya área es el nombre del Depto, ej. René Morales en METAL)
                   const cabezaDepto = personalDepto.filter(u => {
-                    if (['superadmin', 'gerente_rh'].includes(u.rol)) return true;
+                    if (['superadmin'].includes(u.rol)) return true;
                     if (haySubareasEspecificas && u.rol === 'jefe_area' && normalizar(u.area || depto.nombre) === nombreDeptoNorm) return true;
                     return false;
                   });
@@ -419,7 +421,7 @@ export default function VistaArbol({
                           <form onSubmit={guardarDepto} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <input type="text" value={nombreEdit} onChange={e => setNombreEdit(e.target.value.toUpperCase())} placeholder="Nombre del depto" autoFocus style={{ width: '100%', height: '34px', padding: '0 8px', borderRadius: '4px', border: `1px solid ${c.popoverBorder}`, background: c.inputBg, color: c.text, fontSize: '12px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }} />
                             <div style={{ display: 'flex', gap: '4px' }}>
-                              {[ { key: 'produccion', label: 'Producción' }, { key: 'administrativo', label: 'Admón' }, { key: 'obra', label: 'Obra' } ].map(op => (
+                              {[ { key: 'produccion', label: 'Planta' }, { key: 'administrativo', label: 'Admón' }, { key: 'rh', label: 'RH/Seg' }, { key: 'obra', label: 'Obra' } ].map(op => (
                                 <button key={op.key} type="button" onClick={() => setClasifEdit(op.key)} style={{ flex: 1, padding: '6px 2px', borderRadius: '4px', border: `1px solid ${clasifEdit === op.key ? c.accent : c.popoverBorder}`, background: clasifEdit === op.key ? c.accentSoft : 'transparent', color: clasifEdit === op.key ? c.accent : c.subText, fontSize: '10.5px', fontWeight: '800', cursor: 'pointer' }}>
                                   {op.label}
                                 </button>

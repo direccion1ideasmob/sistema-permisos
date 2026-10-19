@@ -294,7 +294,7 @@ export const crearNuevaSolicitudPermiso = async ({
   }
 
   // === PASO 2: DETERMINAR FIRMA 2 (GERENCIA) Y FIRMA 3 (RH) ===
-  const esDeptoRH = depto.nombre.toUpperCase().includes('RECURSOS HUMANOS') || depto.nombre.toUpperCase() === 'RH';
+  const esDeptoRH = (depto.clasificacion || '').toLowerCase().includes('rh') || depto.nombre.toUpperCase().includes('RECURSOS HUMANOS') || depto.nombre.toUpperCase() === 'RH';
   const clasificacionDepto = (depto.clasificacion || tipoPersonal || 'produccion').toLowerCase();
   const rolGerenteFallback = clasificacionDepto.includes('admin') ? 'gerente_admin' : 'gerente_produccion';
 
