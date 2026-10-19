@@ -24,7 +24,7 @@ export default function Sidebar({
 }) {
   const { cerrarSesion } = useAuth();
   const location = useLocation();
-  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState(usuarioLogueado?.nombre_completo || "");
   const [loading, setLoading] = useState(false);
@@ -35,7 +35,6 @@ export default function Sidebar({
     if (!archivo || !usuarioLogueado?.id) return;
     
     setLoading(true);
-    setShowPhotoOptions(false);
     
     try {
       const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
@@ -54,6 +53,7 @@ export default function Sidebar({
       const sesionActual = JSON.parse(localStorage.getItem('permisos_sesion') || '{}');
       sesionActual.foto_url = urlFinal;
       localStorage.setItem('permisos_sesion', JSON.stringify(sesionActual));
+      setShowPhotoModal(false);
     } catch (err) {
       alert("Error al subir foto: " + err.message);
     } finally {
@@ -117,7 +117,6 @@ export default function Sidebar({
   };
 
   const cerrarMenuMovil = () => {
-    setShowPhotoOptions(false);
     if (isMobile) setMenuAbierto(false);
   };
 
@@ -125,215 +124,258 @@ export default function Sidebar({
   const puedeAprobar = ['encargado', 'jefe_area', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'rh_nominas', 'superadmin'].includes(rol);
   const esNominas = ['rh_nominas', 'gerente_rh', 'superadmin'].includes(rol);
   const esCaseta = rol === 'caseta';
-  const miFoto = usuarioLogueado?.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(usuarioLogueado?.nombre_completo || 'Usuario')}&background=16a34a&color=fff&bold=true&size=200`;
+  const miFoto = usuarioLogueado?.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(usuarioLogueado?.nombre_completo || 'Usuario')}&background=16a34a&color=fff&bold=true&size=400`;
 
   const puedeEditarNombre = ['superadmin', 'gerente_rh', 'rh_nominas'].includes(rol);
 
   return (
-    <aside style={{
-      ...s.sidebar,
-      width: isMobile ? '72vw' : '260px',
-      maxWidth: isMobile ? '280px' : '260px',
-      padding: isMobile ? '16px 12px' : '20px 16px',
-      backgroundColor: tema.sidebarBg,
-      borderRight: `1.5px solid ${tema.border}`,
-      position: isMobile ? 'fixed' : 'relative',
-      transform: isMobile ? (menuAbierto ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-      marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-260px'),
-      boxShadow: modoOscuro ? 'none' : '4px 0 25px rgba(0,0,0,0.05)'
-    }}>
+    <>
+      <aside style={{
+        ...s.sidebar,
+        width: isMobile ? '72vw' : '260px',
+        maxWidth: isMobile ? '280px' : '260px',
+        padding: isMobile ? '16px 12px' : '20px 16px',
+        backgroundColor: tema.sidebarBg,
+        borderRight: `1.5px solid ${tema.border}`,
+        position: isMobile ? 'fixed' : 'relative',
+        transform: isMobile ? (menuAbierto ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+        marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-260px'),
+        boxShadow: modoOscuro ? 'none' : '4px 0 25px rgba(0,0,0,0.05)'
+      }}>
 
-      {/* 1. MARCA DE AGUA EN LA BARRA */}
-      <div style={s.sidebarWatermarkContainer}>
-        <img 
-          src="/LogoVerde-removebg-preview.png" 
-          alt="Marca de agua lateral" 
-          style={{
-            ...s.sidebarWatermarkImg,
-            opacity: modoOscuro ? 0.26 : 0.32
-          }} 
-        />
-      </div>
-
-      {/* 2. CABECERA CON BOTONES GLOBALES */}
-      <div style={s.brandHeader}>
-        <div style={s.headerActions}>
-          
-          {/* Botón Tema Oscuro */}
-          <button 
-            onClick={() => setModoOscuro(!modoOscuro)} 
-            style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
-            title={modoOscuro ? "Modo Claro" : "Modo Oscuro"}
-          >
-            {modoOscuro ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
-
-          {/* Botón Global de Notificaciones (1 CLIC) */}
-          <button 
-            onClick={activarAlertas} 
-            disabled={suscribiendo}
-            style={{ 
-              ...s.btnIcon, 
-              border: `1.5px solid ${tema.border}`, 
-              color: suscribiendo ? '#16a34a' : tema.textSecondary,
-              cursor: suscribiendo ? 'wait' : 'pointer'
-            }}
-            title="Activar Notificaciones Push en este dispositivo"
-          >
-            <Bell size={14} className={suscribiendo ? "animate-pulse" : ""} />
-          </button>
-
-          {/* Botón Cerrar Menú Móvil */}
-          <button 
-            onClick={() => setMenuAbierto(false)} 
-            style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
-            title="Contraer menú"
-            aria-label="Contraer menú"
-          >
-            <X size={15} />
-          </button>
-        </div>
-      </div>
-
-      {/* 3. PERFIL (zIndex superior para que el menú de foto nunca se traslape con los botones de abajo) */}
-      <div style={{ ...s.profileBox, border: `1.5px solid ${tema.border}`, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
-        <div style={s.avatarWrapper} onClick={() => setShowPhotoOptions(!showPhotoOptions)}>
-          <img src={miFoto} alt="Perfil" style={s.avatarImg} />
-          <div style={s.avatarEditBadge}><Camera size={11} color="#fff" /></div>
+        {/* 1. MARCA DE AGUA EN LA BARRA */}
+        <div style={s.sidebarWatermarkContainer}>
+          <img 
+            src="/LogoVerde-removebg-preview.png" 
+            alt="Marca de agua lateral" 
+            style={{
+              ...s.sidebarWatermarkImg,
+              opacity: modoOscuro ? 0.26 : 0.32
+            }} 
+          />
         </div>
 
-        {showPhotoOptions && (
-          <div style={{
-            ...s.popover,
-            backgroundColor: modoOscuro ? '#18181b' : '#ffffff',
-            border: `1.5px solid ${tema.border}`
-          }}>
-            <label style={{ ...s.popBtn, color: tema.textPrimary }}>
-              <Camera size={13} color="#16a34a" /> Tomar foto 
-              <input type="file" accept="image/*" capture="environment" hidden onChange={handleUpdateFoto} />
-            </label>
-            <label style={{ ...s.popBtn, color: tema.textPrimary }}>
-              <ImageIcon size={13} color="#0ea5e9" /> Subir archivo 
-              <input type="file" accept="image/*" hidden onChange={handleUpdateFoto} />
-            </label>
-            <button onClick={() => setShowPhotoOptions(false)} style={s.popBtnCancel}>Cancelar</button>
-          </div>
-        )}
-
-        <div style={s.profileDetails}>
-          {editandoNombre ? (
-            <input 
-              style={{ ...s.inputEdit, backgroundColor: modoOscuro ? '#000' : '#fff', color: tema.textPrimary, border: `1.5px solid ${tema.border}` }} 
-              value={nuevoNombre} 
-              onChange={e => setNuevoNombre(e.target.value)} 
-              autoFocus 
-              onBlur={guardarNombre} 
-              onKeyDown={(e) => e.key === 'Enter' && guardarNombre()} 
-            />
-          ) : (
-            <span 
-              style={{ 
-                ...s.userName, 
-                color: tema.textPrimary, 
-                cursor: puedeEditarNombre ? 'pointer' : 'default' 
-              }} 
-              onClick={() => puedeEditarNombre && setEditandoNombre(true)}
-              title={puedeEditarNombre ? "Clic para editar nombre" : ""}
-            >
-              {usuarioLogueado?.nombre_completo || 'Usuario'}
-            </span>
-          )}
-          
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ ...s.userRole, color: tema.textSecondary }}>
-              {rol.replace(/_/g, ' ')}
-            </span>
+        {/* 2. CABECERA CON BOTONES GLOBALES */}
+        <div style={s.brandHeader}>
+          <div style={s.headerActions}>
             
+            {/* Botón Tema Oscuro */}
             <button 
-              onClick={onOpenSeguridad}
-              style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
-              title="Seguridad y PIN"
+              onClick={() => setModoOscuro(!modoOscuro)} 
+              style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
+              title={modoOscuro ? "Modo Claro" : "Modo Oscuro"}
             >
-              <Settings size={14} />
+              {modoOscuro ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+
+            {/* Botón Global de Notificaciones (1 CLIC) */}
+            <button 
+              onClick={activarAlertas} 
+              disabled={suscribiendo}
+              style={{ 
+                ...s.btnIcon, 
+                border: `1.5px solid ${tema.border}`, 
+                color: suscribiendo ? '#16a34a' : tema.textSecondary,
+                cursor: suscribiendo ? 'wait' : 'pointer'
+              }}
+              title="Activar Notificaciones Push en este dispositivo"
+            >
+              <Bell size={14} className={suscribiendo ? "animate-pulse" : ""} />
+            </button>
+
+            {/* Botón Cerrar Menú Móvil */}
+            <button 
+              onClick={() => setMenuAbierto(false)} 
+              style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
+              title="Contraer menú"
+              aria-label="Contraer menú"
+            >
+              <X size={15} />
             </button>
           </div>
         </div>
-      </div>
 
-      {/* 4. NAVEGACIÓN */}
-      <nav style={s.nav}>
-        {!esCaseta && (
-          <Link 
-            to="/solicitar" 
-            onClick={cerrarMenuMovil} 
-            style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+        {/* 3. PERFIL */}
+        <div style={{ ...s.profileBox, border: `1.5px solid ${tema.border}`, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
+          <div
+            style={s.avatarWrapper}
+            onClick={() => setShowPhotoModal(true)}
+            title="Ver foto de perfil"
           >
-            <FilePlus size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-            <span style={s.navText}>Solicitar Pase</span>
-          </Link>
-        )}
+            <img src={miFoto} alt="Perfil" style={s.avatarImg} />
+            <div style={s.avatarEditBadge}><Camera size={11} color="#fff" /></div>
+          </div>
 
-        {!esCaseta && (
-          <Link 
-            to="/mis-permisos" 
-            onClick={cerrarMenuMovil} 
-            style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-          >
-            <ClipboardList size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-            <span style={s.navText}>Mis Permisos</span>
-          </Link>
-        )}
+          <div style={s.profileDetails}>
+            {editandoNombre ? (
+              <input 
+                style={{ ...s.inputEdit, backgroundColor: modoOscuro ? '#000' : '#fff', color: tema.textPrimary, border: `1.5px solid ${tema.border}` }} 
+                value={nuevoNombre} 
+                onChange={e => setNuevoNombre(e.target.value)} 
+                autoFocus 
+                onBlur={guardarNombre} 
+                onKeyDown={(e) => e.key === 'Enter' && guardarNombre()} 
+              />
+            ) : (
+              <span 
+                style={{ 
+                  ...s.userName, 
+                  color: tema.textPrimary, 
+                  cursor: puedeEditarNombre ? 'pointer' : 'default' 
+                }} 
+                onClick={() => puedeEditarNombre && setEditandoNombre(true)}
+                title={puedeEditarNombre ? "Clic para editar nombre" : ""}
+              >
+                {usuarioLogueado?.nombre_completo || 'Usuario'}
+              </span>
+            )}
+            
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ ...s.userRole, color: tema.textSecondary }}>
+                {rol.replace(/_/g, ' ')}
+              </span>
+              
+              <button 
+                onClick={onOpenSeguridad}
+                style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
+                title="Seguridad y PIN"
+              >
+                <Settings size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
 
-        {puedeAprobar && (
-          <Link 
-            to="/aprobaciones" 
-            onClick={cerrarMenuMovil} 
-            style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-          >
-            <PenLine size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-            <span style={s.navText}>Aprobaciones</span>
-          </Link>
-        )}
-
-        {esNominas && (
-          <>
+        {/* 4. NAVEGACIÓN */}
+        <nav style={s.nav}>
+          {!esCaseta && (
             <Link 
-              to="/control-historial" 
+              to="/solicitar" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <FileBarChart size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-              <span style={s.navText}>Control / Historial</span>
+              <FilePlus size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <span style={s.navText}>Solicitar Pase</span>
             </Link>
+          )}
+
+          {!esCaseta && (
             <Link 
-              to="/directorio" 
+              to="/mis-permisos" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <Users size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-              <span style={s.navText}>Directorio RH</span>
+              <ClipboardList size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <span style={s.navText}>Mis Permisos</span>
             </Link>
-          </>
-        )}
+          )}
 
-        {esCaseta && (
-          <Link 
-            to="/caseta" 
-            onClick={cerrarMenuMovil} 
-            style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+          {puedeAprobar && (
+            <Link 
+              to="/aprobaciones" 
+              onClick={cerrarMenuMovil} 
+              style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+            >
+              <PenLine size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <span style={s.navText}>Aprobaciones</span>
+            </Link>
+          )}
+
+          {esNominas && (
+            <>
+              <Link 
+                to="/control-historial" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <FileBarChart size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Control / Historial</span>
+              </Link>
+              <Link 
+                to="/directorio" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <Users size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Directorio RH</span>
+              </Link>
+            </>
+          )}
+
+          {esCaseta && (
+            <Link 
+              to="/caseta" 
+              onClick={cerrarMenuMovil} 
+              style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+            >
+              <ShieldCheck size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <span style={s.navText}>Control Caseta</span>
+            </Link>
+          )}
+
+          <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
+            <LogOut size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+            <span style={s.navText}>Cerrar Sesión</span>
+          </button>
+        </nav>
+
+      </aside>
+
+      {/* VISOR MODAL DE FOTO DE PERFIL EN GRANDE */}
+      {showPhotoModal && (
+        <div style={s.modalOverlay} onClick={() => setShowPhotoModal(false)}>
+          <div
+            style={{
+              ...s.modalCard,
+              backgroundColor: modoOscuro ? '#18181b' : '#ffffff',
+              border: `1.5px solid ${tema.border}`
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <ShieldCheck size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-            <span style={s.navText}>Control Caseta</span>
-          </Link>
-        )}
+            <div style={s.modalHeader}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: tema.textPrimary }}>
+                  {usuarioLogueado?.nombre_completo || 'Colaborador'}
+                </span>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: tema.textSecondary, textTransform: 'uppercase' }}>
+                  {usuarioLogueado?.puesto || rol.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowPhotoModal(false)}
+                style={{ ...s.btnCloseModal, border: `1px solid ${tema.border}`, color: tema.textSecondary }}
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-        <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
-          <LogOut size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-          <span style={s.navText}>Cerrar Sesión</span>
-        </button>
-      </nav>
+            <div style={s.photoPreviewWrap}>
+              <img src={miFoto} alt="Foto de perfil" style={s.photoPreviewLarge} />
+            </div>
 
-    </aside>
+            {loading ? (
+              <div style={{ textAlign: 'center', fontSize: '12px', fontWeight: '700', color: '#16a34a', padding: '8px' }}>
+                Actualizando fotografía...
+              </div>
+            ) : (
+              <div style={s.modalActions}>
+                <label style={{ ...s.actionBtnPrimary, backgroundColor: '#16a34a', color: '#fff' }}>
+                  <Camera size={15} />
+                  <span>Tomar foto</span>
+                  <input type="file" accept="image/*" capture="environment" hidden onChange={handleUpdateFoto} />
+                </label>
+
+                <label style={{ ...s.actionBtnSecondary, border: `1.5px solid ${tema.border}`, color: tema.textPrimary }}>
+                  <ImageIcon size={15} />
+                  <span>Elegir imagen</span>
+                  <input type="file" accept="image/*" hidden onChange={handleUpdateFoto} />
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -370,11 +412,11 @@ const s = {
     borderRadius: '7px', background: 'transparent', cursor: 'pointer'
   },
   profileBox: {
-    position: 'relative', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px',
+    position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '10px',
     padding: '10px 8px', borderRadius: '10px', marginBottom: '16px'
   },
   avatarWrapper: {
-    width: '38px', height: '38px', borderRadius: '50%', overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0
+    width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0
   },
   avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
   avatarEditBadge: {
@@ -385,12 +427,6 @@ const s = {
   userName: { fontSize: '12.5px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   inputEdit: { fontSize: '11px', padding: '3px 5px', borderRadius: '5px', outline: 'none' },
   userRole: { fontSize: '10.5px', textTransform: 'capitalize', marginTop: '1px' },
-  popover: { 
-    position: 'absolute', top: '58px', left: '6px', borderRadius: '10px', padding: '6px', 
-    display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '0 14px 32px rgba(0,0,0,0.35)', zIndex: 999, width: '165px' 
-  },
-  popBtn: { padding: '8px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '7px' },
-  popBtnCancel: { padding: '6px', color: '#ef4444', fontSize: '11.5px', fontWeight: '700', border: 'none', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', cursor: 'pointer', textAlign: 'center', marginTop: '2px' },
   nav: { 
     position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' 
   },
@@ -409,5 +445,38 @@ const s = {
     marginTop: 'auto', display: 'flex', alignItems : 'center', justifyContent: 'center',
     gap: '6px', padding: '10px', borderRadius: '8px', border: 'none',
     backgroundColor: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+  },
+  modalOverlay: {
+    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)',
+    zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+  },
+  modalCard: {
+    width: '100%', maxWidth: '320px', borderRadius: '18px', padding: '18px',
+    display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
+  },
+  modalHeader: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px'
+  },
+  btnCloseModal: {
+    width: '30px', height: '30px', borderRadius: '50%', background: 'transparent',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0
+  },
+  photoPreviewWrap: {
+    width: '220px', height: '220px', margin: '0 auto', borderRadius: '50%', overflow: 'hidden',
+    border: '3px solid #16a34a', boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+  },
+  photoPreviewLarge: {
+    width: '100%', height: '100%', objectFit: 'cover'
+  },
+  modalActions: {
+    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px'
+  },
+  actionBtnPrimary: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+    padding: '10px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer'
+  },
+  actionBtnSecondary: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+    padding: '10px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', background: 'transparent'
   }
 };
