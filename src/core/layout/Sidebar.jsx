@@ -8,7 +8,7 @@ import { registrarSuscripcionPush } from '../notificaciones/notificacionesServic
 import { 
   ClipboardList, PenLine, FileBarChart, Users, ShieldCheck, 
   LogOut, X, Camera, Image as ImageIcon, Sun, Moon,
-  Settings, FilePlus, Bell
+  Settings, FilePlus, Bell, Clock, DoorOpen
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -303,14 +303,32 @@ export default function Sidebar({
           )}
 
           {esCaseta && (
-            <Link 
-              to="/caseta" 
-              onClick={cerrarMenuMovil} 
-              style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-            >
-              <ShieldCheck size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-              <span style={s.navText}>Control Caseta</span>
-            </Link>
+            <>
+              <Link 
+                to="/caseta" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <DoorOpen size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Pases de Puerta</span>
+              </Link>
+              <Link 
+                to="/caseta/asistencia" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <ClipboardList size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Pase de Lista</span>
+              </Link>
+              <Link 
+                to="/caseta/retardo" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/caseta/retardo' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <Clock size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Apoyo Retardo</span>
+              </Link>
+            </>
           )}
 
           <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
