@@ -67,7 +67,7 @@ export default function App() {
               />
 
               <Route 
-                path="/caseta" 
+                path="/caseta/*" 
                 element={
                   <RutaRol rolesPermitidos={['caseta', 'gerente_rh', 'rh_nominas', 'superadmin']}>
                     <Caseta />
