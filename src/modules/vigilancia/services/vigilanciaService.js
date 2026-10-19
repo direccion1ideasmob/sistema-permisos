@@ -309,7 +309,7 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
       fecha_permiso: fechaHoy,
       tipo_permiso: 'retardo',
       pago: 'Pendiente de dictamen',
-      asunto_motivo: `[APOYO CASETA] Solicitud de retardo generada en puerta a las ${horaActual} hrs.`,
+      asunto_motivo: `[APOYO CASETA] Pase de retardo tramitado con apoyo de caseta de vigilancia.`,
       total_horas: 1,
       observaciones: `🕒 Llegada en puerta: ${horaActual} hrs | [ENTRADA CASETA: ${horaActual} hrs]`,
       firma_empleado: true,

@@ -16,7 +16,6 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
     listaPermisos = [permiso];
   }
 
-  // Cargar firma_url de supervisores de subárea por nombre o id si no vienen embebidos
   useEffect(() => {
     const cargarFirmasSubarea = async () => {
       const nombresBuscar = new Set();
@@ -169,13 +168,20 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
         <div style={{ padding: '15px', overflow: 'auto', background: '#f1f5f9' }}>
           <div ref={contenedorRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {listaPermisos.map((p, index) => {
+              const tipo = (p.tipo_permiso || '').toLowerCase();
               const {
                 horarioSolicitado,
                 horaSalidaCaseta,
                 horaEntradaCaseta,
                 supervisorSubarea
               } = parsearDatosObservaciones(p.observaciones);
-              const { categoria, texto: justificacionLimpia } = limpiarMotivo(p.asunto_motivo);
+              const { categoria, texto: motivoCrudo } = limpiarMotivo(p.asunto_motivo);
+
+              const esApoyoCaseta = (categoria || '').toUpperCase() === 'APOYO CASETA';
+              const etiquetaMotivo = esApoyoCaseta ? 'REGISTRO EN PUERTA' : categoria;
+              const justificacionLimpia = esApoyoCaseta
+                ? 'Pase de retardo tramitado con apoyo de caseta de vigilancia.'
+                : motivoCrudo;
 
               const firmanteJefe = p.firmante1 || p.jefe;
               const firmanteGerente = p.firmante2 || p.gerente;
@@ -247,7 +253,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
                   </div>
 
-                  {/* INCIDENCIA + SELLO CASETA */}
+                  {/* INCIDENCIA + SELLO CASETA (SIN REPETIR LA HORA EN 3 LUGARES) */}
                   <div style={{
                     display: 'grid', gridTemplateColumns: '0.9fr 1fr 1.3fr 1fr', gap: '6px',
                     padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '6px', fontSize: '10px'
@@ -257,9 +263,13 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                       <strong style={{ textTransform: 'uppercase', color: '#0f172a' }}>{p.tipo_permiso}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>FECHA / HORARIO</span>
-                      <strong style={{ color: '#0f172a', display: 'block' }}>{p.fecha_permiso}{p.fecha_fin && p.fecha_fin !== p.fecha_permiso ? ` al ${p.fecha_fin}` : ''}</strong>
-                      <span style={{ fontSize: '9px', color: '#475569' }}>{horarioSolicitado}</span>
+                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>FECHA DE APLICACIÓN</span>
+                      <strong style={{ color: '#0f172a', display: 'block' }}>
+                        {p.fecha_permiso}{p.fecha_fin && p.fecha_fin !== p.fecha_permiso ? ` al ${p.fecha_fin}` : ''}
+                      </strong>
+                      {tipo === 'salida' && horarioSolicitado && (
+                        <span style={{ fontSize: '9px', color: '#475569' }}>{horarioSolicitado}</span>
+                      )}
                     </div>
                     <div>
                       <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>SELLO DE VIGILANCIA (CASETA)</span>
@@ -269,8 +279,10 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                           {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
                           {horaEntradaCaseta ? `ENTRADA: ${horaEntradaCaseta}` : ''}
                         </strong>
+                      ) : (tipo === 'falta' || tipo === 'vacaciones') ? (
+                        <span style={{ color: '#475569', fontSize: '9.5px', fontWeight: '700' }}>Jornada completa</span>
                       ) : (
-                        <span style={{ color: '#64748b', fontSize: '9.5px' }}>Sin registro en puerta</span>
+                        <span style={{ color: '#64748b', fontSize: '9.5px' }}>{horarioSolicitado || 'Sin registro en puerta'}</span>
                       )}
                     </div>
                     <div>
@@ -285,7 +297,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     marginBottom: '8px', background: '#fcfcfd', flex: 1
                   }}>
                     <span style={{ fontSize: '8px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                      MOTIVO {categoria ? `• ${categoria}` : ''}
+                      MOTIVO {etiquetaMotivo ? `• ${etiquetaMotivo}` : ''}
                     </span>
                     <div style={{ color: '#0f172a', fontSize: '10.5px', lineHeight: 1.35 }}>
                       {justificacionLimpia || 'Sin justificación adicional.'}
