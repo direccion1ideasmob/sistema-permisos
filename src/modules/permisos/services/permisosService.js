@@ -131,10 +131,15 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   }
 
   // Si quien firma es RH (y ya están listas Firma 1 y Firma 2, o si el Gerente de RH firma directo)
+  const firma1EstabaListaAntes = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(solicitud.firma_1_estado);
   const firma1Lista = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_1_estado || solicitud.firma_1_estado);
   const firma2Lista = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_2_estado || solicitud.firma_2_estado);
 
-  if (esRH && firma1Lista && firma2Lista) {
+  // Si Victoria acaba de firmar como Jefa de Nóminas (Firma 1), el permiso pasa a José Coca (Firma 3).
+  // Pero si Firma 1 ya estaba lista (o si quien firma es José Coca), entonces cierra la Firma 3 y genera el Folio Oficial.
+  const puedeCerrarFirma3EnEsteClic = usuario.rol === 'gerente_rh' || firma1EstabaListaAntes;
+
+  if (esRH && firma1Lista && firma2Lista && puedeCerrarFirma3EnEsteClic) {
     updates.firma_3_estado = 'autorizado';
     updates.estado_general = 'autorizado';
     updates.firma_3_id = usuario.id;
