@@ -64,8 +64,8 @@ export const obtenerSolicitudesAprobacion = async () => {
     .select(`
       *,
       usuarios:usuario_id (
-        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, departamento_id,
-        departamentos:departamento_id (id, nombre, clasificacion)
+        id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, departamento_id, reporta_a_id,
+        departamentos:departamento_id (id, nombre, clasificacion, jefe_id)
       )
     `)
     .order('created_at', { ascending: false });
@@ -95,57 +95,118 @@ const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
   return `${prefijoLetra}-${anio2Digitos}-${String(consecutivo).padStart(4, '0')}`;
 };
 
-// 6. PROCESAR APROBACIÓN Y ENRUTAMIENTO INTELIGENTE (Aprobaciones)
+// AUXILIAR: BUSCAR SI UN SUPERVISOR DE SUBÁREA (encargado) TIENE ARRIBA UN JEFE DE DEPTO (jefe_area)
+const buscarJefeDeptoSuperior = async (supervisorId, deptoId) => {
+  if (!supervisorId) return null;
+  const { data: sup } = await supabase
+    .from('usuarios')
+    .select('id, reporta_a_id, departamento_id')
+    .eq('id', supervisorId)
+    .maybeSingle();
+
+  if (sup?.reporta_a_id) {
+    const { data: jefeArriba } = await supabase
+      .from('usuarios')
+      .select('id, rol, activo')
+      .eq('id', sup.reporta_a_id)
+      .maybeSingle();
+    if (jefeArriba && jefeArriba.activo && jefeArriba.rol === 'jefe_area') {
+      return jefeArriba.id;
+    }
+  }
+
+  const targetDeptoId = deptoId || sup?.departamento_id;
+  if (targetDeptoId) {
+    const { data: depto } = await supabase
+      .from('departamentos')
+      .select('jefe_id')
+      .eq('id', targetDeptoId)
+      .maybeSingle();
+    if (depto?.jefe_id && depto.jefe_id !== supervisorId) {
+      return depto.jefe_id;
+    }
+  }
+  return null;
+};
+
+// 6. PROCESAR APROBACIÓN Y ENRUTAMIENTO INTELIGENTE DE 4 NIVELES (Aprobaciones)
 export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago, comentarios }) => {
-  const esJefeDepto = usuario.rol === 'jefe_area' && solicitud.firma_1_id === usuario.id;
+  const esFirmante1Actual =
+    solicitud.firma_1_estado === 'pendiente' &&
+    (solicitud.firma_1_id === usuario.id || ['encargado', 'jefe_area'].includes(usuario.rol));
+
   const esGerente = solicitud.firma_2_id === usuario.id && solicitud.firma_2_estado === 'pendiente';
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
   const updates = { pago: dictamenPago };
   let siguientesEnFirmar = [];
   let nuevoFolioGenerado = null;
+  let huboRelevoSubareaADepto = false;
 
   const obtenerUsuariosRH = async () => {
-    const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true);
-    return rhUsers ? rhUsers.map(u => u.id) : [];
+    const { data: rhUsers } = await supabase
+      .from('usuarios')
+      .select('id, rol')
+      .in('rol', ['gerente_rh', 'rh_nominas'])
+      .eq('activo', true);
+    return rhUsers || [];
   };
 
-  if (esJefeDepto && solicitud.firma_1_estado === 'pendiente') {
-    updates.firma_1_estado = 'autorizado';
-    if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
+  if (esFirmante1Actual) {
+    // CASO A: Si quien aprueba Firma 1 es un Supervisor de Subárea (encargado, ej. Ricardo Morúa),
+    // verificamos si arriba de él hay un Jefe de Departamento (jefe_area, ej. René Morales).
+    if (usuario.rol === 'encargado') {
+      const jefeDeptoId = await buscarJefeDeptoSuperior(usuario.id, solicitud.usuarios?.departamento_id);
+      if (jefeDeptoId && jefeDeptoId !== usuario.id) {
+        huboRelevoSubareaADepto = true;
+        updates.firma_1_id = jefeDeptoId;
+        updates.firma_1_estado = 'pendiente';
+        updates.observaciones = `${solicitud.observaciones || ''} | ✅ VoBo Subárea: ${usuario.nombre_completo}`;
+        siguientesEnFirmar.push(jefeDeptoId);
+      }
+    }
 
-    if (solicitud.firma_2_estado === 'pendiente') {
-      if (solicitud.firma_2_id) siguientesEnFirmar.push(solicitud.firma_2_id);
-    } else if (solicitud.firma_3_estado === 'pendiente') {
-      const rhIds = await obtenerUsuariosRH();
-      if (rhIds.length > 0) siguientesEnFirmar.push(...rhIds);
-      else if (solicitud.firma_3_id) siguientesEnFirmar.push(solicitud.firma_3_id);
+    // CASO B: Si es Jefe de Departamento (o un encargado sin otro jefe_area arriba, o Victoria como jefa de Nora), cierra Firma 1
+    if (!huboRelevoSubareaADepto) {
+      updates.firma_1_estado = 'autorizado';
+      if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
+
+      if (solicitud.firma_2_estado === 'pendiente' && solicitud.firma_2_id) {
+        siguientesEnFirmar.push(solicitud.firma_2_id);
+      } else if (solicitud.firma_3_estado === 'pendiente') {
+        const rhUsers = await obtenerUsuariosRH();
+        // Si quien acaba de firmar Firma 1 fue Victoria (rh_nominas), notificamos prioritariamente al Gerente de RH (José Coca)
+        const filtrados = usuario.rol === 'rh_nominas'
+          ? rhUsers.filter(u => u.id !== usuario.id).map(u => u.id)
+          : rhUsers.map(u => u.id);
+        if (filtrados.length > 0) siguientesEnFirmar.push(...filtrados);
+        else if (solicitud.firma_3_id) siguientesEnFirmar.push(solicitud.firma_3_id);
+      }
     }
   } else if (esGerente) {
     updates.firma_2_estado = 'autorizado';
     if (solicitud.firma_3_estado === 'pendiente') {
-      const rhIds = await obtenerUsuariosRH();
-      if (rhIds.length > 0) siguientesEnFirmar.push(...rhIds);
+      const rhUsers = await obtenerUsuariosRH();
+      if (rhUsers.length > 0) siguientesEnFirmar.push(...rhUsers.map(u => u.id));
       else if (solicitud.firma_3_id) siguientesEnFirmar.push(solicitud.firma_3_id);
     }
   }
 
-  // Si quien firma es RH (y ya están listas Firma 1 y Firma 2, o si el Gerente de RH firma directo)
+  // CIERRE DE FIRMA 3 (RH / SUPLENCIA):
+  // Si Victoria acaba de firmar la Firma 1 de Nora en este mismo clic, NO cierra Firma 3 todavía (pasa a José Coca).
+  // Pero si Firma 1 y Firma 2 ya estaban listas de antes (o si quien firma es José Coca), cierra Firma 3 y genera Folio Oficial.
   const firma1EstabaListaAntes = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(solicitud.firma_1_estado);
-  const firma1Lista = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_1_estado || solicitud.firma_1_estado);
+  const firma1Lista = !huboRelevoSubareaADepto && ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_1_estado || solicitud.firma_1_estado);
   const firma2Lista = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_2_estado || solicitud.firma_2_estado);
 
-  // Si Victoria acaba de firmar como Jefa de Nóminas (Firma 1), el permiso pasa a José Coca (Firma 3).
-  // Pero si Firma 1 ya estaba lista (o si quien firma es José Coca), entonces cierra la Firma 3 y genera el Folio Oficial.
   const puedeCerrarFirma3EnEsteClic = usuario.rol === 'gerente_rh' || firma1EstabaListaAntes;
 
   if (esRH && firma1Lista && firma2Lista && puedeCerrarFirma3EnEsteClic) {
     updates.firma_3_estado = 'autorizado';
     updates.estado_general = 'autorizado';
     updates.firma_3_id = usuario.id;
-    siguientesEnFirmar = []; // Ya terminó la cadena
+    siguientesEnFirmar = [];
 
-    // REGLA NÓMINA INDIVIDUAL: El folio obedece al tipo_personal del empleado (ej. Vero = P aunque esté en RH)
     const nominaEmpleado = (solicitud.usuarios?.tipo_personal || solicitud.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
     let letra = 'P';
     if (nominaEmpleado.includes('admin')) letra = 'A';
@@ -157,7 +218,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   }
 
   if (comentarios && comentarios.trim()) {
-    updates.observaciones = `${solicitud.observaciones || ''} | Res: ${comentarios.trim()}`;
+    updates.observaciones = `${updates.observaciones || solicitud.observaciones || ''} | Res: ${comentarios.trim()}`;
   }
 
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
@@ -200,7 +261,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
 // 7. RECHAZAR SOLICITUD (Aprobaciones)
 export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRechazo }) => {
-  const esJefeDepto = usuario.rol === 'jefe_area' && solicitud.firma_1_id === usuario.id;
+  const esFirmante1 = ['encargado', 'jefe_area'].includes(usuario.rol) || solicitud.firma_1_id === usuario.id;
   const esGerente = solicitud.firma_2_id === usuario.id;
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
@@ -209,12 +270,12 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     observaciones: `${solicitud.observaciones || ''} | RECHAZO: ${motivoRechazo}`
   };
 
-  if (esRH && solicitud.firma_3_estado === 'pendiente') {
+  if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_1_id !== usuario.id) {
     updates.firma_3_estado = 'rechazado';
     if (!solicitud.firma_3_id) updates.firma_3_id = usuario.id;
   } else if (esGerente && solicitud.firma_2_estado === 'pendiente') {
     updates.firma_2_estado = 'rechazado';
-  } else if (esJefeDepto && solicitud.firma_1_estado === 'pendiente') {
+  } else if (esFirmante1 && solicitud.firma_1_estado === 'pendiente') {
     updates.firma_1_estado = 'rechazado';
     if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
   } else {
@@ -257,7 +318,7 @@ export const forzarSaltoFirmaRH = async (solicitud) => {
   }
 };
 
-// 9. CREAR NUEVA SOLICITUD DE PASE CON ENRUTADOR HÍBRIDO (SOPORTA MANDO CRUZADO Y EVITA DOBLE FIRMA DE RH)
+// 9. CREAR NUEVA SOLICITUD DE PASE CON ENRUTADOR DE 4 NIVELES (Operador -> Supervisor Subárea -> Jefe Depto -> Gerente División -> RH)
 export const crearNuevaSolicitudPermiso = async ({
   userId, rolUsuario, deptoId, sedeId, tipoPersonal, nombreSolicitante, fotoSolicitante,
   tipoPermiso, naturaleza, fechaHoy, fechaPermiso, fechaFinVacaciones,
@@ -275,33 +336,39 @@ export const crearNuevaSolicitudPermiso = async ({
   const reportaAId = usuarioSolicitante?.reporta_a_id || null;
   const listaDepto = todosEmpDepto || [];
   const areasEnDepto = new Set(listaDepto.map(u => (u.area || '').trim().toUpperCase()).filter(Boolean));
-  const jefesEnDepto = listaDepto.filter(u => u.rol === 'jefe_area' && u.id !== userId);
+  const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== userId);
 
-  // === PASO 1: DETERMINAR FIRMA 1 (JEFE INMEDIATO) ===
+  // === PASO 1: DETERMINAR FIRMA 1 (SUPERVISOR DE SUBÁREA / JEFE DE DEPTO / TITULAR NÓMINAS) ===
   let jefeFinalId = null;
 
   if (reportaAId) {
-    // Si tiene un superior asignado en el organigrama, verificamos si ese superior tiene facultad de jefe_area (ej. Valeri o Mariel)
-    // Si su superior es rh_nominas (ej. Victoria con Nora) o gerente, NO intercepta Firma 1; salta directo a Gerencia/RH
-    const { data: supDirecto } = await supabase.from('usuarios').select('id, rol').eq('id', reportaAId).maybeSingle();
-    if (supDirecto && supDirecto.rol === 'jefe_area') {
-      jefeFinalId = supDirecto.id;
+    const { data: supDirecto } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
+    if (supDirecto && supDirecto.activo) {
+      // Si su jefe directo es Supervisor (encargado), Jefe de Depto (jefe_area) o Titular de Nóminas (rh_nominas, caso Victoria con Nora),
+      // entra como Firma 1. Si reporta directo a un Gerente (gerente_produccion, gerente_admin, gerente_rh), salta Firma 1.
+      if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
+        jefeFinalId = supDirecto.id;
+      }
     }
   } else {
-    // Si no tiene reporta_a_id explícito, busca jefe_area de su mismo Subdepartamento/Área
-    const jefeMismaArea = jefesEnDepto.find(j => (j.area || '').trim().toUpperCase() === areaSolicitante);
-    if (jefeMismaArea) {
-      jefeFinalId = jefeMismaArea.id;
-    } else if (areasEnDepto.size <= 1) {
-      // Departamento simple de 1 sola área (ej. Carpintería, Estimaciones)
-      jefeFinalId = depto.jefe_id || jefesEnDepto[0]?.id || null;
+    // Si no tiene reporta_a_id explícito, busca primero encargado o jefe_area de su misma subárea
+    const mandoMismaArea =
+      mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
+      mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
+
+    if (mandoMismaArea) {
+      jefeFinalId = mandoMismaArea.id;
+    } else if (depto.jefe_id && depto.jefe_id !== userId) {
+      jefeFinalId = depto.jefe_id;
+    } else if ( areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
+      jefeFinalId = mandosEnDepto[0].id;
     }
   }
 
-  // === PASO 2: DETERMINAR FIRMA 2 (GERENCIA) Y FIRMA 3 (RH) ===
-  const esDeptoRH = (depto.clasificacion || '').toLowerCase().includes('rh') || depto.nombre.toUpperCase().includes('RECURSOS HUMANOS') || depto.nombre.toUpperCase() === 'RH';
+  // === PASO 2: DETERMINAR FIRMA 2 (GERENCIA DE DIVISIÓN) Y FIRMA 3 (RH) ===
+  const esDeptoRH = (depto.clasificacion || '').toLowerCase().includes('rh') || depto.nombre.toUpperCase().includes('RECURSOS HUMANOS') || depto.nombre.toUpperCase().includes('VIGILANCIA') || depto.nombre.toUpperCase() === 'RH';
   const clasificacionDepto = (depto.clasificacion || tipoPersonal || 'produccion').toLowerCase();
-  const rolGerenteFallback = clasificacionDepto.includes('admin') ? 'gerente_admin' : 'gerente_produccion';
+  const rolGerenteFallback = clasificacionDepto.includes('admin') ? 'gerente_admin' : (clasificacionDepto.includes('rh') ? 'gerente_rh' : 'gerente_produccion');
 
   const [{ data: gerenteDeptoData }, { data: gerenteFallbackData }, { data: rhUsersData }] = await Promise.all([
     depto.gerente_id ? supabase.from('usuarios').select('id, rol').eq('id', depto.gerente_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -313,17 +380,15 @@ export const crearNuevaSolicitudPermiso = async ({
   const gerenteRH = listaRH.find(u => u.rol === 'gerente_rh') || listaRH[0];
   const rhFinalId = gerenteRH?.id || depto.rh_id || null;
 
-  // Prioridad de Gerente: 1) El gerente asignado al departamento, 2) Si es el depto de RH, es el Gerente de RH, 3) El gerente general de Planta/Oficina
   let gerenteFinalId = gerenteDeptoData?.id || (esDeptoRH ? rhFinalId : gerenteFallbackData?.id) || null;
   let rolDelGerenteDepto = gerenteDeptoData?.rol || (esDeptoRH ? 'gerente_rh' : gerenteFallbackData?.rol);
 
-  // === PASO 3: ÁRBITRO DE ESTADOS (EVITA QUE JOSÉ COCA FIRME DOS VECES SI EL DEPTO ES RH) ===
+  // === PASO 3: ÁRBITRO DE ESTADOS ===
   let estadoFirma1 = jefeFinalId ? (jefeFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
   let estadoFirma2 = gerenteFinalId ? (gerenteFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
   let estadoFirma3 = rhFinalId ? (rhFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
 
-  // FUSIÓN INTELIGENTE: Si el departamento ya es comandado por el Gerente de RH (ej. caso Vero -> Valeri -> José Coca),
-  // omitimos la Firma 2 intermedia para que después de Valeri pase directo al dictamen final de RH (José Coca / Nóminas) sin firmar doble.
+  // FUSIÓN INTELIGENTE: Si la división ya es comandada por José Coca (RH / Vigilancia), omitimos Firma 2 para no firmar doble
   if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId) {
     estadoFirma2 = 'omitido';
   }
@@ -468,7 +533,7 @@ export const obtenerPermisoPorId = async (permisoId) => {
     .select(`
       *,
       usuarios:usuario_id (
-        id, nombre_completo, numero_empleado, area, puesto, tipo_personal, foto_url,
+        id, nombre_completo, numero_empleado, area, puesto, tipo_personal, foto_url, departamento_id,
         departamentos:departamento_id (nombre)
       )
     `)
@@ -483,27 +548,46 @@ export const obtenerPermisoPorId = async (permisoId) => {
 
 // 13. AUTORIZAR DESDE LINK RÁPIDO DE JEFATURA (AprobarDirecto)
 export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => {
-  const { error } = await supabase
-    .from('permisos')
-    .update({ firma_1_estado: 'autorizado', pago: dictamenPago })
-    .eq('id', permiso.id);
-
-  if (error) throw error;
-
+  let updates = { pago: dictamenPago };
   let siguientesEnFirmar = [];
   let etiquetaNotificacion = "Gerencia";
 
-  if (permiso.firma_2_estado === 'pendiente') {
-    if (permiso.firma_2_id) siguientesEnFirmar.push(permiso.firma_2_id);
-  } else if (permiso.firma_3_estado === 'pendiente') {
-    etiquetaNotificacion = "Recursos Humanos";
-    const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true);
-    if (rhUsers && rhUsers.length > 0) {
-      siguientesEnFirmar = rhUsers.map(u => u.id);
-    } else if (permiso.firma_3_id) {
-      siguientesEnFirmar.push(permiso.firma_3_id);
+  // Verificar si quien era firma_1_id es un encargado con un jefe_area arriba
+  if (permiso.firma_1_id) {
+    const { data: firmante1 } = await supabase.from('usuarios').select('id, rol, nombre_completo').eq('id', permiso.firma_1_id).maybeSingle();
+    if (firmante1?.rol === 'encargado') {
+      const jefeDeptoId = await buscarJefeDeptoSuperior(firmante1.id, permiso.usuarios?.departamento_id);
+      if (jefeDeptoId && jefeDeptoId !== firmante1.id) {
+        updates.firma_1_id = jefeDeptoId;
+        updates.firma_1_estado = 'pendiente';
+        updates.observaciones = `${permiso.observaciones || ''} | ✅ VoBo Subárea: ${firmante1.nombre_completo}`;
+        siguientesEnFirmar.push(jefeDeptoId);
+        etiquetaNotificacion = "Jefatura de Departamento";
+      }
     }
   }
+
+  if (siguientesEnFirmar.length === 0) {
+    updates.firma_1_estado = 'autorizado';
+    if (permiso.firma_2_estado === 'pendiente' && permiso.firma_2_id) {
+      siguientesEnFirmar.push(permiso.firma_2_id);
+    } else if (permiso.firma_3_estado === 'pendiente') {
+      etiquetaNotificacion = "Recursos Humanos";
+      const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true);
+      if (rhUsers && rhUsers.length > 0) {
+        siguientesEnFirmar = rhUsers.map(u => u.id);
+      } else if (permiso.firma_3_id) {
+        siguientesEnFirmar.push(permiso.firma_3_id);
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from('permisos')
+    .update(updates)
+    .eq('id', permiso.id);
+
+  if (error) throw error;
 
   if (siguientesEnFirmar.length > 0) {
     const nombreSolicitante = permiso.usuarios?.nombre_completo || 'Un colaborador';
