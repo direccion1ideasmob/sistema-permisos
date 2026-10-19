@@ -51,18 +51,29 @@ export default function AdminUsuarios() {
   return (
     <>
       <style>{`
-        .admin-container { display: flex; flex-direction: column; gap: 15px; width: 100%; box-sizing: border-box; font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
-        .admin-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-        .admin-title { font-size: 20px; font-weight: 800; color: ${c.text}; margin: 0; letter-spacing: -0.02em; }
-        .admin-sub { font-size: 12px; color: ${c.textMuted}; margin: 3px 0 0 0; font-weight: 400; }
-        .admin-actions { display: flex; gap: 10px; align-items: center; width: 100%; justify-content: space-between; }
-        @media (min-width: 600px) { .admin-title { font-size: 22px; } .admin-actions { width: auto; justify-content: flex-end; } }
-        .view-switch { display: flex; background: ${c.bg}; border-radius: 9px; padding: 3px; border: 1px solid ${c.border}; }
-        .switch-btn { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid transparent; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 12px; background: transparent; color: ${c.textMuted}; transition: all 0.15s ease; }
-        .switch-btn.active { background: ${c.surfaceCard}; color: ${c.accent}; border-color: ${c.border}; box-shadow: ${modoOscuro ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.06)'}; }
-        .btn-nuevo-main { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: ${c.accent}; color: #fff; border: none; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); transition: background-color 0.15s ease, transform 0.1s ease; }
+                .admin-container { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 100%; overflow-x: hidden; box-sizing: border-box; font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%; box-sizing: border-box; }
+        .admin-title { font-size: 19px; font-weight: 800; color: ${c.text}; margin: 0; letter-spacing: -0.02em; }
+        .admin-sub { font-size: 12px; color: ${c.textMuted}; margin: 2px 0 0 0; font-weight: 400; }
+        .admin-actions { display: flex; gap: 8px; align-items: center; width: 100%; max-width: 100%; justify-content: space-between; box-sizing: border-box; flex-wrap: nowrap; }
+        .view-switch { display: flex; background: ${c.bg}; border-radius: 9px; padding: 3px; border: 1px solid ${c.border}; min-width: 0; flex-shrink: 1; }
+        .switch-btn { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 11.5px; background: transparent; color: ${c.textMuted}; transition: all 0.15s ease; white-space: nowrap; }
+        .switch-btn.active { background: ${c.surfaceCard}; color: ${c.accent}; border-color: ${c.border}; box-shadow: ${modoOscuro ? "0 4px 12px rgba(0,0,0,0.4)" : "0 2px 6px rgba(0,0,0,0.06)"}; }
+        .btn-nuevo-main { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 12px; background: ${c.accent}; color: #fff; border: none; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25); transition: background-color 0.15s ease, transform 0.1s ease; white-space: nowrap; flex-shrink: 0; }
         .btn-nuevo-main:hover { background: ${c.accentHover}; }
         .btn-nuevo-main:active { transform: scale(0.98); }
+        @media (max-width: 599px) {
+          .admin-header > div:first-child { padding-left: 44px; }
+          .admin-actions { padding-left: 0; width: 100%; }
+          .switch-btn { padding: 6px 9px; font-size: 11px; }
+          .btn-nuevo-main { padding: 7px 11px; font-size: 11px; }
+        }
+        @media (min-width: 600px) {
+          .admin-title { font-size: 22px; }
+          .admin-actions { width: auto; justify-content: flex-end; }
+          .switch-btn { padding: 7px 12px; font-size: 12px; }
+          .btn-nuevo-main { padding: 8px 14px; font-size: 12.5px; }
+        }
       `}</style>
 
       <div className="admin-container">
