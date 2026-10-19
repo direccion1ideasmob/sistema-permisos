@@ -1,3 +1,5 @@
+import { supabase } from '../api/supabaseClient';
+
 // La LLAVE NUEVA que generamos y pusimos en Vercel
 const PUBLIC_VAPID_KEY = 'BNThRogYfbR6B2Pmy7cKGHLZDAfMMkgWoCPzBREZjJzkSxa4BGpnmVQ2zRQLGCRI5iLoNoAWhkDToDIpFbmRNu4';
 
@@ -29,13 +31,12 @@ export async function registrarSuscripcionPush() {
 
     let suscripcion = await registro.pushManager.getSubscription();
     
-    // CORRECCIÓN VITAL: Si ya hay una suscripción, la reciclamos. 
-    // ¡NO LA DESTRUIMOS! Así conservamos la misma huella (endpoint).
+    // Si ya hay una suscripción activa en este navegador, reciclamos la misma huella (endpoint)
     if (suscripcion) {
       return suscripcion.toJSON();
     }
 
-    // Si no existía ninguna, generamos la suscripción nueva con la llave
+    // Si no existía ninguna, generamos la suscripción nueva con la llave VAPID
     suscripcion = await registro.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY),
@@ -47,24 +48,38 @@ export async function registrarSuscripcionPush() {
     return null;
   }
 }
-// === FUNCIÓN UNIVERSAL PARA ENVIAR PUSH A UNO O VARIOS USUARIOS ===
+
+// === FUNCIÓN UNIVERSAL PARA ENVIAR PUSH A UNO O VARIOS USUARIOS (SIN DUPLICADOS POR DISPOSITIVO) ===
 export const enviarNotificacionPushUsuarios = async (usuariosIds, { titulo, mensaje, urlDestino = '/inicio', fotoUrl = null }) => {
-  const ids = (Array.isArray(usuariosIds) ? usuariosIds : [usuariosIds]).filter(Boolean);
+  const ids = [...new Set((Array.isArray(usuariosIds) ? usuariosIds : [usuariosIds]).filter(Boolean))];
   if (ids.length === 0) return;
 
   try {
-    const { data: subs } = await supabase
+    const { data: subs, error } = await supabase
       .from('suscripciones_push')
       .select('subscription')
       .in('usuario_id', ids);
 
-    if (!subs || subs.length === 0) return;
+    if (error || !subs || subs.length === 0) return;
 
-    const envios = subs.map(async (item) => {
+    // Deduplicar por endpoint físico para que si activaron varias veces en el mismo dispositivo solo suene 1 vez
+    const endpointsVistos = new Set();
+    const suscripcionesUnicas = [];
+
+    for (const item of subs) {
       let subLimpia = item.subscription;
       if (typeof subLimpia === 'string') {
-        try { subLimpia = JSON.parse(subLimpia); } catch (_) {}
+        try { subLimpia = JSON.parse(subLimpia); } catch (_) { continue; }
       }
+      if (subLimpia && subLimpia.endpoint && !endpointsVistos.has(subLimpia.endpoint)) {
+        endpointsVistos.add(subLimpia.endpoint);
+        suscripcionesUnicas.push(subLimpia);
+      }
+    }
+
+    if (suscripcionesUnicas.length === 0) return;
+
+    const envios = suscripcionesUnicas.map(async (subLimpia) => {
       const res = await fetch('/api/notificar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
