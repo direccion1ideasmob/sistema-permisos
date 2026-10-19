@@ -10,6 +10,42 @@ const limpiarTexto = (txt) => {
     : txt.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 };
 
+
+// AUXILIAR: Sincronizar vínculos de mando cuando cambia el rol de un colaborador
+const sincronizarVinculosPorRol = async ({ colaboradorId, rolNuevo, departamentoId, areaFinal }) => {
+  const rol = (rolNuevo || empleado).toLowerCase();
+
+  // Caso A: Si ahora es empleado o caseta, NO puede tener subordinados ni ser jefe_id de un departamento
+  if (rol === empleado || rol === caseta) {
+    let nuevoJefeParaSubordinados = null;
+    if (departamentoId) {
+      const { data: depto } = await supabase.from(departamentos).select(jefe_id).eq(id, departamentoId).maybeSingle();
+      if (depto?.jefe_id && depto.jefe_id !== colaboradorId) {
+        nuevoJefeParaSubordinados = depto.jefe_id;
+      }
+    }
+    await Promise.all([
+      supabase.from(usuarios).update({ reporta_a_id: nuevoJefeParaSubordinados }).eq(reporta_a_id, colaboradorId),
+      supabase.from(departamentos).update({ jefe_id: null }).eq(jefe_id, colaboradorId)
+    ]);
+  }
+
+  // Caso B: Si es encargado (Supervisor de Subárea), los empleados base de su misma subárea le reportan a él, y él reporta al jefe_id del depto
+  if (rol === encargado && departamentoId && areaFinal) {
+    const { data: depto } = await supabase.from(departamentos).select(jefe_id).eq(id, departamentoId).maybeSingle();
+    if (depto?.jefe_id && depto.jefe_id !== colaboradorId) {
+      await supabase.from(usuarios).update({ reporta_a_id: depto.jefe_id }).eq(id, colaboradorId);
+    }
+    await supabase
+      .from(usuarios)
+      .update({ reporta_a_id: colaboradorId })
+      .eq(departamento_id, departamentoId)
+      .ilike(area, areaFinal)
+      .eq(rol, empleado)
+      .neq(id, colaboradorId);
+  }
+};
+
 // 1. CARGAR TODO EL DIRECTORIO Y CATÁLOGOS
 export const obtenerDatosDirectorio = async () => {
   const [resSedes, resUsuarios, resDeptos] = await Promise.all([
@@ -239,6 +275,7 @@ export const actualizarExpedienteColaborador = async ({
   if (pinCambio) {
     await supabase.from('suscripciones_push').delete().eq('usuario_id', colaboradorId);
   }
+  await sincronizarVinculosPorRol({ colaboradorId, rolNuevo: datosEdit.rol, departamentoId: deptoFinalId, areaFinal });
 };
 
 // 4. REUBICACIÓN RÁPIDA DE EMPLEADO DESDE EL ÁRBOL (Depto, Área, Puesto, Rol y Superior)
@@ -255,6 +292,7 @@ export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId
     .eq('id', colaboradorId);
 
   if (error) throw error;
+  await sincronizarVinculosPorRol({ colaboradorId, rolNuevo: rol, departamentoId, areaFinal: (area || 'GENERAL').trim().toUpperCase() });
 };
 
 // 5. BAJA Y REACTIVACIÓN LABORAL

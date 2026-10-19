@@ -182,7 +182,7 @@ export default function VistaArbol({
     : [];
 
   const posiblesJefesEnDepto = userEditando
-    ? usuarios.filter(u => u.departamento_id === userEditando.departamento_id && u.activo && u.id !== userEditando.id)
+    ? usuarios.filter(u => u.departamento_id === userEditando.departamento_id && u.activo && u.id !== userEditando.id && ![empleado, caseta].includes(u.rol))
     : [];
 
   return (
@@ -534,9 +534,13 @@ export default function VistaArbol({
                                     const tieneJefeArea = grupo.miembros.some(m => m.rol === 'jefe_area');
                                     const tieneEmpleadosBase = grupo.miembros.some(m => m.rol === 'empleado');
 
+                                    const ROLES_MANDO_ARBOL = ['jefe_area', 'encargado', 'rh_nominas', 'gerente_produccion', 'gerente_admin', 'gerente_rh', 'superadmin'];
+                                    const esMandoValido = (m) => ROLES_MANDO_ARBOL.includes(m.rol);
+
                                     const esTitularDeSubdepto = (m) => {
-                                      if (grupo.miembros.some(sub => sub.reporta_a_id === m.id)) return true;
+                                      if (!esMandoValido(m)) return false;
                                       if (m.rol === 'jefe_area' || m.rol === 'encargado') return true;
+                                      if (grupo.miembros.some(sub => sub.reporta_a_id === m.id)) return true;
                                       if (!tieneJefeArea && tieneEmpleadosBase && m.rol === 'rh_nominas') return true;
                                       return false;
                                     };
@@ -544,7 +548,8 @@ export default function VistaArbol({
                                     const liderPrincipal = grupo.miembros.find(esTitularDeSubdepto);
 
                                     const miembrosRaiz = grupo.miembros.filter(m => {
-                                      if (m.reporta_a_id && idsGrupo.has(m.reporta_a_id)) return false;
+                                      const supEnGrupo = m.reporta_a_id ? grupo.miembros.find(x => x.id === m.reporta_a_id) : null;
+                                      if (supEnGrupo && esMandoValido(supEnGrupo)) return false;
                                       if (liderPrincipal && m.id !== liderPrincipal.id && !esTitularDeSubdepto(m)) return false;
                                       return true;
                                     });
@@ -593,14 +598,17 @@ export default function VistaArbol({
                                         {subAbierta && (
                                           <div style={{ padding: mostrarCabeceraSubdepto ? '10px' : '0', display: 'flex', flexDirection: 'column', gap: '10px', boxSizing: 'border-box', width: '100%' }}>
                                             {miembrosRaiz.map(titular => {
-                                              const subordinados = grupo.miembros.filter(sub => {
-                                                if (sub.id === titular.id) return false;
-                                                if (sub.reporta_a_id === titular.id) return true;
-                                                if ((!sub.reporta_a_id || !idsGrupo.has(sub.reporta_a_id)) && liderPrincipal && titular.id === liderPrincipal.id && !esTitularDeSubdepto(sub)) {
-                                                  return true;
-                                                }
-                                                return false;
-                                              });
+                                              const subordinados = esTitularDeSubdepto(titular)
+                                                ? grupo.miembros.filter(sub => {
+                                                    if (sub.id === titular.id || esTitularDeSubdepto(sub)) return false;
+                                                    if (sub.reporta_a_id === titular.id) return true;
+                                                    const supEnGrupo = sub.reporta_a_id ? grupo.miembros.find(x => x.id === sub.reporta_a_id) : null;
+                                                    if ((!supEnGrupo || !esMandoValido(supEnGrupo)) && liderPrincipal && titular.id === liderPrincipal.id) {
+                                                      return true;
+                                                    }
+                                                    return false;
+                                                  })
+                                                : [];
 
                                               const tipoNodo = (['jefe_area', 'encargado'].includes(titular.rol) || subordinados.length > 0) ? 'lider' : 'operativo';
 

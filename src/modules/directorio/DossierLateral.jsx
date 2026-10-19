@@ -54,7 +54,7 @@ export default function DossierLateral({
   // Posibles superiores en el organigrama dentro de este mismo Departamento
   const posiblesSuperiores = useMemo(() => {
     if (!colaborador) return [];
-    return personalMismoDepto.filter(u => u.id !== colaborador.id);
+    return personalMismoDepto.filter(u => u.id !== colaborador.id && ![empleado, caseta].includes(u.rol));
   }, [personalMismoDepto, colaborador]);
 
   if (!colaborador || !abierto) return null;
