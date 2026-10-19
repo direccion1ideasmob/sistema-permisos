@@ -171,28 +171,26 @@ export default function Layout() {
               </div>
 
               <footer style={{
-                marginTop: "36px",
-                paddingTop: "14px",
+                marginTop: "40px",
+                paddingTop: "16px",
+                paddingBottom: "8px",
                 borderTop: `1px solid ${tema.border}`,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: "10px",
-                fontSize: "11px",
+                gap: "12px",
+                fontFamily: "'Inter', Georgia, serif",
+                fontSize: "9.5px",
                 fontWeight: "600",
                 color: tema.textSecondary,
-                letterSpacing: "0.02em",
-                opacity: 0.9,
+                letterSpacing: "0.22em",
+                textTransform: "uppercase",
+                opacity: 0.75,
                 userSelect: "none"
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px rgba(34,197,94,0.6)" }} />
-                  <span>RH Control & Management System v1.0 &nbsp;•&nbsp; © 2026</span>
-                </div>
-                <div>
-                  Powered by <strong style={{ color: tema.textPrimary, fontWeight: "800" }}>Ing. Alejandro Valenzo</strong>
-                </div>
+                <span>RH CONTROL &amp; MANAGEMENT SYSTEM V1.0 &nbsp;•&nbsp; © 2026</span>
+                <span>POWERED BY <strong style={{ color: tema.textPrimary, fontWeight: "800" }}>ING. ALEJANDRO VALENZO</strong></span>
               </footer>
             </div>
 

@@ -78,19 +78,13 @@ export default function Login({ alEntrar }) {
             {cargando ? 'VALIDANDO...' : 'ENTRAR'}
           </button>
         </form>
-        <div id="firma-autor-login" style={{ marginTop: "22px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", fontSize: "10.5px", fontWeight: "600", color: "#737373", letterSpacing: "0.02em" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-            <span>RH Control & Management System v1.0 • © 2026</span>
-          </div>
-          <div>Powered by <strong style={{ color: "#d4d4d4", fontWeight: "800" }}>Ing. Alejandro Valenzo</strong></div>
-        </div>
+        
         
         <button type="button" onClick={solicitarAyudaRH} style={styles.btnOlvidado}>
           ¿Olvidaste tu PIN?
         </button>
 
-        <p style={styles.footer}>ALEJANDRO VALENZO © 2026</p>
+        <p style={styles.footer}>RH CONTROL & MANAGEMENT SYSTEM V1.0 • POWERED BY ING. ALEJANDRO VALENZO © 2026</p>
       </div>
     </div>
   );
