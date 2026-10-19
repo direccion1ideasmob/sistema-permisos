@@ -1,67 +1,86 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, AlertTriangle, DoorOpen, UserMinus, FileText } from 'lucide-react';
-import { obtenerDatosCaseta, registrarCheckCaseta, registrarRetardoEnPuerta } from './services/vigilanciaService';
+import { RefreshCw, Clock, DoorOpen, ClipboardCheck, Search, Calendar } from 'lucide-react';
+import {
+  obtenerDatosCaseta,
+  registrarCheckCaseta,
+  registrarRetardoEnPuerta,
+  registrarAsistenciaLista,
+  obtenerFechaLocalHoy
+} from './services/vigilanciaService';
 import TablaRegistrosVig from './TablaRegistrosVig';
 import FormularioAsistencia from './FormularioAsistencia';
 
-export default function ControlCaseta({ c }) {
-  const [tabActiva, setTabActiva] = useState('en_vivo');
+export default function ControlCaseta({ c, usuario }) {
+  const usr = usuario || c || {};
+  const [tabActiva, setTabActiva] = useState('pases');
 
-  const [pasesAutorizados, setPasesAutorizados] = useState([]);
-  const [pasesEnEspera, setPasesEnEspera] = useState([]);
-  const [pasesRechazados, setPasesRechazados] = useState([]);
+  const [pasesPorCruzar, setPasesPorCruzar] = useState([]);
   const [personalFuera, setPersonalFuera] = useState([]);
-  const [faltasProgramadas, setFaltasProgramadas] = useState([]);
-  const [completados, setCompletados] = useState([]);
+  const [crucesCompletadosHoy, setCrucesCompletadosHoy] = useState([]);
   const [empleadosSede, setEmpleadosSede] = useState([]);
+  const [mapaAsistencias, setMapaAsistencias] = useState({});
+
+  const [busquedaTexto, setBusquedaTexto] = useState('');
+  const [fechaConsulta, setFechaConsulta] = useState(obtenerFechaLocalHoy());
 
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState(null);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState('');
 
-  const sedeGuardia = c?.sede_id || null;
+  const sedeGuardia = usr?.sede_id || null;
 
-  const theme = { 
-    bg: c?.background || '#fafafa',
-    surface: c?.surface || '#ffffff', 
-    text: c?.text || '#171717',
-    textMuted: c?.textMuted || '#737373', 
-    border: c?.border || '#e5e5e5',
-    accent: c?.accent || '#16a34a' 
+  const theme = {
+    bg: c?.bgMain || '#f8fafc',
+    surface: c?.surfaceCard || '#ffffff',
+    text: c?.text || '#0f172a',
+    textMuted: c?.textMuted || '#64748b',
+    border: c?.border || '#e2e8f0',
+    accent: c?.accent || '#16a34a'
   };
 
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
-      const data = await obtenerDatosCaseta(sedeGuardia);
-      setPasesAutorizados(data.pasesAutorizados);
-      setPasesEnEspera(data.pasesEnEspera);
-      setPasesRechazados(data.pasesRechazados);
+      const fechaTarget = tabActiva === 'consulta' ? fechaConsulta : obtenerFechaLocalHoy();
+      const data = await obtenerDatosCaseta(sedeGuardia, fechaTarget);
+      setPasesPorCruzar(data.pasesPorCruzar);
       setPersonalFuera(data.personalFuera);
-      setFaltasProgramadas(data.faltasProgramadas);
-      setCompletados(data.completados);
+      setCrucesCompletadosHoy(data.crucesCompletadosHoy);
       setEmpleadosSede(data.empleadosSede);
+      setMapaAsistencias(data.mapaAsistencias);
     } catch (error) {
       console.error("Error al cargar datos en Caseta:", error);
     } finally {
       setCargando(false);
     }
-  }, [sedeGuardia]);
+  }, [sedeGuardia, tabActiva, fechaConsulta]);
 
   useEffect(() => {
-    cargarDatos(); 
-    const intervalo = setInterval(cargarDatos, 10000);
-    return () => clearInterval(intervalo); 
+    cargarDatos();
+    const intervalo = setInterval(cargarDatos, 12000);
+    return () => clearInterval(intervalo);
   }, [cargarDatos]);
 
-  const registrarMovimiento = async (id, tipoMovimiento) => {
+  const registrarMovimientoPase = async (id, tipoMovimiento) => {
     setProcesandoId(id);
     try {
       await registrarCheckCaseta(id, tipoMovimiento);
       await cargarDatos();
     } catch (error) {
-      alert("Error registrando en puerta: " + error.message);
+      alert("Error registrando cruce: " + error.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const marcarAsistencia = async (empleadoId, tipoMarca) => {
+    setProcesandoId(`${empleadoId}-${tipoMarca}`);
+    try {
+      await registrarAsistenciaLista(empleadoId, tipoMarca, usr?.id || null);
+      await cargarDatos();
+    } catch (error) {
+      alert("Error al guardar asistencia: " + error.message);
     } finally {
       setProcesandoId(null);
     }
@@ -72,9 +91,10 @@ export default function ControlCaseta({ c }) {
     setProcesandoId('nuevo');
     try {
       await registrarRetardoEnPuerta(empleadoSeleccionado);
-      setModalAbierto(false); 
-      setEmpleadoSeleccionado(''); 
+      setModalAbierto(false);
+      setEmpleadoSeleccionado('');
       await cargarDatos();
+      alert("✅ Pase de retardo enviado y hora de entrada sellada.");
     } catch (error) {
       alert("Error: " + error.message);
     } finally {
@@ -82,60 +102,163 @@ export default function ControlCaseta({ c }) {
     }
   };
 
+  const totalPasesActivos = pasesPorCruzar.length + personalFuera.length;
+
   return (
-    <div style={{ padding: '24px', background: theme.bg, minHeight: '100vh', fontFamily: '"Inter", -apple-system, sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+    <div style={{ width: '100%', maxWidth: '960px', margin: '0 auto', paddingBottom: '40px', fontFamily: '"Inter", -apple-system, sans-serif' }}>
+      
+      {/* CABECERA COMPACTA ADAPTADA A CELULAR Y PC */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '900', color: theme.text, margin: 0 }}>
-            Control de Accesos y Caseta
+          <h1 style={{ fontSize: '19px', fontWeight: '900', color: theme.text, margin: 0 }}>
+            Control de Puerta
           </h1>
-          <div style={{ fontSize: '12px', color: theme.textMuted, fontWeight: '600', marginTop: '2px' }}>
-            Monitoreo en tiempo real de salidas, retardos y reingresos de planta
+          <div style={{ fontSize: '12px', color: theme.textMuted, fontWeight: '600' }}>
+            Registro de entradas, salidas y pase de lista
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setModalAbierto(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}>
-            <AlertTriangle size={16} /> Llegada sin Pase
+
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={() => setModalAbierto(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '9px 14px', background: '#0f172a', color: '#fff',
+              border: 'none', borderRadius: '9px', fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+            }}
+          >
+            <Clock size={15} /> Apoyo: Generar Retardo
           </button>
-          <button onClick={cargarDatos} title="Actualizar ahora" style={{ padding: '10px 14px', background: theme.surface, border: `1px solid \${theme.border}`, borderRadius: '8px', cursor: 'pointer', color: theme.text }}>
-            <RefreshCw size={14} className={cargando ? "spin" : ""} />
+
+          <button
+            onClick={cargarDatos}
+            title="Actualizar"
+            style={{
+              padding: '9px 11px', background: theme.surface,
+              border: `1px solid ${theme.border}`, borderRadius: '9px',
+              cursor: 'pointer', color: theme.text, display: 'inline-flex', alignItems: 'center'
+            }}
+          >
+            <RefreshCw size={15} />
           </button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: `2px solid \${theme.border}`, paddingBottom: '12px', flexWrap: 'wrap' }}>
-        <button onClick={() => setTabActiva('en_vivo')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', borderRadius: '8px', border: 'none', background: tabActiva === 'en_vivo' ? theme.accent : 'transparent', color: tabActiva === 'en_vivo' ? '#fff' : theme.textMuted, fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}>
-          <DoorOpen size={16} /> Control en Vivo ({pasesAutorizados.length + pasesEnEspera.length})
+      {/* BARRA DE 3 PESTAÑAS EJECUTIVAS */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '6px',
+        background: theme.surface,
+        padding: '5px',
+        borderRadius: '11px',
+        border: `1px solid ${theme.border}`,
+        marginBottom: '16px'
+      }}>
+        <button
+          onClick={() => setTabActiva('pases')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            padding: '9px 8px', borderRadius: '8px', border: 'none',
+            background: tabActiva === 'pases' ? theme.accent : 'transparent',
+            color: tabActiva === 'pases' ? '#fff' : theme.textMuted,
+            fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+          }}
+        >
+          <DoorOpen size={15} />
+          <span>Pases ({totalPasesActivos})</span>
         </button>
-        <button onClick={() => setTabActiva('fuera_planta')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', borderRadius: '8px', border: 'none', background: tabActiva === 'fuera_planta' ? '#3b82f6' : 'transparent', color: tabActiva === 'fuera_planta' ? '#fff' : theme.textMuted, fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}>
-          <UserMinus size={16} /> Fuera de Planta ({personalFuera.length})
+
+        <button
+          onClick={() => {
+            setFechaConsulta(obtenerFechaLocalHoy());
+            setTabActiva('lista');
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            padding: '9px 8px', borderRadius: '8px', border: 'none',
+            background: tabActiva === 'lista' ? theme.accent : 'transparent',
+            color: tabActiva === 'lista' ? '#fff' : theme.textMuted,
+            fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+          }}
+        >
+          <ClipboardCheck size={15} />
+          <span>Pase de Lista</span>
         </button>
-        <button onClick={() => setTabActiva('faltas')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', borderRadius: '8px', border: 'none', background: tabActiva === 'faltas' ? '#525252' : 'transparent', color: tabActiva === 'faltas' ? '#fff' : theme.textMuted, fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}>
-          <FileText size={16} /> Faltas y Cierre ({faltasProgramadas.length + completados.length})
+
+        <button
+          onClick={() => setTabActiva('consulta')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            padding: '9px 8px', borderRadius: '8px', border: 'none',
+            background: tabActiva === 'consulta' ? theme.accent : 'transparent',
+            color: tabActiva === 'consulta' ? '#fff' : theme.textMuted,
+            fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+          }}
+        >
+          <Search size={15} />
+          <span>Consultar</span>
         </button>
       </div>
 
-      <TablaRegistrosVig 
+      {/* BARRA DE BÚSQUEDA RÁPIDA (Y SELECTOR DE FECHA EN MODO CONSULTA) */}
+      {(tabActiva === 'lista' || tabActiva === 'consulta') && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: '1 1 220px' }}>
+            <Search size={15} style={{ position: 'absolute', left: '12px', top: '11px', color: theme.textMuted }} />
+            <input
+              type="text"
+              placeholder="Buscar por # de nómina o nombre..."
+              value={busquedaTexto}
+              onChange={(e) => setBusquedaTexto(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 12px 9px 34px',
+                borderRadius: '9px', border: `1px solid ${theme.border}`,
+                background: theme.surface, color: theme.text,
+                fontSize: '13px', boxSizing: 'border-box', outline: 'none'
+              }}
+            />
+          </div>
+
+          {tabActiva === 'consulta' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '9px', padding: '0 10px' }}>
+              <Calendar size={14} color={theme.textMuted} />
+              <input
+                type="date"
+                value={fechaConsulta}
+                onChange={(e) => setFechaConsulta(e.target.value)}
+                style={{
+                  border: 'none', background: 'transparent', color: theme.text,
+                  fontSize: '12.5px', fontWeight: '700', padding: '8px 0', outline: 'none'
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <TablaRegistrosVig
         tabActiva={tabActiva}
-        pasesAutorizados={pasesAutorizados} 
-        pasesEnEspera={pasesEnEspera}
-        pasesRechazados={pasesRechazados}
+        pasesPorCruzar={pasesPorCruzar}
         personalFuera={personalFuera}
-        faltasProgramadas={faltasProgramadas}
-        completados={completados}
-        registrarMovimiento={registrarMovimiento} 
-        procesandoId={procesandoId} 
-        theme={theme} 
+        crucesCompletadosHoy={crucesCompletadosHoy}
+        empleadosSede={empleadosSede}
+        mapaAsistencias={mapaAsistencias}
+        busquedaTexto={busquedaTexto}
+        registrarMovimientoPase={registrarMovimientoPase}
+        marcarAsistencia={marcarAsistencia}
+        procesandoId={procesandoId}
+        theme={theme}
       />
-      
-      <FormularioAsistencia 
-        abierto={modalAbierto} 
-        cerrar={() => setModalAbierto(false)} 
-        empleadosSede={empleadosSede} 
-        empleadoSeleccionado={empleadoSeleccionado} 
-        setEmpleadoSeleccionado={setEmpleadoSeleccionado} 
-        generarRegistro={generarLlegadaSinPase} 
-        procesandoId={procesandoId} 
+
+      <FormularioAsistencia
+        abierto={modalAbierto}
+        cerrar={() => setModalAbierto(false)}
+        empleadosSede={empleadosSede}
+        empleadoSeleccionado={empleadoSeleccionado}
+        setEmpleadoSeleccionado={setEmpleadoSeleccionado}
+        generarRegistro={generarLlegadaSinPase}
+        procesandoId={procesandoId}
       />
     </div>
   );

@@ -1,71 +1,59 @@
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 
-// Obtener fecha local YYYY-MM-DD (evita el salto de día a las 6:00 PM por UTC)
-const obtenerFechaLocalHoy = () => {
+// Fecha local YYYY-MM-DD (evita desfase UTC después de las 18:00 hrs)
+export const obtenerFechaLocalHoy = () => {
   const ahora = new Date();
   const offsetMs = ahora.getTimezoneOffset() * 60000;
   return new Date(ahora.getTime() - offsetMs).toISOString().split('T')[0];
 };
 
-// Extraer quién falta por firmar con nombre real
-const calcularNivelEspera = (p) => {
-  const f1Listo = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(p.firma_1_estado);
-  const f2Listo = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(p.firma_2_estado);
-
-  if (!f1Listo) {
-    return p.firmante1?.nombre_completo
-      ? `Jefe / Supervisor (\${p.firmante1.nombre_completo})`
-      : 'Jefe de Área / Supervisor';
-  }
-  if (!f2Listo) {
-    return p.firmante2?.nombre_completo
-      ? `Gerencia (\${p.firmante2.nombre_completo})`
-      : 'Gerencia';
-  }
-  return 'Recursos Humanos (Dictamen Final)';
-};
-
-// Extraer horas registradas en caseta desde observaciones
 const extraerHorasCaseta = (obs = '') => {
   const mSalida = obs.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
-  const mEntrada = obs.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
+  const mEntrada = obs.match(/\[(?:ENTRADA\vert{}REINGRESO) CASETA:\s*([^\]]+)\]/i);
   return {
     horaSalidaCaseta: mSalida ? mSalida[1].trim() : null,
     horaEntradaCaseta: mEntrada ? mEntrada[1].trim() : null
   };
 };
 
-// 1. OBTENER Y CLASIFICAR TODOS LOS PASES DEL DÍA PARA CASETA
-export const obtenerDatosCaseta = async (sedeId) => {
-  const hoy = obtenerFechaLocalHoy();
+const extraerHorarioProgramado = (obs = '') => {
+  const primeraParte = String(obs).split('|')[0]?.trim() || '';
+  return primeraParte || 'Horario autorizado';
+};
 
+// 1. OBTENER DATOS ESTRICTAMENTE ACOTADOS PARA VIGILANCIA (SIN FOTOS, SIN DEPTOS, SIN MOTIVOS)
+export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
+  const hoy = obtenerFechaLocalHoy();
+  const fechaTarget = fechaConsulta || hoy;
+
+  // Solo pedimos id, numero_empleado y nombre_completo (Cero fotos, cero departamentos, cero puestos)
   let queryEmpleados = supabase
     .from('usuarios')
-    .select('id, numero_empleado, nombre_completo, area, puesto, foto_url, sede_id, activo, departamento_id')
+    .select('id, numero_empleado, nombre_completo, sede_id, activo, rol')
     .eq('activo', true)
+    .neq('rol', 'caseta')
     .order('nombre_completo', { ascending: true });
 
   if (sedeId) {
     queryEmpleados = queryEmpleados.eq('sede_id', sedeId);
   }
 
-  const [resEmpleados, resPermisos] = await Promise.all([
+  const [resEmpleados, resPermisos, resAsistencias] = await Promise.all([
     queryEmpleados,
     supabase
       .from('permisos')
       .select(`
-        *,
-        usuarios:usuario_id (
-          id, numero_empleado, nombre_completo, area, puesto, foto_url, sede_id,
-          departamentos:departamento_id (id, nombre, jefe_id, gerente_id)
-        ),
-        firmante1:firma_1_id (id, nombre_completo, rol),
-        firmante2:firma_2_id (id, nombre_completo, rol),
-        firmante3:firma_3_id (id, nombre_completo, rol)
+        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, observaciones, estado_general, created_at,
+        usuarios:usuario_id (id, numero_empleado, nombre_completo, sede_id)
       `)
-      .lte('fecha_permiso', hoy)
-      .order('created_at', { ascending: false })
+      .eq('fecha_permiso', hoy)
+      .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta'])
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('asistencias_caseta')
+      .select('id, usuario_id, fecha, hora_entrada, hora_salida')
+      .eq('fecha', fechaTarget)
   ]);
 
   if (resEmpleados.error) throw resEmpleados.error;
@@ -74,105 +62,83 @@ export const obtenerDatosCaseta = async (sedeId) => {
   const empleadosSede = resEmpleados.data || [];
   const idsSede = new Set(empleadosSede.map(e => e.id));
 
-  // Filtrar permisos vigentes hoy (fecha exacta hoy, o vacaciones/faltas cuyo rango cubra hoy)
-  const pasesHoy = (resPermisos.data || []).filter(p => {
-    const perteneceASede = !sedeId || p.usuarios?.sede_id === sedeId || idsSede.has(p.usuario_id);
-    if (!perteneceASede) return false;
+  const pasesHoy = (resPermisos.data || []).filter(
+    p => !sedeId || p.usuarios?.sede_id === sedeId || idsSede.has(p.usuario_id)
+  );
 
-    const inicio = p.fecha_permiso;
-    const fin = p.fecha_fin || p.fecha_permiso;
-    return inicio <= hoy && fin >= hoy;
-  });
-
-  const pasesAutorizados = [];
-  const pasesEnEspera = [];
-  const pasesRechazados = [];
+  const pasesPorCruzar = [];
   const personalFuera = [];
-  const faltasProgramadas = [];
-  const completados = [];
+  const crucesCompletadosHoy = [];
 
   pasesHoy.forEach(rawPase => {
     const tipo = (rawPase.tipo_permiso || '').toLowerCase();
-    const estado = (rawPase.estado_general || '').toLowerCase();
-    const obs = rawPase.observaciones || '';
+    if (tipo !== 'salida' && tipo !== 'retardo') return; // Vigilancia solo opera Salidas y Retardos autorizados
 
+    const obs = rawPase.observaciones || '';
     const { horaSalidaCaseta, horaEntradaCaseta } = extraerHorasCaseta(obs);
-    const yaSalio = Boolean(rawPase.hora_salida_real) || Boolean(horaSalidaCaseta);
-    const yaRegreso = Boolean(rawPase.hora_entrada_real) || Boolean(horaEntradaCaseta);
+    const yaSalio = Boolean(horaSalidaCaseta);
+    const yaRegreso = Boolean(horaEntradaCaseta);
     const requiereRegreso = obs.toLowerCase().includes('regresa:');
 
-    // Limpiar el horario para mostrarlo al guardia sin códigos internos
-    const horarioLimpio = obs
-      .split('|')
-      .map(s => s.trim())
-      .filter(s => s && !s.startsWith('✅') && !s.startsWith('Res:'))
-      .join(' • ');
-
     const p = {
-      ...rawPase,
-      nivelEspera: calcularNivelEspera(rawPase),
-      horarioLimpio: horarioLimpio || 'Horario estándar',
+      id: rawPase.id,
+      folio: rawPase.folio,
+      usuario_id: rawPase.usuario_id,
+      tipo_permiso: tipo,
+      horarioProgramado: extraerHorarioProgramado(obs),
+      requiereRegreso,
       horaSalidaCaseta,
-      horaEntradaCaseta
+      horaEntradaCaseta,
+      usuarios: {
+        id: rawPase.usuarios?.id,
+        numero_empleado: rawPase.usuarios?.numero_empleado,
+        nombre_completo: rawPase.usuarios?.nombre_completo
+      }
     };
 
-    // 1. Faltas y Vacaciones
-    if (tipo === 'falta' || tipo === 'vacaciones') {
-      faltasProgramadas.push(p);
-      return;
-    }
-
-    // 2. Rechazados
-    if (estado === 'rechazado') {
-      pasesRechazados.push(p);
-      return;
-    }
-
-    // 3. Movimientos ya concluidos en puerta
+    // 1. Ya concluyó su movimiento en puerta
     if (
-      estado === 'completado_caseta' ||
+      rawPase.estado_general === 'completado_caseta' ||
       (tipo === 'retardo' && yaRegreso) ||
       (tipo === 'salida' && yaSalio && (!requiereRegreso || yaRegreso))
     ) {
-      completados.push(p);
+      crucesCompletadosHoy.push(p);
       return;
     }
 
-    // 4. Personal actualmente fuera de planta (salió y tiene marcado regresar hoy)
+    // 2. Salió con pase temporal y está pendiente su reingreso
     if (tipo === 'salida' && yaSalio && requiereRegreso && !yaRegreso) {
       personalFuera.push(p);
       return;
     }
 
-    // 5. Autorizados listos para ejecutar en puerta
-    if (['autorizado', 'aprobado'].includes(estado)) {
-      pasesAutorizados.push(p);
-      return;
-    }
+    // 3. Autorizado por RH listo para cruzar puerta
+    pasesPorCruzar.push(p);
+  });
 
-    // 6. En espera de firmas
-    pasesEnEspera.push(p);
+  // Mapa de asistencias de la fecha consultada
+  const mapaAsistencias = {};
+  (resAsistencias.data || []).forEach(a => {
+    mapaAsistencias[a.usuario_id] = a;
   });
 
   return {
-    pasesAutorizados,
-    pasesEnEspera,
-    pasesRechazados,
+    pasesPorCruzar,
     personalFuera,
-    faltasProgramadas,
-    completados,
-    empleadosSede
+    crucesCompletadosHoy,
+    empleadosSede,
+    mapaAsistencias
   };
 };
 
-// 2. REGISTRAR CHECK-IN / CHECK-OUT EN PUERTA
+// 2. SELLAR HORA DE SALIDA / ENTRADA / REINGRESO EN PUERTA (SOBRE PASE AUTORIZADO)
 export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') => {
   const ahora = new Date();
   const horaFormateada = ahora.toTimeString().slice(0, 5);
 
   const { data: permiso, error: errGet } = await supabase
     .from('permisos')
-    .select('id, usuario_id, folio, tipo_permiso, observaciones')
+    .select('id, usuario_id, tipo_permiso, observaciones')
     .eq('id', permisoId)
     .single();
 
@@ -183,18 +149,15 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   const tipo = (permiso.tipo_permiso || '').toLowerCase();
   const requiereRegreso = obsActual.toLowerCase().includes('regresa:');
 
-  let etiquetaBitacora = `[MOVIMIENTO CASETA: \${horaFormateada} hrs]`;
-  let cierraCicloCaseta = false;
+  let etiquetaBitacora = `[ENTRADA CASETA: ${horaFormateada} hrs]`;
+  let cierraCicloCaseta = true;
 
   if (mov.includes('salida') || (tipo === 'salida' && !obsActual.includes('[SALIDA CASETA:'))) {
-    etiquetaBitacora = `[SALIDA CASETA: \${horaFormateada} hrs]`;
+    etiquetaBitacora = `[SALIDA CASETA: ${horaFormateada} hrs]`;
     cierraCicloCaseta = !requiereRegreso;
-  } else {
-    etiquetaBitacora = `[ENTRADA CASETA: \${horaFormateada} hrs]`;
-    cierraCicloCaseta = true;
   }
 
-  const nuevasObservaciones = `${obsActual} \vert{}${etiquetaBitacora}`.trim();
+  const nuevasObservaciones = `${obsActual} | ${etiquetaBitacora}`.trim();
   const updates = { observaciones: nuevasObservaciones };
 
   if (cierraCicloCaseta) {
@@ -209,7 +172,41 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   if (error) throw error;
 };
 
-// 3. GENERAR RETARDO EN PUERTA CUANDO EL EMPLEADO LLEGA SIN PASE PREVIO (CON JERARQUÍA DE 4 NIVELES)
+// 3. REGISTRAR ENTRADA O SALIDA EN EL PASE DE LISTA DIARIO
+export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada', guardiaId = null) => {
+  const hoy = obtenerFechaLocalHoy();
+  const horaActual = new Date().toTimeString().slice(0, 5);
+
+  const { data: existente } = await supabase
+    .from('asistencias_caseta')
+    .select('id, hora_entrada, hora_salida')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha', hoy)
+    .maybeSingle();
+
+  if (!existente) {
+    const payload = {
+      usuario_id: usuarioId,
+      fecha: hoy,
+      hora_entrada: tipoMarca === 'entrada' ? horaActual : null,
+      hora_salida: tipoMarca === 'salida' ? horaActual : null,
+      registrado_por: guardiaId
+    };
+    const { error } = await supabase.from('asistencias_caseta').insert([payload]);
+    if (error) throw error;
+  } else {
+    const updates = tipoMarca === 'salida'
+      ? { hora_salida: horaActual }
+      : { hora_entrada: existente.hora_entrada || horaActual };
+    const { error } = await supabase
+      .from('asistencias_caseta')
+      .update(updates)
+      .eq('id', existente.id);
+    if (error) throw error;
+  }
+};
+
+// 4. APOYO AL TRABAJADOR SIN INTERNET: GENERAR PASE DE RETARDO EN PUERTA
 export const registrarRetardoEnPuerta = async (usuarioId) => {
   const ahora = new Date();
   const fechaHoy = obtenerFechaLocalHoy();
@@ -269,7 +266,6 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
     if (rh) rhId = rh.id;
   }
 
-  // Reglas de auto-aprobación si quien llega tarde es Jefe o Gerente
   let f1Estado = firma1Id ? 'pendiente' : 'omitido';
   let f2Estado = gerenteId ? 'pendiente' : 'omitido';
 
@@ -284,7 +280,7 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
     f2Estado = 'auto_aprobado';
   }
 
-  const folioTemporal = `CAS-\${Math.floor(100000 + Math.random() * 900000)}`;
+  const folioTemporal = `CAS-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const { error: errInsert } = await supabase
     .from('permisos')
@@ -295,9 +291,9 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
       fecha_permiso: fechaHoy,
       tipo_permiso: 'retardo',
       pago: 'Pendiente de dictamen',
-      asunto_motivo: `[RETARDO EN PUERTA] Registro directo en Caseta a las \${horaActual} hrs sin pase previo.`,
+      asunto_motivo: `[APOYO CASETA] Solicitud de retardo generada en puerta a las ${horaActual} hrs.`,
       total_horas: 1,
-      observaciones: `🕒 Llegada reportada en caseta: \${horaActual} hrs`,
+      observaciones: `🕒 Llegada registrada en caseta: ${horaActual} hrs`,
       firma_empleado: true,
       firma_1_id: firma1Id,
       firma_1_estado: f1Estado,
@@ -311,7 +307,11 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
 
   if (errInsert) throw errInsert;
 
-  // Notificar únicamente a la autoridad inmediata que le toca autorizar
+  // También dejamos marcada su hora de entrada en la lista de asistencia de hoy
+  try {
+    await registrarAsistenciaLista(user.id, 'entrada', null);
+  } catch (_) {}
+
   let destinatarios = [];
   if (f1Estado === 'pendiente' && firma1Id) {
     destinatarios = [firma1Id];
@@ -323,8 +323,8 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
 
   if (destinatarios.length > 0) {
     await enviarNotificacionPushUsuarios(destinatarios, {
-      titulo: '🚨 LLEGADA SIN PASE EN CASETA',
-      mensaje: `👤 \${user.nombre_completo}\n🕒 Hora en puerta: \${horaActual} hrs\nRequiere autorización de acceso.`,
+      titulo: '🕒 RETARDO GENERADO EN CASETA',
+      mensaje: `👤 ${user.nombre_completo}\n🕒 Hora de llegada: ${horaActual} hrs\nPendiente de autorización.`,
       fotoUrl: user.foto_url,
       urlDestino: '/aprobaciones'
     });
