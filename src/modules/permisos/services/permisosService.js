@@ -352,16 +352,18 @@ export const crearNuevaSolicitudPermiso = async ({
   // === PASO 1: DETERMINAR FIRMA 1 (SUPERVISOR DE SUBÁREA / JEFE DE DEPTO / TITULAR NÓMINAS) ===
   let jefeFinalId = null;
 
+  let reportaDirectoAGerente = false;
   if (reportaAId) {
     const { data: supDirecto } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
     if (supDirecto && supDirecto.activo) {
-      // Si su jefe directo es Supervisor (encargado), Jefe de Depto (jefe_area) o Titular de Nóminas (rh_nominas, caso Victoria con Nora),
-      // entra como Firma 1. Si reporta directo a un Gerente (gerente_produccion, gerente_admin, gerente_rh), salta Firma 1.
       if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
         jefeFinalId = supDirecto.id;
+      } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
+        reportaDirectoAGerente = true;
       }
     }
-  } else {
+  }
+  if (!jefeFinalId && !reportaDirectoAGerente) {
     // Si no tiene reporta_a_id explícito, busca primero encargado o jefe_area de su misma subárea
     const mandoMismaArea =
       mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||

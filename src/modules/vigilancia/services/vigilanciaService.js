@@ -1,7 +1,6 @@
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 
-// Fecha local YYYY-MM-DD (evita desfase UTC después de las 18:00 hrs)
 export const obtenerFechaLocalHoy = () => {
   const ahora = new Date();
   const offsetMs = ahora.getTimezoneOffset() * 60000;
@@ -27,7 +26,6 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   const hoy = obtenerFechaLocalHoy();
   const fechaTarget = fechaConsulta || hoy;
 
-  // Solo pedimos id, numero_empleado y nombre_completo (Cero fotos, cero departamentos, cero puestos)
   let queryEmpleados = supabase
     .from('usuarios')
     .select('id, numero_empleado, nombre_completo, sede_id, activo, rol')
@@ -72,7 +70,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
   pasesHoy.forEach(rawPase => {
     const tipo = (rawPase.tipo_permiso || '').toLowerCase();
-    if (tipo !== 'salida' && tipo !== 'retardo') return; // Vigilancia solo opera Salidas y Retardos autorizados
+    if (tipo !== 'salida' && tipo !== 'retardo') return;
 
     const obs = rawPase.observaciones || '';
     const { horaSalidaCaseta, horaEntradaCaseta } = extraerHorasCaseta(obs);
@@ -96,7 +94,6 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       }
     };
 
-    // 1. Ya concluyó su movimiento en puerta
     if (
       rawPase.estado_general === 'completado_caseta' ||
       (tipo === 'retardo' && yaRegreso) ||
@@ -106,17 +103,14 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       return;
     }
 
-    // 2. Salió con pase temporal y está pendiente su reingreso
     if (tipo === 'salida' && yaSalio && requiereRegreso && !yaRegreso) {
       personalFuera.push(p);
       return;
     }
 
-    // 3. Autorizado por RH listo para cruzar puerta
     pasesPorCruzar.push(p);
   });
 
-  // Mapa de asistencias de la fecha consultada
   const mapaAsistencias = {};
   (resAsistencias.data || []).forEach(a => {
     mapaAsistencias[a.usuario_id] = a;
@@ -131,7 +125,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   };
 };
 
-// 2. SELLAR HORA DE SALIDA / ENTRADA / REINGRESO EN PUERTA (SOBRE PASE AUTORIZADO)
+// 2. SELLAR HORA DE SALIDA / ENTRADA / REINGRESO EN PUERTA
 export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') => {
   const ahora = new Date();
   const horaFormateada = ahora.toTimeString().slice(0, 5);
@@ -206,7 +200,7 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
   }
 };
 
-// 4. APOYO AL TRABAJADOR SIN INTERNET: GENERAR PASE DE RETARDO EN PUERTA
+// 4. APOYO AL TRABAJADOR SIN INTERNET: GENERAR PASE DE RETARDO EN PUERTA CON ENRUTADOR DE 4 NIVELES
 export const registrarRetardoEnPuerta = async (usuarioId) => {
   const ahora = new Date();
   const fechaHoy = obtenerFechaLocalHoy();
@@ -214,74 +208,98 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
 
   const { data: user, error: errU } = await supabase
     .from('usuarios')
-    .select('id, nombre_completo, foto_url, rol, reporta_a_id, departamento_id, tipo_personal')
+    .select('id, nombre_completo, foto_url, rol, area, reporta_a_id, departamento_id, tipo_personal')
     .eq('id', usuarioId)
     .single();
 
   if (errU || !user) throw new Error("No se encontró al colaborador seleccionado.");
 
-  let firma1Id = user.reporta_a_id || null;
-  let gerenteId = null;
-  let rhId = null;
-  let clasificacionDepto = '';
+  const [{ data: depto }, { data: todosEmpDepto }] = await Promise.all([
+    user.departamento_id
+      ? supabase.from('departamentos').select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id').eq('id', user.departamento_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    user.departamento_id
+      ? supabase.from('usuarios').select('id, area, rol, activo').eq('departamento_id', user.departamento_id).eq('activo', true)
+      : Promise.resolve({ data: [] })
+  ]);
 
-  if (user.departamento_id) {
-    const { data: depto } = await supabase
-      .from('departamentos')
-      .select('jefe_id, gerente_id, rh_id, clasificacion')
-      .eq('id', user.departamento_id)
+  const areaSolicitante = (user.area || '').trim().toUpperCase();
+  const listaDepto = todosEmpDepto || [];
+  const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== user.id);
+
+  // PASO 1: VALIDAR SI SU JEFE DIRECTO (reporta_a_id) SIGUE TENIENDO ROL DE MANDO ACTIVO
+  let firma1Id = null;
+
+  if (user.reporta_a_id) {
+    const { data: supDirecto } = await supabase
+      .from('usuarios')
+      .select('id, rol, activo')
+      .eq('id', user.reporta_a_id)
       .maybeSingle();
 
-    if (depto) {
-      if (!firma1Id) firma1Id = depto.jefe_id;
-      gerenteId = depto.gerente_id;
-      rhId = depto.rh_id;
-      clasificacionDepto = (depto.clasificacion || '').toLowerCase();
+    // Si lo degradaron a 'empleado' o está inactivo, NO se le asigna y cae al fallback del departamento
+    if (supDirecto && supDirecto.activo && ['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
+      firma1Id = supDirecto.id;
     }
   }
 
-  const nomina = (user.tipo_personal || clasificacionDepto || 'produccion').toLowerCase();
+  // Fallback inteligente si no tenía reporta_a_id o si su supervisor fue cambiado a 'empleado'
+  if (!firma1Id) {
+    const mandoMismaSubarea =
+      mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
+      mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
 
-  if (!gerenteId) {
-    const rolGerente = nomina.includes('admin') ? 'gerente_admin' : 'gerente_produccion';
-    const { data: ger } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('rol', rolGerente)
-      .eq('activo', true)
-      .limit(1)
-      .maybeSingle();
-    if (ger) gerenteId = ger.id;
+    if (mandoMismaSubarea) {
+      firma1Id = mandoMismaSubarea.id;
+    } else if (depto?.jefe_id && depto.jefe_id !== user.id) {
+      // Verificar que el jefe del depto también siga siendo mando activo
+      const { data: jefeDeptoData } = await supabase
+        .from('usuarios')
+        .select('id, rol, activo')
+        .eq('id', depto.jefe_id)
+        .maybeSingle();
+      if (jefeDeptoData && jefeDeptoData.activo && ['encargado', 'jefe_area', 'rh_nominas'].includes(jefeDeptoData.rol)) {
+        firma1Id = jefeDeptoData.id;
+      }
+    }
   }
 
-  if (!rhId) {
-    const { data: rh } = await supabase
-      .from('usuarios')
-      .select('id')
-      .in('rol', ['gerente_rh', 'rh_nominas'])
-      .eq('activo', true)
-      .order('rol', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (rh) rhId = rh.id;
+  // PASO 2: DETERMINAR GERENCIA (FIRMA 2) Y RH (FIRMA 3)
+  const nomDeptoUpper = (depto?.nombre || '').toUpperCase();
+  const clasifLower = (depto?.clasificacion || user.tipo_personal || 'produccion').toLowerCase();
+  const esDeptoRH = clasifLower.includes('rh') || nomDeptoUpper.includes('RECURSOS HUMANOS') || nomDeptoUpper.includes('VIGILANCIA') || nomDeptoUpper === 'RH';
+  const rolGerenteFallback = clasifLower.includes('admin') ? 'gerente_admin' : (clasifLower.includes('rh') ? 'gerente_rh' : 'gerente_produccion');
+
+  const [{ data: gerenteDeptoData }, { data: gerenteFallbackData }, { data: rhUsersData }] = await Promise.all([
+    depto?.gerente_id ? supabase.from('usuarios').select('id, rol').eq('id', depto.gerente_id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from('usuarios').select('id, rol').eq('rol', rolGerenteFallback).eq('activo', true).limit(1).maybeSingle(),
+    supabase.from('usuarios').select('id, rol').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true)
+  ]);
+
+  const listaRH = rhUsersData || [];
+  const gerenteRH = listaRH.find(u => u.rol === 'gerente_rh') || listaRH[0];
+  const rhId = gerenteRH?.id || depto?.rh_id || null;
+
+  let gerenteId = gerenteDeptoData?.id || (esDeptoRH ? rhId : gerenteFallbackData?.id) || null;
+  const rolDelGerenteDepto = gerenteDeptoData?.rol || (esDeptoRH ? 'gerente_rh' : gerenteFallbackData?.rol);
+
+  // PASO 3: ÁRBITRO DE ESTADOS
+  let f1Estado = firma1Id ? (firma1Id === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+  let f2Estado = gerenteId ? (gerenteId === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+  let f3Estado = rhId ? (rhId === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteId === rhId) {
+    f2Estado = 'omitido';
   }
 
-  let f1Estado = firma1Id ? 'pendiente' : 'omitido';
-  let f2Estado = gerenteId ? 'pendiente' : 'omitido';
-
-  if (['jefe_area', 'encargado'].includes(user.rol) && (!user.reporta_a_id || user.reporta_a_id === gerenteId || firma1Id === user.id)) {
-    firma1Id = user.id;
-    f1Estado = 'auto_aprobado';
-  }
   if (['gerente_produccion', 'gerente_admin', 'gerente_rh', 'superadmin'].includes(user.rol)) {
-    firma1Id = user.id;
     f1Estado = 'auto_aprobado';
-    gerenteId = user.id;
     f2Estado = 'auto_aprobado';
   }
 
   const folioTemporal = `CAS-${Math.floor(100000 + Math.random() * 900000)}`;
 
+  // Guardamos desde el inicio el sello real [ENTRADA CASETA: HH:MM hrs] para que RH lo vea en el Historial y en la Papeleta PDF
   const { error: errInsert } = await supabase
     .from('permisos')
     .insert([{
@@ -293,14 +311,14 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
       pago: 'Pendiente de dictamen',
       asunto_motivo: `[APOYO CASETA] Solicitud de retardo generada en puerta a las ${horaActual} hrs.`,
       total_horas: 1,
-      observaciones: `🕒 Llegada registrada en caseta: ${horaActual} hrs`,
+      observaciones: `🕒 Llegada en puerta: ${horaActual} hrs | [ENTRADA CASETA: ${horaActual} hrs]`,
       firma_empleado: true,
       firma_1_id: firma1Id,
       firma_1_estado: f1Estado,
       firma_2_id: gerenteId,
       firma_2_estado: f2Estado,
       firma_3_id: rhId,
-      firma_3_estado: 'pendiente',
+      firma_3_estado: f3Estado,
       requiere_caseta: true,
       estado_general: 'en_firmas'
     }]);
@@ -317,12 +335,12 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
     destinatarios = [firma1Id];
   } else if (f2Estado === 'pendiente' && gerenteId) {
     destinatarios = [gerenteId];
-  } else if (rhId) {
-    destinatarios = [rhId];
+  } else if (f3Estado === 'pendiente') {
+    destinatarios = listaRH.length > 0 ? listaRH.map(u => u.id) : [rhId];
   }
 
   if (destinatarios.length > 0) {
-    await enviarNotificacionPushUsuarios(destinatarios, {
+    await enviarNotificacionPushUsuarios([...new Set(destinatarios.filter(Boolean))], {
       titulo: '🕒 RETARDO GENERADO EN CASETA',
       mensaje: `👤 ${user.nombre_completo}\n🕒 Hora de llegada: ${horaActual} hrs\nPendiente de autorización.`,
       fotoUrl: user.foto_url,
