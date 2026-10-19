@@ -25,7 +25,7 @@ export default function TarjetaAprobacion({
 
   // Saber a quién le toca realmente
   const esMiTurno = () => {
-    if (usuarioActual?.rol === 'jefe_area' && solicitud.firma_1_estado === 'pendiente') return true;
+    if (['jefe_area', 'encargado'].includes(usuarioActual?.rol) && solicitud.firma_1_estado === 'pendiente') return true;
     if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
     if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_2_estado !== 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
     return false;

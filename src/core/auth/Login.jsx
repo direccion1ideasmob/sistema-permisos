@@ -16,7 +16,6 @@ export default function Login({ alEntrar }) {
     const pinDigitado = pass.trim();
 
     try {
-      // Consulta con las columnas reales de Supabase: 'usuario_login' y 'pin'
       const { data, error } = await supabase
         .from('usuarios')
         .select('*')
@@ -27,7 +26,6 @@ export default function Login({ alEntrar }) {
       if (error || !data) {
         alert("Credenciales incorrectas");
       } else {
-        // Guardamos la sesión usando las columnas correctas
         localStorage.setItem("permisos_sesion", JSON.stringify({
           id: data.id,
           usuario: data.usuario_login,
@@ -48,7 +46,6 @@ export default function Login({ alEntrar }) {
 
   const solicitarAyudaRH = () => {
     const msj = encodeURIComponent(`Hola RH, solicito apoyo para restaurar mi PIN de acceso al sistema ERP.`);
-    // Cambia el número de teléfono por el real de tu área de RH (ej. 525551234567)
     window.open(`https://wa.me/?text=${msj}`, '_blank');
   };
 
@@ -79,12 +76,16 @@ export default function Login({ alEntrar }) {
           </button>
         </form>
         
-        
         <button type="button" onClick={solicitarAyudaRH} style={styles.btnOlvidado}>
           ¿Olvidaste tu PIN?
         </button>
 
-        <p style={styles.footer}>RH CONTROL & MANAGEMENT SYSTEM V1.0 • POWERED BY ING. ALEJANDRO VALENZO © 2026</p>
+        <div style={styles.footerBox}>
+          <span style={styles.footerLine1}>RH CONTROL &amp; MANAGEMENT SYSTEM V1.0 • © 2026</span>
+          <span style={styles.footerLine2}>
+            POWERED BY <strong style={styles.footerStrong}>ING. ALEJANDRO VALENZO</strong>
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -92,88 +93,111 @@ export default function Login({ alEntrar }) {
 
 const styles = {
   fondo: { 
-    height: '100vh', 
+    minHeight: '100vh', 
     display: 'flex', 
     justifyContent: 'center', 
     alignItems: 'center', 
     backgroundColor: '#fff',
     padding: '20px',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif'
   },
   contenedor: { 
     width: '100%', 
-    maxWidth: '400px',
+    maxWidth: '390px',
     textAlign: 'center',
     boxSizing: 'border-box'
   },
   logo: { 
     width: '100%', 
-    maxWidth: '350px', 
-    marginBottom: '15px',
+    maxWidth: '320px', 
+    marginBottom: '14px',
     objectFit: 'contain'
   },
   rh: {
-    fontSize: '18px',
-    letterSpacing: '6px',
-    color: '#000',
+    fontSize: '17px',
+    letterSpacing: '5px',
+    color: '#0f172a',
     margin: '0 0 4px 0',
     fontWeight: '900'
   },
   titulo: { 
-    fontSize: '13px', 
-    letterSpacing: '4px', 
-    color: '#888', 
-    marginBottom: '35px', 
-    fontWeight: '900' 
+    fontSize: '12px', 
+    letterSpacing: '3.5px', 
+    color: '#64748b', 
+    marginBottom: '32px', 
+    fontWeight: '800' 
   },
   form: { 
     width: '100%', 
     display: 'flex', 
     flexDirection: 'column', 
-    gap: '15px' 
+    gap: '14px' 
   },
   input: { 
     width: '100%',
-    padding: '18px', 
-    border: '2px solid #f0f0f0', 
-    borderRadius: '15px', 
-    fontSize: '16px',
+    padding: '16px 18px', 
+    border: '1.5px solid #e2e8f0', 
+    borderRadius: '12px', 
+    fontSize: '15px',
     outline: 'none',
-    backgroundColor: '#fafafa',
-    transition: '0.3s',
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    transition: '0.2s',
     boxSizing: 'border-box',
-    fontFamily: 'monospace',
-    letterSpacing: '1px'
+    fontFamily: '"Inter", monospace',
+    fontWeight: '600',
+    letterSpacing: '0.5px'
   },
   boton: { 
     width: '100%',
-    padding: '20px', 
-    backgroundColor: '#000', 
+    padding: '17px', 
+    backgroundColor: '#0f172a', 
     color: '#fff', 
     border: 'none',
-    borderRadius: '15px', 
-    fontSize: '16px', 
-    fontWeight: '900', 
+    borderRadius: '12px', 
+    fontSize: '14px', 
+    fontWeight: '800', 
     cursor: 'pointer',
-    marginTop: '10px',
+    marginTop: '6px',
     letterSpacing: '2px',
     boxSizing: 'border-box'
   },
   btnOlvidado: {
     background: 'none',
     border: 'none',
-    color: '#888',
+    color: '#64748b',
     fontSize: '12px',
     fontWeight: '600',
-    marginTop: '24px',
+    marginTop: '20px',
     cursor: 'pointer',
     textDecoration: 'underline',
-    letterSpacing: '1px'
+    letterSpacing: '0.3px'
   },
-  footer: {
-    marginTop: '40px',
-    fontSize: '10px',
-    color: '#ccc',
-    letterSpacing: '3px'
+  footerBox: {
+    marginTop: '36px',
+    paddingTop: '16px',
+    borderTop: '1px solid #f1f5f9',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '4px',
+    userSelect: 'none'
+  },
+  footerLine1: {
+    fontSize: '9.5px',
+    fontWeight: '600',
+    color: '#94a3b8',
+    letterSpacing: '0.12em'
+  },
+  footerLine2: {
+    fontSize: '9.5px',
+    fontWeight: '600',
+    color: '#94a3b8',
+    letterSpacing: '0.1em'
+  },
+  footerStrong: {
+    color: '#334155',
+    fontWeight: '800'
   }
 };

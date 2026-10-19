@@ -12,7 +12,7 @@ import TarjetaAprobacion from './TarjetaAprobacion';
 import ModalDictamenAprobar from './ModalDictamenAprobar';
 import ModalRechazoPermiso from './ModalRechazoPermiso';
 import TablaHistorial from '../historial/TablaHistorial';
-import { CheckCircle2, Clock, Radar, FileCheck } from 'lucide-react';
+import { Inbox, Radar, Archive } from 'lucide-react';
 
 export default function Aprobaciones() {
   const { usuario } = useAuth();
@@ -86,14 +86,14 @@ export default function Aprobaciones() {
     }
   };
 
-  const esRH = usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh';
-  const esGerente = usuario?.rol.includes('gerente') && !esRH;
-  const esJefeDepto = usuario?.rol === 'jefe_area';
+  const esRH = usuario?.rol === 'rh_nominas' || usuario?.rol === 'gerente_rh' || usuario?.rol === 'superadmin';
+  const esGerente = usuario?.rol?.includes('gerente') && !esRH;
+  const esMandoArea = usuario?.rol === 'jefe_area' || usuario?.rol === 'encargado';
 
   const solicitudesDelUsuario = solicitudes.filter(s => {
     if (esRH) return true;
-    if (esJefeDepto) return s.firma_1_id === usuario.id;
-    if (esGerente) return s.firma_2_id === usuario.id;
+    if (esMandoArea) return s.firma_1_id === usuario.id;
+    if (esGerente) return s.firma_2_id === usuario.id || s.firma_1_id === usuario.id;
     return false;
   });
 
@@ -103,15 +103,19 @@ export default function Aprobaciones() {
     const firma1OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado);
     const firma2OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_2_estado);
 
+    // Si alguien (incluso Victoria en RH) es el firma_1_id directo y está pendiente, le aparece en Por Autorizar
+    if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return true;
+
     if (esRH) return firma1OK && firma2OK && s.firma_3_estado === 'pendiente';
-    if (esGerente) return firma1OK && s.firma_2_estado === 'pendiente';
-    if (esJefeDepto) return s.firma_1_estado === 'pendiente';
+    if (esGerente) return firma1OK && s.firma_2_estado === 'pendiente' && s.firma_2_id === usuario.id;
+    if (esMandoArea) return s.firma_1_estado === 'pendiente' && s.firma_1_id === usuario.id;
     return false;
   });
 
   const solicitudesTransito = solicitudesDelUsuario.filter(s => {
     if (!esRH) return false;
     if (['rechazado', 'autorizado', 'aprobado'].includes(s.estado_general)) return false;
+    if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return false;
     return s.firma_1_estado === 'pendiente' || s.firma_2_estado === 'pendiente';
   });
 
@@ -125,16 +129,16 @@ export default function Aprobaciones() {
     <div className="aprobaciones-container">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
 
-      <div className="tabs-aprobacion-bar" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
+      {/* BARRA SEGMENTADA MINIMALISTA Y ENCUADRADA */}
+      <div className="tabs-aprobacion-bar">
         <button
           onClick={() => setTabActiva('pendientes')}
           className={`tab-btn ${tabActiva === 'pendientes' ? 'active' : ''}`}
-          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
         >
-          {esRH ? <FileCheck size={14} /> : <Clock size={14} />}
-          <span>{esRH ? 'Listos para Dictamen' : 'Pendientes de mi firma'}</span>
+          <Inbox size={15} />
+          <span>{esRH ? 'Por Dictaminar' : 'Por Autorizar'}</span>
           {solicitudesPendientes.length > 0 && (
-            <span style={{ background: c.accent, color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px' }}>
+            <span className="tab-badge" style={{ background: c.accent, color: '#fff' }}>
               {solicitudesPendientes.length}
             </span>
           )}
@@ -144,12 +148,11 @@ export default function Aprobaciones() {
           <button
             onClick={() => setTabActiva('transito')}
             className={`tab-btn ${tabActiva === 'transito' ? 'active' : ''}`}
-            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
           >
-            <Radar size={14} />
-            <span>Radar / En Tránsito</span>
+            <Radar size={15} />
+            <span>En Tránsito</span>
             {solicitudesTransito.length > 0 && (
-              <span style={{ background: '#f59e0b', color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px' }}>
+              <span className="tab-badge" style={{ background: '#f59e0b', color: '#fff' }}>
                 {solicitudesTransito.length}
               </span>
             )}
@@ -159,10 +162,9 @@ export default function Aprobaciones() {
         <button
           onClick={() => setTabActiva('historial')}
           className={`tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
-          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
         >
-          <CheckCircle2 size={14} />
-          <span>Historial General</span>
+          <Archive size={15} />
+          <span>Historial</span>
         </button>
       </div>
 
@@ -173,9 +175,9 @@ export default function Aprobaciones() {
       ) : tabActiva === 'historial' ? (
         <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} />
       ) : listadoActual.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '13px' }}>
-          {tabActiva === 'pendientes' && (esRH ? 'No hay pases listos para dictamen final.' : 'No tienes solicitudes pendientes de firma.')}
-          {tabActiva === 'transito' && 'No hay permisos atorados en la cadena de firmas.'}
+        <div style={{ textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '13px', background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px' }}>
+          {tabActiva === 'pendientes' && (esRH ? 'No hay pases pendientes por dictaminar.' : 'No tienes solicitudes pendientes por autorizar.')}
+          {tabActiva === 'transito' && 'No hay permisos en tránsito actualmente.'}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
