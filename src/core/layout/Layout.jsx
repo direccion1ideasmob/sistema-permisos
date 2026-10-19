@@ -171,22 +171,24 @@ export default function Layout() {
               </div>
 
               <footer style={{
-                marginTop: "40px",
+                marginTop: "36px",
                 paddingTop: "16px",
-                paddingBottom: "8px",
+                paddingBottom: esMobile ? "24px" : "10px",
                 borderTop: `1px solid ${tema.border}`,
                 display: "flex",
-                justifyContent: "space-between",
+                flexDirection: esMobile ? "column" : "row",
+                justifyContent: esMobile ? "center" : "space-between",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: "12px",
+                textAlign: "center",
+                gap: esMobile ? "6px" : "12px",
                 fontFamily: "'Inter', Georgia, serif",
-                fontSize: "9.5px",
+                fontSize: esMobile ? "8.5px" : "9.5px",
                 fontWeight: "600",
                 color: tema.textSecondary,
-                letterSpacing: "0.22em",
+                letterSpacing: esMobile ? "0.14em" : "0.22em",
+                lineHeight: "1.5",
                 textTransform: "uppercase",
-                opacity: 0.75,
+                opacity: 0.8,
                 userSelect: "none"
               }}>
                 <span>RH CONTROL &amp; MANAGEMENT SYSTEM V1.0 &nbsp;•&nbsp; © 2026</span>

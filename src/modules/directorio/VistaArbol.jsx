@@ -308,24 +308,24 @@ export default function VistaArbol({
         }
       `}</style>
 
-      {/* BARRA DE CONTROL SUPERIOR */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      {/* BARRA DE CONTROL SUPERIOR RESPONSIVA */}
+      <div style={{ display: 'flex', flexDirection: esMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: esMobile ? 'stretch' : 'center', marginBottom: '18px', gap: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: esMobile ? '1fr 1fr' : 'repeat(3, auto)', gap: '8px' }}>
           {seguridadDesbloqueada ? (
-            <button onClick={() => setSeguridadDesbloqueada(false)} style={{ background: c.accentSoft, border: `1.5px solid ${c.accent}`, padding: '7px 12px', borderRadius: '6px', color: c.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              <Unlock size={13} /> Edición Activa
+            <button onClick={() => setSeguridadDesbloqueada(false)} style={{ gridColumn: esMobile ? '1 / -1' : 'auto', justifyContent: 'center', background: c.accentSoft, border: `1.5px solid ${c.accent}`, padding: '9px 12px', borderRadius: '7px', color: c.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              <Unlock size={13} /> Edición de Estructura Activa
             </button>
           ) : (
-            <button onClick={() => setModalPinAbierto(true)} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '7px 12px', borderRadius: '6px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+            <button onClick={() => setModalPinAbierto(true)} style={{ gridColumn: esMobile ? '1 / -1' : 'auto', justifyContent: 'center', background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '9px 12px', borderRadius: '7px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
               <Lock size={13} color="#f59e0b" /> <span>Acomodar Estructura</span>
             </button>
           )}
 
-          <button onClick={expandirTodo} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '7px 11px', borderRadius: '6px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          <button onClick={expandirTodo} style={{ justifyContent: 'center', background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '8px 11px', borderRadius: '7px', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             <ChevronsDown size={13} /> Expandir Todo
           </button>
 
-          <button onClick={comprimirTodo} style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '7px 11px', borderRadius: '6px', color: c.subText, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          <button onClick={comprimirTodo} style={{ justifyContent: 'center', background: c.surfaceCard, border: `1.5px solid ${c.border}`, padding: '8px 11px', borderRadius: '7px', color: c.subText, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
             <ChevronsUp size={13} /> Comprimir Todo
           </button>
         </div>
@@ -333,7 +333,7 @@ export default function VistaArbol({
         <select 
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
-          style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '6px', color: c.text, fontSize: '11.5px', fontWeight: '800', padding: '7px 10px', outline: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.02em', maxWidth: '100%' }}
+          style={{ width: esMobile ? '100%' : 'auto', background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '7px', color: c.text, fontSize: '11.5px', fontWeight: '800', padding: '9px 12px', outline: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.02em', boxSizing: 'border-box' }}
         >
           <option value="ALL">Todas las Divisiones</option>
           <option value="produccion">Planta & Producción</option>
@@ -375,41 +375,55 @@ export default function VistaArbol({
                 onClick={() => toggleDivision(sec.key)}
                 style={{ 
                   display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
+                  flexDirection: 'column',
                   padding: esMobile ? '14px' : '16px 20px', 
                   cursor: 'pointer', 
                   background: divAbierta ? (modoOscuro ? '#1c1c1c' : '#e2e8f0') : c.surfaceCard,
                   borderBottom: divAbierta ? `1.5px solid ${c.border}` : 'none',
-                  gap: '12px',
-                  flexWrap: 'wrap'
+                  gap: '10px'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
-                  <div style={{ width: '30px', height: '30px', borderRadius: '6px', background: divAbierta ? '#f59e0b' : c.surface, color: divAbierta ? '#000' : c.text, border: `1px solid ${divAbierta ? '#f59e0b' : c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {divAbierta ? <ChevronDown size={17} strokeWidth={2.5} /> : <ChevronRight size={17} strokeWidth={2.5} />}
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <IconoSec size={15} color={c.text} style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: esMobile ? '13px' : '14px', fontWeight: '900', color: c.text, letterSpacing: '0.05em' }}>
-                        {sec.label}
-                      </span>
+                {/* Fila superior: Botón Chevron + Ícono + Nombre completo de la División sin cortarse */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: divAbierta ? '#f59e0b' : c.surface, color: divAbierta ? '#000' : c.text, border: `1px solid ${divAbierta ? '#f59e0b' : c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {divAbierta ? <ChevronDown size={16} strokeWidth={2.5} /> : <ChevronRight size={16} strokeWidth={2.5} />}
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: c.subText, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <Crown size={11} color="#f59e0b" /> GERENCIA: <strong style={{ color: c.text }}>{titularTexto}</strong>
+                    <IconoSec size={16} color={c.text} style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: esMobile ? '13px' : '14.5px', fontWeight: '900', color: c.text, letterSpacing: '0.03em', lineHeight: '1.25' }}>
+                      {sec.label}
                     </span>
                   </div>
+
+                  {!esMobile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '4px 9px', borderRadius: '5px' }}>
+                        {deptosSec.length} {deptosSec.length === 1 ? 'DEPTO' : 'DEPTOS'}
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: c.text, background: c.surface, border: `1px solid ${c.border}`, padding: '4px 9px', borderRadius: '5px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <Users size={12} /> {totalPersonasDivision}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                  <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '4px 9px', borderRadius: '5px' }}>
-                    {deptosSec.length} {deptosSec.length === 1 ? 'DEPTO' : 'DEPTOS'}
+                {/* Fila inferior: Gerencia a la izquierda y contadores a la derecha en móvil */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingLeft: esMobile ? '38px' : '38px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: c.subText, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <Crown size={11} color="#f59e0b" style={{ flexShrink: 0 }} />
+                    <span>GERENCIA: <strong style={{ color: c.text, fontWeight: '800' }}>{titularTexto}</strong></span>
                   </span>
-                  <span style={{ fontSize: '11px', fontWeight: '800', color: c.text, background: c.surface, border: `1px solid ${c.border}`, padding: '4px 9px', borderRadius: '5px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    <Users size={12} /> {totalPersonasDivision}
-                  </span>
+
+                  {esMobile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '10px', fontWeight: '800', color: c.subText, background: c.surface, border: `1px solid ${c.border}`, padding: '3px 7px', borderRadius: '4px' }}>
+                        {deptosSec.length} {deptosSec.length === 1 ? 'DEPTO' : 'DEPTOS'}
+                      </span>
+                      <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.text, background: c.surface, border: `1px solid ${c.border}`, padding: '3px 7px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Users size={11} /> {totalPersonasDivision}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
