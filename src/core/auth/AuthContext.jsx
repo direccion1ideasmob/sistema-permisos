@@ -4,7 +4,7 @@ import { registrarSuscripcionPush } from '../notificaciones/notificacionesServic
 
 const AuthContext = createContext();
 
-// Función auxiliar: Desvincula por completo este navegador de Supabase y apaga el Push local
+// Al cerrar sesión: SOLO borramos el vínculo en Supabase (conservando el permiso del navegador para no pedir campana otra vez)
 export const desvincularPushDispositivoActual = async () => {
   try {
     if ('serviceWorker' in navigator) {
@@ -12,14 +12,10 @@ export const desvincularPushDispositivoActual = async () => {
       if (reg && reg.pushManager) {
         const sub = await reg.pushManager.getSubscription();
         if (sub && sub.endpoint) {
-          // 1. Borrar de Supabase para que nadie le envíe alertas a este navegador sin sesión
           await supabase
             .from('suscripciones_push')
             .delete()
             .eq('endpoint', sub.endpoint);
-
-          // 2. Desuscribir el navegador localmente para matar cualquier rastro del usuario anterior
-          await sub.unsubscribe();
         }
       }
     }
@@ -28,7 +24,7 @@ export const desvincularPushDispositivoActual = async () => {
   }
 };
 
-// Función auxiliar: Si el navegador ya tiene permiso concedido, asegura que el endpoint pertenezca SOLO al usuario actual
+// Al iniciar sesión o recargar: vincula automáticamente este dispositivo al usuario activo sin tocar la campana
 export const sincronizarPushUsuarioActivo = async (usuarioId) => {
   if (!usuarioId) return;
   try {
@@ -41,13 +37,11 @@ export const sincronizarPushUsuarioActivo = async (usuarioId) => {
       await navigator.serviceWorker.register('/sw.js');
       const sub = await registrarSuscripcionPush();
       if (sub && sub.endpoint) {
-        // Borra este navegador de cualquier otro usuario que haya iniciado sesión antes aquí
         await supabase
           .from('suscripciones_push')
           .delete()
           .eq('endpoint', sub.endpoint);
 
-        // Registra este navegador exclusivamente para el usuario logueado actualmente
         await supabase
           .from('suscripciones_push')
           .insert([{
