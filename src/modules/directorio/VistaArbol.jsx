@@ -12,15 +12,14 @@ import ModalSeguridadPin from './ModalSeguridadPin';
 
 const normalizar = (txt) => txt ? estandarizar(txt.toUpperCase()) : 'GENERAL';
 
-// === MOTOR INTELIGENTE DE ICONOS INDUSTRIALES POR SUBÁREA ===
 const obtenerIconoSubarea = (nombreArea = '') => {
   const n = normalizar(nombreArea);
   if (n.includes('NOMINA') || n.includes('FINANZA') || n.includes('CONTAB') || n.includes('TESORERIA') || n.includes('PAGO')) return Banknote;
-  if (n.includes('SEGURIDAD') || n.includes('HIGIENE') || n.includes('INDUSTRIAL') || n.includes('EHS') || n.includes('MEDICO')) return ShieldAlert;
+  if (n.includes('SEGURIDAD') || n.includes('HIGIENE') || n.includes('INDUSTRIAL') || n.includes('EHS') || n.includes('MEDICO') || n.includes('SALUD')) return ShieldAlert;
   if (n.includes('RECLUTAMIENTO') || n.includes('SELECCION') || n.includes('TALENTO') || n.includes('CONTRATACION')) return UserPlus;
-  if (n.includes('SISTEMA') || n.includes('DESARROLLO') || n.includes('TI') || n.includes('INFORMATICA') || n.includes('SOPORTE')) return Cpu;
+  if (n.includes('SISTEMA') || n.includes('DESARROLLO') || n.includes('TI') || n.includes('INFORMATICA') || n.includes('SOPORTE') || n.includes('CNC') || n.includes('LASER')) return Cpu;
   if (n.includes('ESTIMACION') || n.includes('INGENIERIA') || n.includes('PROYECTO') || n.includes('DISENO') || n.includes('ARQUITECT')) return Compass;
-  if (n.includes('CARPINTERIA') || n.includes('PRODUCCION') || n.includes('MAQUINADO') || n.includes('ARMADO') || n.includes('BARNIZ') || n.includes('HERRERIA') || n.includes('MANTENIMIENTO')) return Wrench;
+  if (n.includes('CARPINTERIA') || n.includes('PRODUCCION') || n.includes('MAQUINADO') || n.includes('ARMADO') || n.includes('BARNIZ') || n.includes('HERRERIA') || n.includes('METAL') || n.includes('MANTENIMIENTO')) return Wrench;
   if (n.includes('ALMACEN') || n.includes('COMPRA') || n.includes('LOGISTICA') || n.includes('INVENTARIO') || n.includes('EMBARQUE')) return Package;
   if (n.includes('OBRA') || n.includes('INSTALACION') || n.includes('RESIDENTE') || n.includes('CAMPO')) return HardHat;
   if (n.includes('VIGILANCIA') || n.includes('CASETA') || n.includes('BUNKER') || n.includes('ACCESO')) return ShieldCheck;
@@ -75,9 +74,9 @@ export default function VistaArbol({
   };
 
   const secciones = [
-    { key: 'produccion', label: 'PLANTA & PRODUCCIÓN', icon: Factory, match: 'prod' },
-    { key: 'administrativo', label: 'CORPORATIVO & ADMINISTRACIÓN', icon: Building2, match: 'admin' },
-    { key: 'obra', label: 'OPERACIONES EN OBRA', icon: HardHat, match: 'obra' }
+    { key: 'produccion', label: 'PLANTA & PRODUCCIÓN', icon: Factory, match: 'prod', rolGerenteDiv: 'gerente_produccion' },
+    { key: 'administrativo', label: 'CORPORATIVO & ADMINISTRACIÓN', icon: Building2, match: 'admin', rolGerenteDiv: 'gerente_admin' },
+    { key: 'obra', label: 'OPERACIONES EN OBRA', icon: HardHat, match: 'obra', rolGerenteDiv: null }
   ];
 
   const seccionesVisibles = filtro === 'ALL' ? secciones : secciones.filter(s => s.key === filtro);
@@ -236,7 +235,6 @@ export default function VistaArbol({
           background: ${c.lineStrong};
         }
 
-        /* AJUSTE RESPONSIVO ESTRICTO PARA CELULARES */
         @media (max-width: 640px) {
           .industrial-grid {
             grid-template-columns: 1fr;
@@ -296,38 +294,79 @@ export default function VistaArbol({
       </div>
 
       {/* SECCIONES POR DIVISIÓN */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
         {seccionesVisibles.map(sec => {
           const IconoSec = sec.icon;
+
+          // Identificar al Gerente General de esta División (Reynaldo en Producción, Pedro Simón en Administración)
+          const gerentesDivision = sec.rolGerenteDiv
+            ? usuarios.filter(u => u.rol === sec.rolGerenteDiv && u.activo === true)
+            : [];
+          const idsGerentesDivision = new Set(gerentesDivision.map(g => g.id));
+
+          // Filtrar departamentos de la división (ocultando cajas donde solo estaba el gerente de división solito, ej. "PRODUCCION" o "DIRECCION")
           const deptosSec = (departamentos || []).filter(d => {
             const esDeEstaRama = (d.clasificacion || 'produccion').toLowerCase().includes(sec.match);
-            return esDeEstaRama && (seguridadDesbloqueada || usuarios.some(u => u.departamento_id === d.id && u.activo === true));
+            if (!esDeEstaRama) return false;
+            const activosSinGerenteDiv = usuarios.filter(u => u.departamento_id === d.id && u.activo === true && !idsGerentesDivision.has(u.id));
+            return seguridadDesbloqueada || activosSinGerenteDiv.length > 0;
           });
 
-          if (deptosSec.length === 0) return null;
+          if (deptosSec.length === 0 && gerentesDivision.length === 0) return null;
 
           return (
             <div key={sec.key}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '8px', borderBottom: `2px solid ${c.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', paddingBottom: '8px', borderBottom: `2px solid ${c.border}` }}>
                 <IconoSec size={16} color={c.text} style={{ flexShrink: 0 }} />
                 <span style={{ fontSize: '12.5px', fontWeight: '900', color: c.text, letterSpacing: '0.06em' }}>
                   {sec.label}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* CABEZA DE LA DIVISIÓN (Ej. REYNALDO ORTIZ arriba de todos los departamentos de Producción) */}
+              {gerentesDivision.length > 0 && (
+                <div className={deptosSec.length > 0 ? "tronco-gerencia" : ""} style={{ marginBottom: deptosSec.length > 0 ? '0' : '14px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {gerentesDivision.map(g => renderPlacaIndustrial(g, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'gerencia', esMobile))}
+                  </div>
+                </div>
+              )}
+
+              {/* DEPARTAMENTOS QUE CUELGAN DE ESTA DIVISIÓN */}
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '12px',
+                marginLeft: gerentesDivision.length > 0 ? (esMobile ? '10px' : '20px') : '0',
+                paddingLeft: gerentesDivision.length > 0 ? (esMobile ? '10px' : '16px') : '0',
+                borderLeft: gerentesDivision.length > 0 ? `2px solid ${c.lineStrong}` : 'none'
+              }}>
                 {deptosSec.map(depto => {
                   const abierto = Boolean(deptosAbiertos[depto.id]);
                   const estaEditando = deptoEditandoId === depto.id;
                   const nombreDeptoNorm = normalizar(depto.nombre);
 
                   const personalDepto = (usuarios || [])
-                    .filter(u => u.departamento_id === depto.id && u.activo === true)
+                    .filter(u => u.departamento_id === depto.id && u.activo === true && !idsGerentesDivision.has(u.id))
                     .sort((a, b) => obtenerClaveOrdenApellido(a).localeCompare(obtenerClaveOrdenApellido(b)));
 
-                  const gerencia = personalDepto.filter(u => ['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(u.rol));
-                  const idsGerencia = new Set(gerencia.map(g => g.id));
-                  const restoPersonal = personalDepto.filter(u => !idsGerencia.has(u.id));
+                  // Detectar si existen subáreas específicas distintas al nombre del departamento (ej. CNC LASER dentro de METAL)
+                  const haySubareasEspecificas = personalDepto.some(u => {
+                    const a = normalizar(u.area || depto.nombre);
+                    return a !== nombreDeptoNorm && a !== 'GENERAL' && !['superadmin', 'gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(u.rol);
+                  });
+
+                  // CABEZA DEL DEPARTAMENTO:
+                  // 1) Gerente propio del depto (ej. José Coca en RH)
+                  // 2) O el Jefe General del Departamento (jefe_area cuya área es el nombre del Depto, ej. René Morales en METAL)
+                  const cabezaDepto = personalDepto.filter(u => {
+                    if (['superadmin', 'gerente_rh'].includes(u.rol)) return true;
+                    if (haySubareasEspecificas && u.rol === 'jefe_area' && normalizar(u.area || depto.nombre) === nombreDeptoNorm) return true;
+                    return false;
+                  });
+
+                  const idsCabezaDepto = new Set(cabezaDepto.map(g => g.id));
+                  const restoPersonal = personalDepto.filter(u => !idsCabezaDepto.has(u.id));
 
                   const subdeptosMap = restoPersonal.reduce((acc, u) => {
                     const claveArea = normalizar(u.area || depto.nombre);
@@ -397,20 +436,20 @@ export default function VistaArbol({
                       {abierto && (
                         <div style={{ padding: esMobile ? '12px' : '22px', boxSizing: 'border-box', width: '100%' }}>
                           
-                          {/* 1. CABEZA DE GERENCIA CON LÍNEA TRONCAL */}
-                          {gerencia.length > 0 && (
+                          {/* 1. CABEZA DEL DEPARTAMENTO (Ej. José Coca en RH, o René Morales en METAL) */}
+                          {cabezaDepto.length > 0 && (
                             <div className={clavesSubdeptos.length > 0 ? "tronco-gerencia" : ""}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {gerencia.map(u => renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, 'gerencia', esMobile))}
+                                {cabezaDepto.map(u => renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, u.rol === 'jefe_area' ? 'lider' : 'gerencia', esMobile))}
                               </div>
                             </div>
                           )}
 
-                          {/* 2. MÓDULOS DE SUBDEPARTAMENTOS / CÉLULAS */}
+                          {/* 2. MÓDULOS DE SUBDEPARTAMENTOS / CÉLULAS (Ej. CNC LASER, NOMINAS, SEGURIDAD) */}
                           {clavesSubdeptos.length > 0 && (
                             <div style={{ 
-                              borderTop: gerencia.length > 0 && clavesSubdeptos.length > 1 ? `2px solid ${c.lineStrong}` : 'none',
-                              paddingTop: gerencia.length > 0 && clavesSubdeptos.length > 1 ? (esMobile ? '14px' : '20px') : '0',
+                              borderTop: cabezaDepto.length > 0 && clavesSubdeptos.length > 1 ? `2px solid ${c.lineStrong}` : 'none',
+                              paddingTop: cabezaDepto.length > 0 && clavesSubdeptos.length > 1 ? (esMobile ? '14px' : '20px') : '0',
                               width: '100%',
                               boxSizing: 'border-box'
                             }}>
@@ -425,8 +464,8 @@ export default function VistaArbol({
 
                                   const esTitularDeSubdepto = (m) => {
                                     if (grupo.miembros.some(sub => sub.reporta_a_id === m.id)) return true;
-                                    if (m.rol === 'jefe_area') return true;
-                                    if (!tieneJefeArea && tieneEmpleadosBase && ['rh_nominas', 'encargado'].includes(m.rol)) return true;
+                                    if (m.rol === 'jefe_area' || m.rol === 'encargado') return true;
+                                    if (!tieneJefeArea && tieneEmpleadosBase && m.rol === 'rh_nominas') return true;
                                     return false;
                                   };
 
@@ -452,7 +491,6 @@ export default function VistaArbol({
                                         boxSizing: 'border-box'
                                       }}
                                     >
-                                      {/* BARRA TÉCNICA DEL SUBDEPARTAMENTO CON ICONO INTELIGENTE */}
                                       {mostrarCabeceraSubdepto && (
                                         <div style={{ 
                                           background: modoOscuro ? '#262626' : '#e2e8f0', 
@@ -477,7 +515,6 @@ export default function VistaArbol({
                                         </div>
                                       )}
 
-                                      {/* ÁRBOL INTERNO DE LA CÉLULA */}
                                       <div style={{ padding: mostrarCabeceraSubdepto ? (esMobile ? '10px' : '16px') : '0', display: 'flex', flexDirection: 'column', gap: '12px', boxSizing: 'border-box', width: '100%' }}>
                                         {miembrosRaiz.map(titular => {
                                           const subordinados = grupo.miembros.filter(sub => {
@@ -489,13 +526,12 @@ export default function VistaArbol({
                                             return false;
                                           });
 
-                                          const tipoNodo = (titular.rol === 'jefe_area' || subordinados.length > 0) ? 'lider' : 'operativo';
+                                          const tipoNodo = (['jefe_area', 'encargado'].includes(titular.rol) || subordinados.length > 0) ? 'lider' : 'operativo';
 
                                           return (
                                             <div key={titular.id} style={{ display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
                                               {renderPlacaIndustrial(titular, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, abrirEdicionUsuarioArbol, tipoNodo, esMobile)}
 
-                                              {/* RAMA DE SUBORDINADOS CON TUBERÍA Y NODO VISIBLE */}
                                               {subordinados.length > 0 && (
                                                 <div className="rama-subordinados">
                                                   {subordinados.map(sub => (
@@ -566,7 +602,7 @@ export default function VistaArbol({
                   list="areas-coherentes-arbol"
                   value={userEditando.area}
                   onChange={e => setUserEditando({ ...userEditando, area: e.target.value.toUpperCase() })}
-                  placeholder="Ej. NOMINAS, SEGURIDAD INDUSTRIAL..."
+                  placeholder="Ej. CNC LASER, NOMINAS..."
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 />
                 <datalist id="areas-coherentes-arbol">
@@ -580,7 +616,7 @@ export default function VistaArbol({
                   list="puestos-coherentes-arbol"
                   value={userEditando.puesto}
                   onChange={e => setUserEditando({ ...userEditando, puesto: e.target.value.toUpperCase() })}
-                  placeholder="Ej. AUXILIAR DE RH..."
+                  placeholder="Ej. SUPERVISOR, OPERADOR..."
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 />
                 <datalist id="puestos-coherentes-arbol">
@@ -609,12 +645,13 @@ export default function VistaArbol({
                   onChange={e => setUserEditando({ ...userEditando, rol: e.target.value })}
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
-                  <option value="empleado">EMPLEADO / AUXILIAR (No autoriza pases)</option>
-                  <option value="jefe_area">JEFE DE ÁREA (Sí autoriza pases de su equipo)</option>
+                  <option value="empleado">EMPLEADO / OPERADOR (Nivel 4)</option>
+                  <option value="encargado">ENCARGADO / SUPERVISOR SUBÁREA (Nivel 3)</option>
+                  <option value="jefe_area">JEFE DE DEPARTAMENTO / ÁREA (Nivel 2)</option>
                   <option value="rh_nominas">RH / NÓMINAS (Dictamina nómina)</option>
-                  <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
-                  <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
-                  <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                  <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (Nivel 1)</option>
+                  <option value="gerente_admin">GERENTE ADMINISTRATIVO (Nivel 1)</option>
+                  <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS (Nivel 1)</option>
                   <option value="caseta">CASETA / VIGILANCIA</option>
                   <option value="superadmin">SUPER ADMINISTRADOR</option>
                 </select>
@@ -642,7 +679,6 @@ export default function VistaArbol({
   );
 }
 
-// === PLACA INDUSTRIAL RESPONSIVA CON ICONOS TÉCNICOS ===
 function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, onEditarUsuario, tipoNodo = 'operativo', esMobile = false) {
   const badge = obtenerBadgeRol(u.rol, modoOscuro);
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo)}&background=262626&color=fff&bold=true`;

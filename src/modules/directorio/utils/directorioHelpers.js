@@ -33,18 +33,26 @@ export const obtenerBadgeRol = (rol, modoOscuro) => {
       border: modoOscuro ? 'rgba(245, 158, 11, 0.3)' : '#fcd34d'
     };
   }
-  if (r === 'jefe_area' || r === 'rh_nominas' || r === 'encargado') {
-    const etiquetas = {
-      jefe_area: 'JEFATURA',
-      rh_nominas: 'TITULAR NÓMINAS',
-      encargado: 'ENCARGADO'
-    };
+  if (r === 'jefe_area') {
     return {
-      label: etiquetas[r] || 'JEFATURA',
+      label: 'JEFATURA DEPTO',
       accentBar: '#16a34a',
       bg: modoOscuro ? 'rgba(22, 163, 74, 0.12)' : '#f0fdf4',
       text: modoOscuro ? '#4ade80' : '#15803d',
       border: modoOscuro ? 'rgba(22, 163, 74, 0.3)' : '#bbf7d0'
+    };
+  }
+  if (r === 'encargado' || r === 'rh_nominas') {
+    const etiquetas = {
+      encargado: 'SUPERVISOR SUBÁREA',
+      rh_nominas: 'TITULAR NÓMINAS'
+    };
+    return {
+      label: etiquetas[r] || 'SUPERVISOR',
+      accentBar: '#0284c7',
+      bg: modoOscuro ? 'rgba(2, 132, 199, 0.14)' : '#f0f9ff',
+      text: modoOscuro ? '#38bdf8' : '#0369a1',
+      border: modoOscuro ? 'rgba(2, 132, 199, 0.32)' : '#bae6fd'
     };
   }
   return {

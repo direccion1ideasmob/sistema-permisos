@@ -463,7 +463,8 @@ export default function DossierLateral({
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="touch-field-label">Rol en ERP</label>
                   <select className="touch-field-input" value={datosEdit.rol || 'empleado'} onChange={e => setDatosEdit({ ...datosEdit, rol: e.target.value })}>
-                    <option value="empleado">EMPLEADO (OPERATIVO)</option>
+                    <option value="empleado">EMPLEADO / OPERADOR (NIVEL 4)</option>
+                    <option value="encargado">ENCARGADO / SUPERVISOR SUBÁREA (NIVEL 3)</option>
                     <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
                     <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (PLANTA)</option>
                     <option value="gerente_admin">GERENTE ADMINISTRATIVO (OFICINA)</option>

@@ -315,7 +315,8 @@ export default function ModalColaborador({
                 <div className="input-group">
                   <label className="clean-label">Rol en el Sistema *</label>
                   <select required className="clean-input" value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})}>
-                    <option value="empleado">EMPLEADO (OPERATIVO)</option>
+                    <option value="empleado">EMPLEADO / OPERADOR (NIVEL 4)</option>
+                  <option value="encargado">ENCARGADO / SUPERVISOR SUBÁREA (NIVEL 3)</option>
                     <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
                     <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (PLANTA)</option>
                     <option value="gerente_admin">GERENTE ADMINISTRATIVO (OFICINA)</option>
