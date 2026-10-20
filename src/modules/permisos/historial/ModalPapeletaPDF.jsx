@@ -343,10 +343,10 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     padding: '11px 16px', border: '1px solid #cbd5e1', borderRadius: '8px',
                     background: '#fcfcfd', minHeight: '78px'
                   }}>
-                    <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
                       MOTIVO {etiquetaMotivo ? `• ${etiquetaMotivo}` : ''}
                     </span>
-                    <div style={{ color: '#0f172a', fontSize: '11px', lineHeight: 1.45, fontWeight: '500' }}>
+                    <div style={{ color: '#0f172a', fontSize: '13.5px', lineHeight: 1.5, fontWeight: '600' }}>
                       {justificacionLimpia || 'Sin justificación adicional.'}
                     </div>
                   </div>
