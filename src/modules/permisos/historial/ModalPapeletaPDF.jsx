@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { X, Printer } from 'lucide-react';
+import { X, Printer, ShieldCheck, Clock, CalendarCheck } from 'lucide-react';
 import { supabase } from '../../../core/api/supabaseClient';
 import { parsearDatosObservaciones, limpiarMotivo } from './TablaHistorial';
 
@@ -51,6 +51,18 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
 
   if (listaPermisos.length === 0) return null;
 
+  // Formateador de fecha legible: "2026-10-23" -> "23 Oct 2026"
+  const formatearFecha = (fechaStr) => {
+    if (!fechaStr) return '';
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const partes = String(fechaStr).trim().split('-');
+    if (partes.length !== 3) return fechaStr;
+    const anio = partes[0];
+    const mes = meses[parseInt(partes[1], 10) - 1] || partes[1];
+    const dia = parseInt(partes[2], 10);
+    return `${dia} ${mes} ${anio}`;
+  };
+
   const imprimir = () => {
     if (!contenedorRef.current) return;
     const ventanaImpresion = window.open('', '_blank', 'width=900,height=800');
@@ -76,6 +88,9 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
               border: 1px solid #94a3b8 !important; border-radius: 6px !important; padding: 6mm 10mm !important; margin: 0 0 4mm 0 !important;
               background: #ffffff !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important;
               page-break-inside: avoid !important; break-inside: avoid !important;
+            }
+            .logo-impresion-nitido {
+              filter: contrast(1.95) brightness(0.68) saturate(1.4) !important;
             }
           </style>
         </head>
@@ -108,9 +123,9 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', textAlign: 'center', height: '72px', minWidth: 0 }}>
         <div style={{ height: '38px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', marginBottom: '3px' }}>
           {firmado && firmaUrl ? (
-            <img src={firmaUrl} alt="Firma" style={{ maxHeight: '36px', maxWidth: '85%', objectFit: 'contain', filter: 'contrast(1.2)' }} />
+            <img src={firmaUrl} alt="Firma" style={{ maxHeight: '36px', maxWidth: '85%', objectFit: 'contain', filter: 'contrast(1.35) brightness(0.85)' }} />
           ) : firmado ? (
-            <span style={{ fontSize: '9px', fontWeight: '800', color: '#16a34a' }}>✓ AUTORIZADO DIGITAL</span>
+            <span style={{ fontSize: '9px', fontWeight: '800', color: '#15803d' }}>✓ AUTORIZADO DIGITAL</span>
           ) : rechazado ? (
             <span style={{ fontSize: '9px', fontWeight: '800', color: '#dc2626' }}>✗ RECHAZADO</span>
           ) : (
@@ -191,6 +206,12 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                 p.usuarios?.supervisor?.firma_url ||
                 (supervisorSubarea ? mapaFirmasExtra[supervisorSubarea.trim().toUpperCase()] : null);
 
+              const tieneSelloCaseta = Boolean(horaSalidaCaseta || horaEntradaCaseta);
+              const fechaPermisoBonita = p.fecha_fin && p.fecha_fin !== p.fecha_permiso
+                ? `${formatearFecha(p.fecha_permiso)} al ${formatearFecha(p.fecha_fin)}`
+                : formatearFecha(p.fecha_permiso);
+              const fechaElabBonita = formatearFecha(p.fecha_elaboracion || p.fecha_permiso);
+
               return (
                 <div
                   key={p.id || index}
@@ -203,25 +224,35 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     minHeight: '124mm', width: '100%'
                   }}
                 >
-                  {/* MEMBRETE */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 120px', alignItems: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '6px', marginBottom: '6px' }}>
+                  {/* MEMBRETE CON LOGO DE ALTO CONTRASTE PARA IMPRESIÓN */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr 130px', alignItems: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '6px', marginBottom: '6px' }}>
                     <div>
-                      <img src="/LogoVerde-removebg-preview.png" alt="Logo" style={{ height: '36px', maxWidth: '110px', objectFit: 'contain' }} />
+                      <img
+                        src="/LogoVerde-removebg-preview.png"
+                        alt="Logo"
+                        className="logo-impresion-nitido"
+                        style={{
+                          height: '40px',
+                          maxWidth: '120px',
+                          objectFit: 'contain',
+                          filter: 'contrast(1.85) brightness(0.72) saturate(1.4)'
+                        }}
+                      />
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: '15px', fontWeight: '900', letterSpacing: '0.03em', color: '#0f172a' }}>IDEAS MOBILIARIUM</div>
-                      <div style={{ fontSize: '10px', color: '#475569', fontWeight: '700', marginTop: '1px' }}>Formato oficial de control de pases y permisos</div>
+                      <div style={{ fontSize: '10px', color: '#334155', fontWeight: '700', marginTop: '1px' }}>Formato oficial de control de pases y permisos</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{
                         fontFamily: 'ui-monospace, monospace', fontSize: '12px', fontWeight: '900',
-                        color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0',
-                        padding: '2px 6px', borderRadius: '4px', display: 'inline-block'
+                        color: '#15803d', background: '#f0fdf4', border: '1px solid #86efac',
+                        padding: '2px 7px', borderRadius: '4px', display: 'inline-block'
                       }}>
                         {p.folio}
                       </div>
-                      <div style={{ fontSize: '9px', color: '#475569', marginTop: '2px' }}>
-                        Elab: <strong>{p.fecha_elaboracion || p.fecha_permiso}</strong>
+                      <div style={{ fontSize: '9px', color: '#475569', marginTop: '3px', fontWeight: '600' }}>
+                        Elab: <strong style={{ color: '#0f172a' }}>{fechaElabBonita}</strong>
                       </div>
                     </div>
                   </div>
@@ -235,7 +266,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     <div>
                       <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>COLABORADOR</span>
                       <strong style={{ fontSize: '11px', color: '#0f172a', display: 'block' }}>{p.usuarios?.nombre_completo}</strong>
-                      <span style={{ fontSize: '9px', color: '#16a34a', fontWeight: '800' }}>#{p.usuarios?.numero_empleado}</span>
+                      <span style={{ fontSize: '9px', color: '#15803d', fontWeight: '800' }}>#{p.usuarios?.numero_empleado}</span>
                     </div>
                     <div>
                       <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>DEPARTAMENTO</span>
@@ -253,38 +284,59 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
                   </div>
 
-                  {/* INCIDENCIA + SELLO CASETA (SIN REPETIR LA HORA EN 3 LUGARES) */}
+                  {/* INCIDENCIA + INSIGNIA DISCRETA DE ACCESO/HORARIO */}
                   <div style={{
-                    display: 'grid', gridTemplateColumns: '0.9fr 1fr 1.3fr 1fr', gap: '6px',
+                    display: 'grid', gridTemplateColumns: '0.85fr 1.05fr 1.25fr 1fr', gap: '6px', alignItems: 'center',
                     padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '6px', fontSize: '10px'
                   }}>
                     <div>
                       <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>TIPO DE PASE</span>
-                      <strong style={{ textTransform: 'uppercase', color: '#0f172a' }}>{p.tipo_permiso}</strong>
+                      <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '10.5px' }}>{p.tipo_permiso}</strong>
                     </div>
+
                     <div>
                       <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>FECHA DE APLICACIÓN</span>
-                      <strong style={{ color: '#0f172a', display: 'block' }}>
-                        {p.fecha_permiso}{p.fecha_fin && p.fecha_fin !== p.fecha_permiso ? ` al ${p.fecha_fin}` : ''}
+                      <strong style={{ color: '#0f172a', display: 'block', fontSize: '10.5px' }}>
+                        {fechaPermisoBonita}
                       </strong>
-                      {tipo === 'salida' && horarioSolicitado && (
-                        <span style={{ fontSize: '9px', color: '#475569' }}>{horarioSolicitado}</span>
-                      )}
                     </div>
+
                     <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>SELLO DE VIGILANCIA (CASETA)</span>
-                      {(horaSalidaCaseta || horaEntradaCaseta) ? (
-                        <strong style={{ color: '#16a34a', fontSize: '10px', display: 'block' }}>
-                          {horaSalidaCaseta ? `SALIDA: ${horaSalidaCaseta}` : ''}
-                          {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
-                          {horaEntradaCaseta ? `ENTRADA: ${horaEntradaCaseta}` : ''}
-                        </strong>
+                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>CONTROL DE ACCESO</span>
+                      {tieneSelloCaseta ? (
+                        <div style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '5px',
+                          background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d',
+                          padding: '2px 8px', borderRadius: '5px', fontSize: '9.5px', fontWeight: '800'
+                        }}>
+                          <ShieldCheck size={12} strokeWidth={2.5} />
+                          <span>
+                            {horaSalidaCaseta ? `Salida ${horaSalidaCaseta}` : ''}
+                            {horaSalidaCaseta && horaEntradaCaseta ? ' • ' : ''}
+                            {horaEntradaCaseta ? `Entrada ${horaEntradaCaseta}` : ''}
+                          </span>
+                        </div>
                       ) : (tipo === 'falta' || tipo === 'vacaciones') ? (
-                        <span style={{ color: '#475569', fontSize: '9.5px', fontWeight: '700' }}>Jornada completa</span>
+                        <div style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155',
+                          padding: '2px 8px', borderRadius: '5px', fontSize: '9.5px', fontWeight: '700'
+                        }}>
+                          <CalendarCheck size={11} />
+                          <span>Ausencia de jornada</span>
+                        </div>
                       ) : (
-                        <span style={{ color: '#64748b', fontSize: '9.5px' }}>{horarioSolicitado || 'Sin registro en puerta'}</span>
+                        <div style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569',
+                          padding: '2px 8px', borderRadius: '5px', fontSize: '9.5px', fontWeight: '700'
+                        }}>
+                          <Clock size={11} />
+                          <span>{horarioSolicitado || 'Pendiente en caseta'}</span>
+                        </div>
                       )}
                     </div>
+
                     <div>
                       <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>DICTAMEN NÓMINA</span>
                       <strong style={{ fontSize: '9.5px', color: '#0f172a' }}>{getDictamenPago(p)}</strong>
