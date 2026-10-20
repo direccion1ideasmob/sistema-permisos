@@ -123,7 +123,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', textAlign: 'center', height: '72px', minWidth: 0 }}>
         <div style={{ height: '38px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', marginBottom: '3px' }}>
           {firmado && firmaUrl ? (
-            <img src={firmaUrl} alt="Firma" style={{ maxHeight: '36px', maxWidth: '85%', objectFit: 'contain', filter: 'contrast(1.35) brightness(0.85)' }} />
+            <img src={firmaUrl} alt="Firma" style={{ maxHeight: '36px', maxWidth: '85%', objectFit: 'contain', filter: 'contrast(1.4)', mixBlendMode: 'multiply' }} />
           ) : firmado ? (
             <span style={{ fontSize: '9px', fontWeight: '800', color: '#15803d' }}>✓ AUTORIZADO DIGITAL</span>
           ) : rechazado ? (
@@ -133,7 +133,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
           )}
         </div>
         <div style={{ width: '95%', borderTop: '1.5px solid #0f172a', paddingTop: '3px' }}>
-          <div style={{ fontSize: '9.5px', fontWeight: '900', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: '8.5px', fontWeight: '900', color: '#0f172a', lineHeight: 1.15 }}>
             {nombre || 'Autorizado'}
           </div>
           <div style={{ fontSize: '8px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: '1px', fontWeight: '700' }}>
