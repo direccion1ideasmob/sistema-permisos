@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { X, Printer, ShieldCheck, Clock, CalendarCheck } from 'lucide-react';
+import { X, Printer, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../../core/api/supabaseClient';
 import { parsearDatosObservaciones, limpiarMotivo } from './TablaHistorial';
 
@@ -51,7 +51,6 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
 
   if (listaPermisos.length === 0) return null;
 
-  // Formateador de fecha legible: "2026-10-23" -> "23 Oct 2026"
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return '';
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -85,7 +84,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
             #papeleta-impresion-contenedor { display: flex !important; flex-direction: column !important; gap: 5mm !important; width: 100% !important; }
             .papeleta-hoja-impresion {
               box-sizing: border-box !important; width: 100% !important; height: 124mm !important; max-height: 124mm !important;
-              border: 1px solid #94a3b8 !important; border-radius: 6px !important; padding: 6mm 10mm !important; margin: 0 0 4mm 0 !important;
+              border: 1px solid #94a3b8 !important; border-radius: 8px !important; padding: 7mm 10mm !important; margin: 0 0 4mm 0 !important;
               background: #ffffff !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important;
               page-break-inside: avoid !important; break-inside: avoid !important;
             }
@@ -120,23 +119,33 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
     const rechazado = est === 'rechazado';
 
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', textAlign: 'center', height: '72px', minWidth: 0 }}>
-        <div style={{ height: '38px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', marginBottom: '3px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', textAlign: 'center', height: '104px', minWidth: 0 }}>
+        <div style={{ height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: '4px' }}>
           {firmado && firmaUrl ? (
-            <img src={firmaUrl} alt="Firma" style={{ maxHeight: '36px', maxWidth: '85%', objectFit: 'contain', filter: 'contrast(1.4)', mixBlendMode: 'multiply' }} />
+            <img
+              src={firmaUrl}
+              alt="Firma"
+              style={{
+                maxHeight: '60px',
+                maxWidth: '92%',
+                objectFit: 'contain',
+                filter: 'contrast(1.4)',
+                mixBlendMode: 'multiply'
+              }}
+            />
           ) : firmado ? (
-            <span style={{ fontSize: '9px', fontWeight: '800', color: '#15803d' }}>✓ AUTORIZADO DIGITAL</span>
+            <span style={{ fontSize: '9.5px', fontWeight: '800', color: '#15803d' }}>✓ AUTORIZADO DIGITAL</span>
           ) : rechazado ? (
-            <span style={{ fontSize: '9px', fontWeight: '800', color: '#dc2626' }}>✗ RECHAZADO</span>
+            <span style={{ fontSize: '9.5px', fontWeight: '800', color: '#dc2626' }}>✗ RECHAZADO</span>
           ) : (
-            <span style={{ fontSize: '8.5px', color: '#64748b' }}>—</span>
+            <span style={{ fontSize: '9px', color: '#64748b' }}>—</span>
           )}
         </div>
-        <div style={{ width: '95%', borderTop: '1.5px solid #0f172a', paddingTop: '3px' }}>
-          <div style={{ fontSize: '8.5px', fontWeight: '900', color: '#0f172a', lineHeight: 1.15 }}>
+        <div style={{ width: '94%', borderTop: '1.5px solid #0f172a', paddingTop: '5px' }}>
+          <div style={{ fontSize: '9px', fontWeight: '900', color: '#0f172a', lineHeight: 1.15 }}>
             {nombre || 'Autorizado'}
           </div>
-          <div style={{ fontSize: '8px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: '1px', fontWeight: '700' }}>
+          <div style={{ fontSize: '8px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: '2px', fontWeight: '700' }}>
             {cargo}
           </div>
         </div>
@@ -180,7 +189,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
           </div>
         </div>
 
-        <div style={{ padding: '15px', overflow: 'auto', background: '#f1f5f9' }}>
+        <div style={{ padding: '18px', overflow: 'auto', background: '#f1f5f9' }}>
           <div ref={contenedorRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {listaPermisos.map((p, index) => {
               const tipo = (p.tipo_permiso || '').toLowerCase();
@@ -218,128 +227,131 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                   className="papeleta-hoja-impresion"
                   style={{
                     background: '#ffffff', borderRadius: '8px', border: '1px solid #cbd5e1',
-                    padding: '12px 16px 10px 16px', boxSizing: 'border-box',
+                    padding: '18px 22px 16px 22px', boxSizing: 'border-box',
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif',
                     display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
                     minHeight: '124mm', width: '100%'
                   }}
                 >
-                  {/* MEMBRETE CON LOGO DE ALTO CONTRASTE PARA IMPRESIÓN */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr 130px', alignItems: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '6px', marginBottom: '6px' }}>
-                    <div>
-                      <img
-                        src="/LogoVerde-removebg-preview.png"
-                        alt="Logo"
-                        className="logo-impresion-nitido"
-                        style={{
-                          height: '40px',
-                          maxWidth: '120px',
-                          objectFit: 'contain',
-                          filter: 'contrast(1.85) brightness(0.72) saturate(1.4)'
-                        }}
-                      />
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '15px', fontWeight: '900', letterSpacing: '0.03em', color: '#0f172a' }}>IDEAS MOBILIARIUM</div>
-                      <div style={{ fontSize: '10px', color: '#334155', fontWeight: '700', marginTop: '1px' }}>Formato oficial de control de pases y permisos</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{
-                        fontFamily: 'ui-monospace, monospace', fontSize: '12px', fontWeight: '900',
-                        color: '#15803d', background: '#f0fdf4', border: '1px solid #86efac',
-                        padding: '2px 7px', borderRadius: '4px', display: 'inline-block'
-                      }}>
-                        {p.folio}
+                  {/* BLOQUE SUPERIOR: MEMBRETE + DATOS + MOTIVO CON ESPACIADO EQUILIBRADO */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {/* 1. MEMBRETE */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 140px', alignItems: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '10px' }}>
+                      <div>
+                        <img
+                          src="/LogoVerde-removebg-preview.png"
+                          alt="Logo"
+                          className="logo-impresion-nitido"
+                          style={{
+                            height: '44px',
+                            maxWidth: '130px',
+                            objectFit: 'contain',
+                            filter: 'contrast(1.85) brightness(0.72) saturate(1.4)'
+                          }}
+                        />
                       </div>
-                      <div style={{ fontSize: '9px', color: '#475569', marginTop: '3px', fontWeight: '600' }}>
-                        Elab: <strong style={{ color: '#0f172a' }}>{fechaElabBonita}</strong>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '16px', fontWeight: '900', letterSpacing: '0.03em', color: '#0f172a' }}>IDEAS MOBILIARIUM</div>
+                        <div style={{ fontSize: '10.5px', color: '#334155', fontWeight: '700', marginTop: '2px' }}>Formato oficial de control de pases y permisos</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{
+                          fontFamily: 'ui-monospace, monospace', fontSize: '12.5px', fontWeight: '900',
+                          color: '#15803d', background: '#f0fdf4', border: '1px solid #86efac',
+                          padding: '3px 9px', borderRadius: '5px', display: 'inline-block'
+                        }}>
+                          {p.folio}
+                        </div>
+                        <div style={{ fontSize: '9.5px', color: '#475569', marginTop: '4px', fontWeight: '600' }}>
+                          Elab: <strong style={{ color: '#0f172a' }}>{fechaElabBonita}</strong>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* DATOS DEL COLABORADOR */}
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 0.8fr', gap: '6px',
-                    padding: '6px 10px', background: '#f8fafc', border: '1px solid #cbd5e1',
-                    borderRadius: '6px', marginBottom: '6px', fontSize: '10.5px'
-                  }}>
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>COLABORADOR</span>
-                      <strong style={{ fontSize: '11px', color: '#0f172a', display: 'block' }}>{p.usuarios?.nombre_completo}</strong>
-                      <span style={{ fontSize: '9px', color: '#15803d', fontWeight: '800' }}>#{p.usuarios?.numero_empleado}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>DEPARTAMENTO</span>
-                      <strong style={{ fontSize: '10.5px', display: 'block' }}>{p.usuarios?.departamentos?.nombre || 'GENERAL'}</strong>
-                      <span style={{ fontSize: '8px', color: '#475569', textTransform: 'uppercase' }}>{p.usuarios?.departamentos?.clasificacion || ''}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>ÁREA Y PUESTO</span>
-                      <span style={{ fontWeight: '700', fontSize: '10px', display: 'block' }}>{p.usuarios?.area || 'GENERAL'}</span>
-                      <span style={{ fontSize: '9px', color: '#475569', display: 'block' }}>{p.usuarios?.puesto || ''}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>SEDE</span>
-                      <strong style={{ fontSize: '10.5px', color: '#0f172a' }}>{p.usuarios?.sedes?.nombre || 'SANTA CATARINA'}</strong>
-                    </div>
-                  </div>
-
-                  {/* INCIDENCIA + INSIGNIA DISCRETA DE ACCESO/HORARIO */}
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '0.85fr 1.05fr 1.25fr 1fr', gap: '6px', alignItems: 'center',
-                    padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '6px', fontSize: '10px'
-                  }}>
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>TIPO DE PASE</span>
-                      <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '10.5px' }}>{p.tipo_permiso}</strong>
+                    {/* 2. DATOS DEL COLABORADOR */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 0.8fr', gap: '10px',
+                      padding: '10px 14px', background: '#f8fafc', border: '1px solid #cbd5e1',
+                      borderRadius: '7px', fontSize: '10.5px'
+                    }}>
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>COLABORADOR</span>
+                        <strong style={{ fontSize: '11.5px', color: '#0f172a', display: 'block' }}>{p.usuarios?.nombre_completo}</strong>
+                        <span style={{ fontSize: '9.5px', color: '#15803d', fontWeight: '800', marginTop: '1px', display: 'block' }}>#{p.usuarios?.numero_empleado}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>DEPARTAMENTO</span>
+                        <strong style={{ fontSize: '11px', display: 'block', color: '#0f172a' }}>{p.usuarios?.departamentos?.nombre || 'GENERAL'}</strong>
+                        <span style={{ fontSize: '8.5px', color: '#475569', textTransform: 'uppercase', marginTop: '1px', display: 'block' }}>{p.usuarios?.departamentos?.clasificacion || ''}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>ÁREA Y PUESTO</span>
+                        <strong style={{ fontWeight: '800', fontSize: '10.5px', display: 'block', color: '#0f172a' }}>{p.usuarios?.area || 'GENERAL'}</strong>
+                        <span style={{ fontSize: '9px', color: '#475569', display: 'block', marginTop: '1px' }}>{p.usuarios?.puesto || ''}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>SEDE</span>
+                        <strong style={{ fontSize: '11px', color: '#0f172a' }}>{p.usuarios?.sedes?.nombre || 'SANTA CATARINA'}</strong>
+                      </div>
                     </div>
 
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>FECHA DE APLICACIÓN</span>
-                      <strong style={{ color: '#0f172a', display: 'block', fontSize: '10.5px' }}>
-                        {fechaPermisoBonita}
-                      </strong>
-                    </div>
+                    {/* 3. INCIDENCIA Y CONTROL DE ACCESO */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '0.85fr 1.05fr 1.25fr 1fr', gap: '10px', alignItems: 'center',
+                      padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '10.5px'
+                    }}>
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>TIPO DE PASE</span>
+                        <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '11px' }}>{p.tipo_permiso}</strong>
+                      </div>
 
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <ShieldCheck size={10} strokeWidth={2.5} color="#0f172a" />
-                        CONTROL DE ACCESO
-                      </span>
-                      {tieneSelloCaseta ? (
-                        <strong style={{ color: '#0f172a', fontSize: '10px', display: 'block' }}>
-                          {horaSalidaCaseta ? `Salida: ${horaSalidaCaseta}` : ''}
-                          {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
-                          {horaEntradaCaseta ? `Entrada: ${horaEntradaCaseta}` : ''}
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>FECHA DE APLICACIÓN</span>
+                        <strong style={{ color: '#0f172a', display: 'block', fontSize: '11px' }}>
+                          {fechaPermisoBonita}
                         </strong>
-                      ) : (tipo === 'falta' || tipo === 'vacaciones') ? (
-                        <strong style={{ color: '#0f172a', fontSize: '10px', display: 'block' }}>Jornada completa</strong>
-                      ) : (
-                        <strong style={{ color: '#0f172a', fontSize: '10px', display: 'block' }}>{horarioSolicitado || 'Sin registro en puerta'}</strong>
-                      )}
+                      </div>
+
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
+                          <ShieldCheck size={10.5} strokeWidth={2.5} color="#0f172a" />
+                          CONTROL DE ACCESO
+                        </span>
+                        {tieneSelloCaseta ? (
+                          <strong style={{ color: '#0f172a', fontSize: '10.5px', display: 'block' }}>
+                            {horaSalidaCaseta ? `Salida: ${horaSalidaCaseta}` : ''}
+                            {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
+                            {horaEntradaCaseta ? `Entrada: ${horaEntradaCaseta}` : ''}
+                          </strong>
+                        ) : (tipo === 'falta' || tipo === 'vacaciones') ? (
+                          <strong style={{ color: '#0f172a', fontSize: '10.5px', display: 'block' }}>Jornada completa</strong>
+                        ) : (
+                          <strong style={{ color: '#0f172a', fontSize: '10.5px', display: 'block' }}>{horarioSolicitado || 'Sin registro en puerta'}</strong>
+                        )}
+                      </div>
+
+                      <div>
+                        <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>DICTAMEN NÓMINA</span>
+                        <strong style={{ fontSize: '10.5px', color: '#0f172a' }}>{getDictamenPago(p)}</strong>
+                      </div>
                     </div>
 
-                    <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block' }}>DICTAMEN NÓMINA</span>
-                      <strong style={{ fontSize: '9.5px', color: '#0f172a' }}>{getDictamenPago(p)}</strong>
+                    {/* 4. MOTIVO COMPACTO Y PROPORCIONADO (SIN HUECO GIGANTE) */}
+                    <div style={{
+                      padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '7px',
+                      background: '#fcfcfd', minHeight: '58px'
+                    }}>
+                      <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                        MOTIVO {etiquetaMotivo ? `• ${etiquetaMotivo}` : ''}
+                      </span>
+                      <div style={{ color: '#0f172a', fontSize: '11px', lineHeight: 1.4, fontWeight: '500' }}>
+                        {justificacionLimpia || 'Sin justificación adicional.'}
+                      </div>
                     </div>
                   </div>
 
-                  {/* MOTIVO LIMPIO */}
-                  <div style={{
-                    padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: '6px',
-                    marginBottom: '8px', background: '#fcfcfd', flex: 1
-                  }}>
-                    <span style={{ fontSize: '8px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>
-                      MOTIVO {etiquetaMotivo ? `• ${etiquetaMotivo}` : ''}
-                    </span>
-                    <div style={{ color: '#0f172a', fontSize: '10.5px', lineHeight: 1.35 }}>
-                      {justificacionLimpia || 'Sin justificación adicional.'}
-                    </div>
-                  </div>
-
-                  {/* FIRMAS REALES */}
-                  <div style={{ display: 'flex', gap: '8px', paddingBottom: '2px' }}>
+                  {/* 5. ZONA DE FIRMAS AMPLIA Y PROTAGONISTA */}
+                  <div style={{ display: 'flex', gap: '12px', paddingTop: '10px', paddingBottom: '4px' }}>
                     {renderFirmaTradicional('Solicitante', p.usuarios?.nombre_completo, p.usuarios?.firma_url, 'autorizado', true)}
                     {supervisorSubarea && renderFirmaTradicional('Supervisor Subárea', supervisorSubarea, firmaUrlSubarea, 'autorizado')}
                     {!debeOcultarFirma(p.firma_1_estado) && firmanteJefe?.nombre_completo && (
