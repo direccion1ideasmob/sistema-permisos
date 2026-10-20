@@ -302,38 +302,20 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
 
                     <div>
-                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>CONTROL DE ACCESO</span>
+                      <span style={{ fontSize: '8px', fontWeight: '900', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <ShieldCheck size={10} strokeWidth={2.5} color="#0f172a" />
+                        CONTROL DE ACCESO
+                      </span>
                       {tieneSelloCaseta ? (
-                        <div style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d',
-                          padding: '2px 8px', borderRadius: '5px', fontSize: '9.5px', fontWeight: '800'
-                        }}>
-                          <ShieldCheck size={12} strokeWidth={2.5} />
-                          <span>
-                            {horaSalidaCaseta ? `Salida ${horaSalidaCaseta}` : ''}
-                            {horaSalidaCaseta && horaEntradaCaseta ? ' • ' : ''}
-                            {horaEntradaCaseta ? `Entrada ${horaEntradaCaseta}` : ''}
-                          </span>
-                        </div>
+                        <strong style={{ color: '#0f172a', fontSize: '10px', display: 'block' }}>
+                          {horaSalidaCaseta ? `Salida: ${horaSalidaCaseta}` : ''}
+                          {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
+                          {horaEntradaCaseta ? `Entrada: ${horaEntradaCaseta}` : ''}
+                        </strong>
                       ) : (tipo === 'falta' || tipo === 'vacaciones') ? (
-                        <div style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '4px',
-                          background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155',
-                          padding: '2px 8px', borderRadius: '5px', fontSize: '9.5px', fontWeight: '700'
-                        }}>
-                          <CalendarCheck size={11} />
-                          <span>Ausencia de jornada</span>
-                        </div>
+                        <strong style={{ color: '#0f172a', fontSize: '10px', display: 'block' }}>Jornada completa</strong>
                       ) : (
-                        <div style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '4px',
-                          background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569',
-                          padding: '2px 8px', borderRadius: '5px', fontSize: '9.5px', fontWeight: '700'
-                        }}>
-                          <Clock size={11} />
-                          <span>{horarioSolicitado || 'Pendiente en caseta'}</span>
-                        </div>
+                        <strong style={{ color: '#0f172a', fontSize: '10px', display: 'block' }}>{horarioSolicitado || 'Sin registro en puerta'}</strong>
                       )}
                     </div>
 
