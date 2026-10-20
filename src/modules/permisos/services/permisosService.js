@@ -58,8 +58,8 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
 };
 
 // 4. OBTENER TODAS LAS SOLICITUDES PARA BANDEJA DE APROBACIONES
-export const obtenerSolicitudesAprobacion = async () => {
-  const { data, error } = await supabase
+export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuarioId = null, rol = null } = {}) => {
+  let query = supabase
     .from("permisos")
     .select(`
       *,
@@ -70,9 +70,17 @@ export const obtenerSolicitudesAprobacion = async () => {
       firmante1:firma_1_id (id, nombre_completo, rol, puesto, firma_url),
       firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),
       firmante3:firma_3_id (id, nombre_completo, rol, puesto, firma_url)
-    `)
-    .order("created_at", { ascending: false });
+    `);
 
+  if (soloEnFirmas) {
+    query = query.eq("estado_general", "en_firmas");
+  } else if (usuarioId && (rol === "jefe_area" || rol === "encargado")) {
+    query = query.eq("firma_1_id", usuarioId).limit(100);
+  } else if (usuarioId && rol && rol.includes("gerente")) {
+    query = query.or(`firma_2_id.eq.${usuarioId},firma_1_id.eq.${usuarioId}`).limit(100);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error) throw error;
   return data || [];
 };
@@ -134,6 +142,9 @@ const buscarJefeDeptoSuperior = async (supervisorId, deptoId) => {
 
 // 6. PROCESAR APROBACIÓN Y ENRUTAMIENTO INTELIGENTE DE 4 NIVELES (Aprobaciones)
 export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago, comentarios }) => {
+  if (solicitud.usuario_id === usuario.id && usuario.rol !== "superadmin") {
+    throw new Error("Por control interno, no puedes autorizar ni dictaminar tu propia solicitud.");
+  }
   const esFirmante1Actual =
     solicitud.firma_1_estado === 'pendiente' &&
     (solicitud.firma_1_id === usuario.id || ['encargado', 'jefe_area'].includes(usuario.rol));
@@ -419,7 +430,8 @@ export const crearNuevaSolicitudPermiso = async ({
   } else if (estadoFirma2 === 'pendiente') {
     notificarA = [gerenteFinalId];
   } else if (estadoFirma3 === 'pendiente') {
-    notificarA = listaRH.length > 0 ? listaRH.map(u => u.id) : [rhFinalId];
+    const destinatariosRH = listaRH.filter(u => u.id !== userId).map(u => u.id);
+    notificarA = destinatariosRH.length > 0 ? destinatariosRH : [rhFinalId].filter(id => id && id !== userId);
   }
 
   const hayPendientes = [estadoFirma1, estadoFirma2, estadoFirma3].includes('pendiente');

@@ -20,9 +20,11 @@ export default function TarjetaAprobacion({
   const soyFirmante1Directo = solicitud.firma_1_id === usuarioActual?.id && solicitud.firma_1_estado === 'pendiente';
   const estaAtoradoConJefe = solicitud.firma_1_estado === 'pendiente';
   const estaAtoradoConGerente = solicitud.firma_1_estado !== 'pendiente' && solicitud.firma_2_estado === 'pendiente';
-  const mostrarOverride = esRH && esPendiente && !soyFirmante1Directo && (estaAtoradoConJefe || estaAtoradoConGerente);
+  const esPropioPermiso = solicitud.usuario_id === usuarioActual?.id;
+  const mostrarOverride = !esPropioPermiso && esRH && esPendiente && !soyFirmante1Directo && (estaAtoradoConJefe || estaAtoradoConGerente);
 
   const esMiTurno = () => {
+    if (esPropioPermiso) return false;
     if (soyFirmante1Directo) return true;
     if (['jefe_area', 'encargado'].includes(usuarioActual?.rol) && solicitud.firma_1_estado === 'pendiente') return true;
     if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
