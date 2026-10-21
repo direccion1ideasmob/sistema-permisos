@@ -14,6 +14,7 @@ export default function ControlCaseta({ c, usuario }) {
   const usr = usuario || c || {};
   const [tabActiva, setTabActiva] = useState('pases');
 
+  const [retenidosEnEspera, setRetenidosEnEspera] = useState([]);
   const [pasesPorCruzar, setPasesPorCruzar] = useState([]);
   const [personalFuera, setPersonalFuera] = useState([]);
   const [crucesCompletadosHoy, setCrucesCompletadosHoy] = useState([]);
@@ -44,6 +45,7 @@ export default function ControlCaseta({ c, usuario }) {
     try {
       const fechaTarget = tabActiva === 'consulta' ? fechaConsulta : obtenerFechaLocalHoy();
       const data = await obtenerDatosCaseta(sedeGuardia, fechaTarget);
+      setRetenidosEnEspera(data.retenidosEnEspera || []);
       setPasesPorCruzar(data.pasesPorCruzar);
       setPersonalFuera(data.personalFuera);
       setCrucesCompletadosHoy(data.crucesCompletadosHoy);
@@ -94,7 +96,7 @@ export default function ControlCaseta({ c, usuario }) {
       setModalAbierto(false);
       setEmpleadoSeleccionado('');
       await cargarDatos();
-      alert("✅ Pase de retardo enviado y hora de entrada sellada.");
+      alert("⏳ Hora de llegada congelada en puerta. Esperando respuesta del Jefe de Área.");
     } catch (error) {
       alert("Error: " + error.message);
     } finally {
@@ -102,7 +104,7 @@ export default function ControlCaseta({ c, usuario }) {
     }
   };
 
-  const totalPasesActivos = pasesPorCruzar.length + personalFuera.length;
+  const totalPasesActivos = retenidosEnEspera.length + pasesPorCruzar.length + personalFuera.length;
 
   return (
     <div style={{ width: '100%', maxWidth: '960px', margin: '0 auto', paddingBottom: '40px', fontFamily: '"Inter", -apple-system, sans-serif' }}>
@@ -239,6 +241,7 @@ export default function ControlCaseta({ c, usuario }) {
 
       <TablaRegistrosVig
         tabActiva={tabActiva}
+        retenidosEnEspera={retenidosEnEspera}
         pasesPorCruzar={pasesPorCruzar}
         personalFuera={personalFuera}
         crucesCompletadosHoy={crucesCompletadosHoy}

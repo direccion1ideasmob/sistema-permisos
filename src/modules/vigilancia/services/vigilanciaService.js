@@ -10,18 +10,22 @@ export const obtenerFechaLocalHoy = () => {
 const extraerHorasCaseta = (obs = '') => {
   const mSalida = obs.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
   const mEntrada = obs.match(/\[(?:ENTRADA\vert{}REINGRESO) CASETA:\s*([^\]]+)\]/i);
+  const mLlegadaPuerta = obs.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+  const mRetiro = obs.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
   return {
     horaSalidaCaseta: mSalida ? mSalida[1].trim() : null,
-    horaEntradaCaseta: mEntrada ? mEntrada[1].trim() : null
+    horaEntradaCaseta: mEntrada ? mEntrada[1].trim() : null,
+    horaLlegadaPuerta: mLlegadaPuerta ? mLlegadaPuerta[1].trim() : null,
+    horaRetiroCaseta: mRetiro ? mRetiro[1].trim() : null
   };
 };
 
 const extraerHorarioProgramado = (obs = '') => {
   const primeraParte = String(obs).split('|')[0]?.trim() || '';
-  return primeraParte || 'Horario autorizado';
+  return primeraParte.replace(/🕒|📅/g, '').trim() || 'Horario autorizado';
 };
 
-// 1. OBTENER DATOS ESTRICTAMENTE ACOTADOS PARA VIGILANCIA (SIN FOTOS, SIN DEPTOS, SIN MOTIVOS)
+// 1. OBTENER DATOS DE CASETA (INCLUYENDO RETARDOS EN TRÁNSITO RETENIDOS EN PUERTA)
 export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   const hoy = obtenerFechaLocalHoy();
   const fechaTarget = fechaConsulta || hoy;
@@ -42,11 +46,15 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     supabase
       .from('permisos')
       .select(`
-        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, pago, observaciones, estado_general, created_at,
-        usuarios:usuario_id (id, numero_empleado, nombre_completo, sede_id)
+        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, pago, observaciones,
+        firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado,
+        estado_general, created_at,
+        usuarios:usuario_id (id, numero_empleado, nombre_completo, sede_id),
+        firmante1:firma_1_id (nombre_completo),
+        firmante2:firma_2_id (nombre_completo)
       `)
       .eq('fecha_permiso', hoy)
-      .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta'])
+      .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta'])
       .order('created_at', { ascending: false }),
     supabase
       .from('asistencias_caseta')
@@ -64,6 +72,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     p => !sedeId || p.usuarios?.sede_id === sedeId || idsSede.has(p.usuario_id)
   );
 
+  const retenidosEnEspera = [];
   const pasesPorCruzar = [];
   const personalFuera = [];
   const crucesCompletadosHoy = [];
@@ -73,27 +82,50 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     if (tipo !== 'salida' && tipo !== 'retardo') return;
 
     const obs = rawPase.observaciones || '';
-    const { horaSalidaCaseta, horaEntradaCaseta } = extraerHorasCaseta(obs);
-    const mRetiro = obs.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
-    const horaRetiroCaseta = mRetiro ? mRetiro[1].trim() : null;
-    const seRegresaACasa = (rawPase.pago || "").toLowerCase().includes("regresa");
+    const {
+      horaSalidaCaseta,
+      horaEntradaCaseta,
+      horaLlegadaPuerta,
+      horaRetiroCaseta
+    } = extraerHorasCaseta(obs);
+
+    const seRegresaACasa = (rawPase.pago || '').toLowerCase().includes('regresa');
     const yaSalio = Boolean(horaSalidaCaseta);
     const yaRegreso = Boolean(horaEntradaCaseta);
     const requiereRegreso = obs.toLowerCase().includes('regresa:');
+
+    // En retardos: en cuanto el Jefe Directo (firma_1) ya firmó (o si ya está autorizado), Caseta ya puede actuar sin esperar 30 min a toda la cadena
+    const f1Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido'].includes(rawPase.firma_1_estado);
+    const f2Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido'].includes(rawPase.firma_2_estado);
+    const jefeYaDioLuzVerde =
+      ['autorizado', 'aprobado', 'completado_caseta'].includes(rawPase.estado_general) ||
+      (tipo === 'retardo' && f1Resuelta && (rawPase.firma_1_id ? true : f2Resuelta));
+
+    // Determinar a quién está esperando si sigue en_firmas
+    let esperandoFirmaDe = 'Jefatura / RH';
+    if (rawPase.firma_1_estado === 'pendiente' && rawPase.firmante1?.nombre_completo) {
+      esperandoFirmaDe = rawPase.firmante1.nombre_completo;
+    } else if (rawPase.firma_2_estado === 'pendiente' && rawPase.firmante2?.nombre_completo) {
+      esperandoFirmaDe = rawPase.firmante2.nombre_completo;
+    } else if (rawPase.firma_3_estado === 'pendiente') {
+      esperandoFirmaDe = 'Recursos Humanos';
+    }
 
     const p = {
       id: rawPase.id,
       folio: rawPase.folio,
       usuario_id: rawPase.usuario_id,
       tipo_permiso: tipo,
+      estado_general: rawPase.estado_general,
+      created_at: rawPase.created_at,
       horarioProgramado: extraerHorarioProgramado(obs),
       requiereRegreso,
       seRegresaACasa,
-      horaRetiroCaseta,
-      seRegresaACasa,
+      horaLlegadaPuerta,
       horaRetiroCaseta,
       horaSalidaCaseta,
       horaEntradaCaseta,
+      esperandoFirmaDe,
       usuarios: {
         id: rawPase.usuarios?.id,
         numero_empleado: rawPase.usuarios?.numero_empleado,
@@ -101,6 +133,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       }
     };
 
+    // 1. Si ya completó su cruce en caseta hoy
     if (
       rawPase.estado_general === 'completado_caseta' ||
       (tipo === 'retardo' && !seRegresaACasa && yaRegreso) ||
@@ -111,11 +144,24 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       return;
     }
 
+    // 2. Si es un retardo que AÚN NO tiene autorización del Jefe -> Retenido en Espera
+    if (tipo === 'retardo' && !jefeYaDioLuzVerde) {
+      retenidosEnEspera.push(p);
+      return;
+    }
+
+    // 3. Si es una salida que aún está en firmas y no está autorizada, no puede salir todavía
+    if (tipo === 'salida' && rawPase.estado_general === 'en_firmas') {
+      return;
+    }
+
+    // 4. Si es una salida que ya salió y está pendiente de regresar a planta
     if (tipo === 'salida' && yaSalio && requiereRegreso && !yaRegreso) {
       personalFuera.push(p);
       return;
     }
 
+    // 5. Listo para cruzar puerta (o para confirmar que se regresa a casa)
     pasesPorCruzar.push(p);
   });
 
@@ -125,6 +171,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   });
 
   return {
+    retenidosEnEspera,
     pasesPorCruzar,
     personalFuera,
     crucesCompletadosHoy,
@@ -133,14 +180,14 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   };
 };
 
-// 2. SELLAR HORA DE SALIDA / ENTRADA / REINGRESO EN PUERTA
+// 2. SELLAR MOVIMIENTO EN PUERTA (LLEGADA CONGELADA / ENTRADA / SALIDA / RETIRO A CASA)
 export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') => {
   const ahora = new Date();
   const horaFormateada = ahora.toTimeString().slice(0, 5);
 
   const { data: permiso, error: errGet } = await supabase
     .from('permisos')
-    .select('id, usuario_id, tipo_permiso, observaciones')
+    .select('id, usuario_id, tipo_permiso, estado_general, observaciones')
     .eq('id', permisoId)
     .single();
 
@@ -150,8 +197,22 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   const obsActual = permiso.observaciones || '';
   const tipo = (permiso.tipo_permiso || '').toLowerCase();
   const requiereRegreso = obsActual.toLowerCase().includes('regresa:');
+  const mLlegadaCongelada = obsActual.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+  const horaCongelada = mLlegadaCongelada ? mLlegadaCongelada[1].trim() : null;
 
-  let etiquetaBitacora = `[ENTRADA CASETA: ${horaFormateada} hrs]`;
+  // CASO A: El trabajador acaba de llegar a caseta y el guardia congela su hora real de llegada mientras espera firma
+  if (mov === 'congelar_llegada') {
+    if (horaCongelada) return;
+    const obsConLlegada = `🕒 Llegada en puerta: ${horaFormateada} hrs | ${obsActual} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.trim();
+    const { error } = await supabase
+      .from('permisos')
+      .update({ observaciones: obsConLlegada })
+      .eq('id', permisoId);
+    if (error) throw error;
+    return;
+  }
+
+  let etiquetaBitacora = `[ENTRADA CASETA: ${horaCongelada || `\${horaFormateada} hrs`}]`;
   let cierraCicloCaseta = true;
 
   if (mov.includes('retiro')) {
@@ -160,12 +221,17 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   } else if (mov.includes('salida') || (tipo === 'salida' && !obsActual.includes('[SALIDA CASETA:'))) {
     etiquetaBitacora = `[SALIDA CASETA: ${horaFormateada} hrs]`;
     cierraCicloCaseta = !requiereRegreso;
+  } else if (mov.includes('reingreso')) {
+    etiquetaBitacora = `[REINGRESO CASETA: ${horaFormateada} hrs]`;
+    cierraCicloCaseta = true;
   }
 
   const nuevasObservaciones = `${obsActual} | ${etiquetaBitacora}`.trim();
   const updates = { observaciones: nuevasObservaciones };
 
-  if (cierraCicloCaseta) {
+  // Solo cambiamos estado_general a 'completado_caseta' si ya tenía folio oficial ('autorizado' / 'aprobado').
+  // Si seguía 'en_firmas' (faltaba firma de RH), se conserva 'en_firmas' para que RH le asigne su folio oficial y cierre el documento.
+  if (cierraCicloCaseta && ['autorizado', 'aprobado'].includes(permiso.estado_general)) {
     updates.estado_general = 'completado_caseta';
   }
 
@@ -175,6 +241,38 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
     .eq('id', permisoId);
 
   if (error) throw error;
+
+  // Si es un retardo autorizado que ya entró a planta, registramos su entrada en el Pase de Lista respetando su hora congelada
+  if (tipo === 'retardo' && !mov.includes('retiro')) {
+    try {
+      const horaLista = horaCongelada ? horaCongelada.replace(/\s*hrs/i, '').trim() : horaFormateada;
+      await registrarAsistenciaListaConHora(permiso.usuario_id, 'entrada', horaLista);
+    } catch (_) {}
+  }
+};
+
+const registrarAsistenciaListaConHora = async (usuarioId, tipoMarca, horaEspecifica) => {
+  const hoy = obtenerFechaLocalHoy();
+  const { data: existente } = await supabase
+    .from('asistencias_caseta')
+    .select('id, hora_entrada, hora_salida')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha', hoy)
+    .maybeSingle();
+
+  if (!existente) {
+    await supabase.from('asistencias_caseta').insert([{
+      usuario_id: usuarioId,
+      fecha: hoy,
+      hora_entrada: tipoMarca === 'entrada' ? horaEspecifica : null,
+      hora_salida: tipoMarca === 'salida' ? horaEspecifica : null
+    }]);
+  } else if (tipoMarca === 'entrada' && !existente.hora_entrada) {
+    await supabase
+      .from('asistencias_caseta')
+      .update({ hora_entrada: horaEspecifica })
+      .eq('id', existente.id);
+  }
 };
 
 // 3. REGISTRAR ENTRADA O SALIDA EN EL PASE DE LISTA DIARIO
@@ -211,7 +309,7 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
   }
 };
 
-// 4. APOYO AL TRABAJADOR SIN INTERNET: GENERAR PASE DE RETARDO EN PUERTA CON ENRUTADOR DE 4 NIVELES
+// 4. APOYO EN CASETA: CONGELA HORA DE LLEGADA EN PUERTA Y LO DEJA EN ESPERA DE AUTORIZACIÓN
 export const registrarRetardoEnPuerta = async (usuarioId) => {
   const ahora = new Date();
   const fechaHoy = obtenerFechaLocalHoy();
@@ -238,7 +336,6 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
   const listaDepto = todosEmpDepto || [];
   const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== user.id);
 
-  // PASO 1: VALIDAR SI SU JEFE DIRECTO (reporta_a_id) SIGUE TENIENDO ROL DE MANDO ACTIVO
   let firma1Id = null;
 
   if (user.reporta_a_id) {
@@ -248,13 +345,11 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
       .eq('id', user.reporta_a_id)
       .maybeSingle();
 
-    // Si lo degradaron a 'empleado' o está inactivo, NO se le asigna y cae al fallback del departamento
     if (supDirecto && supDirecto.activo && ['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
       firma1Id = supDirecto.id;
     }
   }
 
-  // Fallback inteligente si no tenía reporta_a_id o si su supervisor fue cambiado a 'empleado'
   if (!firma1Id) {
     const mandoMismaSubarea =
       mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
@@ -263,7 +358,6 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
     if (mandoMismaSubarea) {
       firma1Id = mandoMismaSubarea.id;
     } else if (depto?.jefe_id && depto.jefe_id !== user.id) {
-      // Verificar que el jefe del depto también siga siendo mando activo
       const { data: jefeDeptoData } = await supabase
         .from('usuarios')
         .select('id, rol, activo')
@@ -275,7 +369,6 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
     }
   }
 
-  // PASO 2: DETERMINAR GERENCIA (FIRMA 2) Y RH (FIRMA 3)
   const nomDeptoUpper = (depto?.nombre || '').toUpperCase();
   const clasifLower = (depto?.clasificacion || user.tipo_personal || 'produccion').toLowerCase();
   const esDeptoRH = clasifLower.includes('rh') || nomDeptoUpper.includes('RECURSOS HUMANOS') || nomDeptoUpper.includes('VIGILANCIA') || nomDeptoUpper === 'RH';
@@ -294,7 +387,6 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
   let gerenteId = gerenteDeptoData?.id || (esDeptoRH ? rhId : gerenteFallbackData?.id) || null;
   const rolDelGerenteDepto = gerenteDeptoData?.rol || (esDeptoRH ? 'gerente_rh' : gerenteFallbackData?.rol);
 
-  // PASO 3: ÁRBITRO DE ESTADOS
   let f1Estado = firma1Id ? (firma1Id === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
   let f2Estado = gerenteId ? (gerenteId === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
   let f3Estado = rhId ? (rhId === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
@@ -310,7 +402,7 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
 
   const folioTemporal = `CAS-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // Guardamos desde el inicio el sello real [ENTRADA CASETA: HH:MM hrs] para que RH lo vea en el Historial y en la Papeleta PDF
+  // Se congela [LLEGADA EN PUERTA: HH:MM hrs] sin marcar todavía [ENTRADA CASETA] hasta que el Jefe autorice o regrese al trabajador
   const { error: errInsert } = await supabase
     .from('permisos')
     .insert([{
@@ -322,7 +414,7 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
       pago: 'Pendiente de dictamen',
       asunto_motivo: `[APOYO CASETA] Pase de retardo tramitado con apoyo de caseta de vigilancia.`,
       total_horas: 1,
-      observaciones: `🕒 Llegada en puerta: ${horaActual} hrs | [ENTRADA CASETA: ${horaActual} hrs]`,
+      observaciones: `🕒 Llegada en puerta: ${horaActual} hrs | [LLEGADA EN PUERTA: ${horaActual} hrs]`,
       firma_empleado: true,
       firma_1_id: firma1Id,
       firma_1_estado: f1Estado,
@@ -336,11 +428,6 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
 
   if (errInsert) throw errInsert;
 
-  // También dejamos marcada su hora de entrada en la lista de asistencia de hoy
-  try {
-    await registrarAsistenciaLista(user.id, 'entrada', null);
-  } catch (_) {}
-
   let destinatarios = [];
   if (f1Estado === 'pendiente' && firma1Id) {
     destinatarios = [firma1Id];
@@ -352,8 +439,8 @@ export const registrarRetardoEnPuerta = async (usuarioId) => {
 
   if (destinatarios.length > 0) {
     await enviarNotificacionPushUsuarios([...new Set(destinatarios.filter(Boolean))], {
-      titulo: '🕒 RETARDO GENERADO EN CASETA',
-      mensaje: `👤 ${user.nombre_completo}\n🕒 Hora de llegada: ${horaActual} hrs\nPendiente de autorización.`,
+      titulo: '⏳ TRABAJADOR EN CASETA (RETARDO)',
+      mensaje: `👤 ${user.nombre_completo}\n🕒 Llegada congelada en puerta: ${horaActual} hrs\nEsperando tu autorización para ingresar o regresar.`,
       fotoUrl: user.foto_url,
       urlDestino: '/aprobaciones'
     });

@@ -1,13 +1,14 @@
 import React from 'react';
-import { LogOut, LogIn, CheckCircle2, Clock } from 'lucide-react';
+import { LogOut, LogIn, CheckCircle2, Clock, Hourglass, MapPin } from 'lucide-react';
 
 export default function TablaRegistrosVig({
   tabActiva,
-  pasesPorCruzar,
-  personalFuera,
-  crucesCompletadosHoy,
-  empleadosSede,
-  mapaAsistencias,
+  retenidosEnEspera = [],
+  pasesPorCruzar = [],
+  personalFuera = [],
+  crucesCompletadosHoy = [],
+  empleadosSede = [],
+  mapaAsistencias = {},
   busquedaTexto,
   registrarMovimientoPase,
   marcarAsistencia,
@@ -15,7 +16,6 @@ export default function TablaRegistrosVig({
   theme
 }) {
 
-  // Renglón compacto sin foto y sin departamento: solo #Empleado + Nombre Completo
   const BadgeNomina = ({ numero }) => (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -27,17 +27,112 @@ export default function TablaRegistrosVig({
     </span>
   );
 
+  const calcularMinutosEspera = (createdAt) => {
+    if (!createdAt) return null;
+    const diffMs = Date.now() - new Date(createdAt).getTime();
+    const min = Math.max(1, Math.floor(diffMs / 60000));
+    return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
+  };
+
   // ==========================================================
-  // PESTAÑA 1: PASES AUTORIZADOS EN PUERTA (SALIDAS / RETARDOS)
+  // PESTAÑA 1: PASES Y RETARDOS EN PUERTA
   // ==========================================================
   if (tabActiva === 'pases') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        
-        {/* 1. AUTORIZADOS POR CRUZAR */}
+
+        {/* 0. RETENIDOS EN PUERTA ESPERANDO AUTORIZACIÓN (MODELO A) */}
+        {retenidosEnEspera.length > 0 && (
+          <div style={{
+            background: theme.surface,
+            border: '1.5px solid #f59e0b',
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '11px 14px',
+              background: 'rgba(245, 158, 11, 0.1)',
+              borderBottom: '1px solid rgba(245, 158, 11, 0.3)',
+              fontSize: '12px',
+              fontWeight: '900',
+              color: '#b45309',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Hourglass size={14} /> RETENIDOS EN PUERTA • ESPERANDO RESPUESTA DE JEFE
+              </span>
+              <span>{retenidosEnEspera.length}</span>
+            </div>
+
+            {retenidosEnEspera.map((p) => {
+              const tiempoEspera = calcularMinutosEspera(p.created_at);
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: '10px', padding: '12px 14px', borderBottom: `1px solid ${theme.border}`,
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '210px', flex: '1 1 240px' }}>
+                    <BadgeNomina numero={p.usuarios?.numero_empleado} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: '800', color: theme.text }}>
+                        {p.usuarios?.nombre_completo}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
+                        <span style={{
+                          fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px',
+                          background: 'rgba(245, 158, 11, 0.15)', color: '#b45309'
+                        }}>
+                          ⏳ Esperando a: {p.esperandoFirmaDe}
+                        </span>
+                        {tiempoEspera && (
+                          <span style={{ fontSize: '10.5px', fontWeight: '700', color: '#64748b' }}>
+                            • Hace {tiempoEspera}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {p.horaLlegadaPuerta ? (
+                    <span style={{
+                      fontSize: '11px', fontWeight: '800', color: '#15803d',
+                      background: '#f0fdf4', border: '1px solid #86efac',
+                      padding: '6px 10px', borderRadius: '8px',
+                      display: 'inline-flex', alignItems: 'center', gap: '5px', marginLeft: 'auto'
+                    }}>
+                      <CheckCircle2 size={13} /> Llegada congelada: {p.horaLlegadaPuerta}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => registrarMovimientoPase(p.id, 'congelar_llegada')}
+                      disabled={procesandoId === p.id}
+                      style={{
+                        padding: '8px 12px', borderRadius: '8px', border: '1px solid #f59e0b',
+                        background: '#fffbeb', color: '#b45309',
+                        fontSize: '11.5px', fontWeight: '800', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '5px', marginLeft: 'auto'
+                      }}
+                    >
+                      <MapPin size={13} />
+                      {procesandoId === p.id ? 'Guardando...' : 'Congelar Hora de Llegada'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 1. AUTORIZADOS O DICTAMINADOS LISTOS PARA ACCIÓN EN CASETA */}
         <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
           <div style={{ padding: '11px 14px', borderBottom: `1px solid ${theme.border}`, fontSize: '12px', fontWeight: '900', color: theme.text, display: 'flex', justifyContent: 'space-between' }}>
-            <span>PASES AUTORIZADOS LISTOS PARA CRUZAR</span>
+            <span>PASES CON INSTRUCCIÓN PARA CASETA</span>
             <span style={{ color: theme.accent }}>{pasesPorCruzar.length}</span>
           </div>
 
@@ -55,6 +150,7 @@ export default function TablaRegistrosVig({
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     gap: '10px', padding: '11px 14px', borderBottom: `1px solid ${theme.border}`,
+                    background: esRegresoCasa ? 'rgba(239,68,68,0.04)' : 'transparent',
                     flexWrap: 'wrap'
                   }}
                 >
@@ -64,16 +160,16 @@ export default function TablaRegistrosVig({
                       <div style={{ fontSize: '13.5px', fontWeight: '800', color: theme.text }}>
                         {p.usuarios?.nombre_completo}
                       </div>
-                      <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                      <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
                         <span style={{
-                          fontSize: '10px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px',
+                          fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px',
                           background: esRegresoCasa ? 'rgba(239,68,68,0.14)' : (esSalida ? 'rgba(14,165,233,0.12)' : 'rgba(22,163,74,0.12)'),
                           color: esRegresoCasa ? '#dc2626' : (esSalida ? '#0284c7' : '#16a34a'), textTransform: 'uppercase'
                         }}>
-                          {esRegresoCasa ? '🚫 SE REGRESA A CASA (NO DAR ACCESO)' : (esSalida ? 'Salida Autorizada' : 'Entrada Autorizada')}
+                          {esRegresoCasa ? '🚫 SE REGRESA A CASA (NO DAR ACCESO)' : (esSalida ? 'Salida Autorizada' : '✅ Acceso Autorizado')}
                         </span>
                         <span>•</span>
-                        <span>{p.horarioProgramado}</span>
+                        <span>{p.horaLlegadaPuerta ? `Llegó a puerta: ${p.horaLlegadaPuerta}` : p.horarioProgramado}</span>
                       </div>
                     </div>
                   </div>
@@ -162,10 +258,11 @@ export default function TablaRegistrosVig({
                   <BadgeNomina numero={p.usuarios?.numero_empleado} />
                   <span style={{ fontWeight: '700', color: theme.text }}>{p.usuarios?.nombre_completo}</span>
                 </div>
-                <div style={{ fontSize: '11.5px', fontWeight: '700', color: '#16a34a' }}>
-                  {p.horaSalidaCaseta && `Salida: ${p.horaSalidaCaseta}`}
-                  {p.horaSalidaCaseta && p.horaEntradaCaseta && ' • '}
-                  {p.horaEntradaCaseta && `Entrada: ${p.horaEntradaCaseta}`}
+                <div style={{ fontSize: '11.5px', fontWeight: '700', color: p.seRegresaACasa ? '#dc2626' : '#16a34a' }}>
+                  {p.seRegresaACasa && p.horaRetiroCaseta && `↩️ Se regresó a casa: ${p.horaRetiroCaseta}`}
+                  {!p.seRegresaACasa && p.horaSalidaCaseta && `Salida: ${p.horaSalidaCaseta}`}
+                  {!p.seRegresaACasa && p.horaSalidaCaseta && p.horaEntradaCaseta && ' • '}
+                  {!p.seRegresaACasa && p.horaEntradaCaseta && `Entrada: ${p.horaEntradaCaseta}`}
                 </div>
               </div>
             ))}
@@ -175,7 +272,6 @@ export default function TablaRegistrosVig({
     );
   }
 
-  // Filtrar lista de personal por # de empleado o nombre
   const termino = (busquedaTexto || '').toLowerCase().trim();
   const personalFiltrado = empleadosSede.filter(emp => {
     if (!termino) return true;
@@ -185,9 +281,6 @@ export default function TablaRegistrosVig({
     );
   });
 
-  // ==========================================================
-  // PESTAÑA 2: PASE DE LISTA DIARIO (SELLAR ENTRADA / SALIDA)
-  // ==========================================================
   if (tabActiva === 'lista') {
     return (
       <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
@@ -271,9 +364,6 @@ export default function TablaRegistrosVig({
     );
   }
 
-  // ==========================================================
-  // PESTAÑA 3: CONSULTA DE ASISTENCIA (SOLO SI VINO Y A QUÉ HORA)
-  // ==========================================================
   if (tabActiva === 'consulta') {
     return (
       <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
