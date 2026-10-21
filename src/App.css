@@ -1,1 +1,21 @@
 
+
+/* === ESCALA LEGIBILIDAD LAPTOP 14 PULGADAS === */
+@media screen and (min-width: 900px) {
+  #root {
+    zoom: 1.12;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden;
+  }
+  /* Si algún layout interno usa 100vw o 100vh fijo, lo ajustamos al 100% del contenedor con zoom */
+  #root > div {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+@media print {
+  #root, html, body {
+    zoom: 1 !important;
+  }
+}
