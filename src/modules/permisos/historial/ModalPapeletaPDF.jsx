@@ -345,7 +345,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
                   </div>
 
-                  {/* 4. CAJA DIVIDIDA: MOTIVO DEL COLABORADOR A LA IZQUIERDA | COMENTARIOS DE FLUJO A UN COSTADO */}
+                  {/* 4. CAJA DIVIDIDA: MOTIVO A LA IZQUIERDA | COMENTARIOS DE AUTORIZACIÓN A UN COSTADO */}
                   <div style={{
                     display: 'grid',
                     gridTemplateColumns: '1.25fr 1fr',

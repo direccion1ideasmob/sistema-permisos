@@ -75,7 +75,6 @@ export default function ModalDictamenAprobar({
       }}>
         <div className="modal-container">
 
-          {/* CABECERA */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: '18px', fontWeight: '900', color: c.text, letterSpacing: '-0.02em' }}>
@@ -96,7 +95,6 @@ export default function ModalDictamenAprobar({
             </button>
           </div>
 
-          {/* NOTAS DE NIVELES ANTERIORES (SI EXISTEN) */}
           {notasFlujo && notasFlujo.length > 0 && (
             <div style={{
               background: c.surface, border: `1px solid ${c.border}`, borderRadius: '10px',
@@ -115,7 +113,6 @@ export default function ModalDictamenAprobar({
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-            {/* GRID DE OPCIONES */}
             <div className="grid-opciones">
               {opciones.map(op => {
                 const seleccionada = dictamenPago === op.key;
@@ -166,7 +163,6 @@ export default function ModalDictamenAprobar({
               </div>
             )}
 
-            {/* TEXTAREA DE NOTAS */}
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', top: '14px', left: '12px', color: c.textSubtle }}>
                 <MessageSquare size={16} />
@@ -184,7 +180,6 @@ export default function ModalDictamenAprobar({
               />
             </div>
 
-            {/* BOTONES DE ACCIÓN */}
             <div className="botones-accion">
               <button
                 type="button" onClick={onClose}
