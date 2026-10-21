@@ -24,3 +24,15 @@ html, body, #root {
     zoom: 1 !important;
   }
 }
+
+/* === ESCALA LEGIBILIDAD LAPTOP 14 PULGADAS === */
+@media screen and (min-width: 900px) {
+  html {
+    zoom: 1.12;
+  }
+}
+@media print {
+  html, body {
+    zoom: 1 !important;
+  }
+}

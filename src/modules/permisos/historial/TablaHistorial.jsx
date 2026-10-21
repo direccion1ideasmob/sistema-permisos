@@ -44,7 +44,7 @@ export const parsearDatosObservaciones = (obs = '') => {
 };
 
 export const limpiarMotivo = (asunto = '') => {
-  const m = String(asunto || '').match(/^\[(.*?)\]\s*(.*)\$/);
+  const m = String(asunto || '').match(/^\[(.*?)\]\s*(.*)$/);
   if (m) return { categoria: m[1].trim(), texto: m[2].trim() };
   return { categoria: '', texto: String(asunto || '').trim() };
 };
@@ -242,7 +242,7 @@ export default function TablaHistorial({
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: '5px',
-        fontSize: '12.5px', fontWeight: '700', padding: '4px 9px', borderRadius: '6px',
+        fontSize: '15.5px', fontWeight: '700', padding: '4px 9px', borderRadius: '6px',
         background: c.bg, border: `1px solid ${c.border}`, color: c.text, whiteSpace: 'nowrap'
       }}>
         <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color }} />
@@ -262,11 +262,11 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'produccion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('produccion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', padding: '10px 14px' }}
+              style={{ fontSize: '16.5px', padding: '10px 14px' }}
             >
               <Factory size={16} />
               <span>Producción</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '12px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '16.5px' }}>
                 {pasesPorArea.produccion?.length || 0}
               </span>
             </button>
@@ -274,11 +274,11 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'administracion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('administracion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', padding: '10px 14px' }}
+              style={{ fontSize: '16.5px', padding: '10px 14px' }}
             >
               <Building2 size={16} />
               <span>Administración</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '12px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '16.5px' }}>
                 {pasesPorArea.administracion?.length || 0}
               </span>
             </button>
@@ -286,11 +286,11 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'obra' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('obra'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', padding: '10px 14px' }}
+              style={{ fontSize: '16.5px', padding: '10px 14px' }}
             >
               <HardHat size={16} />
               <span>Obra</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '12px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '16.5px' }}>
                 {pasesPorArea.obra?.length || 0}
               </span>
             </button>
@@ -319,7 +319,7 @@ export default function TablaHistorial({
               </button>
 
               <div style={{ padding: '0 8px', textAlign: 'center', minWidth: '190px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
+                <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
                   Semana {infoSemana.numSemana} {offsetSemana === 0 ? '(Actual)' : offsetSemana === -1 ? '(Pasada)' : ''}
                 </div>
                 <div style={{ fontSize: '11.5px', fontWeight: '600', color: textSecundario }}>
@@ -343,7 +343,7 @@ export default function TablaHistorial({
                   onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
                   style={{
                     padding: '5px 10px', borderRadius: '6px', border: 'none',
-                    background: c.accentSoft, color: c.accent, fontSize: '12px', fontWeight: '800', cursor: 'pointer'
+                    background: c.accentSoft, color: c.accent, fontSize: '16.5px', fontWeight: '800', cursor: 'pointer'
                   }}
                 >
                   Hoy
@@ -354,7 +354,7 @@ export default function TablaHistorial({
                 onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
                 style={{
                   padding: '5px 10px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: textSecundario, fontSize: '12px', fontWeight: '700', cursor: 'pointer'
+                  background: c.bg, color: textSecundario, fontSize: '16.5px', fontWeight: '700', cursor: 'pointer'
                 }}
               >
                 Ver Todo ({solicitudes.length})
@@ -362,7 +362,7 @@ export default function TablaHistorial({
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
+              <span style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
                 {usandoRangoManual ? 'Rango personalizado activo' : `Mostrando todo (${solicitudes.length})`}
               </span>
               <button
@@ -375,7 +375,7 @@ export default function TablaHistorial({
                 }}
                 style={{
                   padding: '5px 10px', borderRadius: '6px', border: 'none',
-                  background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer'
+                  background: c.accent, color: '#fff', fontSize: '16.5px', fontWeight: '800', cursor: 'pointer'
                 }}
               >
                 Volver a Semana Actual
@@ -390,7 +390,7 @@ export default function TablaHistorial({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
               padding: '10px 16px', borderRadius: '9px', border: 'none',
-              background: c.accent, color: '#fff', fontSize: '13.5px', fontWeight: '800', cursor: 'pointer'
+              background: c.accent, color: '#fff', fontSize: '16.5px', fontWeight: '800', cursor: 'pointer'
             }}
           >
             <FileSpreadsheet size={16} /> Exportar Excel
@@ -410,7 +410,7 @@ export default function TablaHistorial({
             placeholder="Folio, nombre o #empleado..."
             value={busqueda}
             onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
-            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13.5px', width: '100%' }}
+            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '16.5px', width: '100%' }}
           />
         </div>
 
@@ -418,7 +418,7 @@ export default function TablaHistorial({
           <select
             value={deptoFiltro}
             onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-            style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '13px', fontWeight: '700', outline: 'none' }}
+            style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '14.5px', fontWeight: '700', outline: 'none' }}
           >
             <option value="todos">Todos los Deptos</option>
             {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
@@ -428,7 +428,7 @@ export default function TablaHistorial({
         <select
           value={tipoFiltro}
           onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '13px', fontWeight: '700', outline: 'none' }}
+          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '14.5px', fontWeight: '700', outline: 'none' }}
         >
           <option value="todos">Todos los Tipos</option>
           <option value="salida">Salida</option>
@@ -440,7 +440,7 @@ export default function TablaHistorial({
         <select
           value={filtroEstado}
           onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '13px', fontWeight: '700', outline: 'none' }}
+          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '14.5px', fontWeight: '700', outline: 'none' }}
         >
           <option value="todos">Autorizados y Rechazados</option>
           <option value="autorizado">Solo Autorizados</option>
@@ -452,7 +452,7 @@ export default function TablaHistorial({
           value={fechaInicio}
           onChange={(e) => { setFechaInicio(e.target.value); setPaginaActual(1); }}
           title="Desde fecha específica"
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '13px', outline: 'none' }}
+          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '14.5px', outline: 'none' }}
         />
 
         <input
@@ -460,7 +460,7 @@ export default function TablaHistorial({
           value={fechaFin}
           onChange={(e) => { setFechaFin(e.target.value); setPaginaActual(1); }}
           title="Hasta fecha específica"
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '13px', outline: 'none' }}
+          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '14.5px', outline: 'none' }}
         />
 
         {hayFiltrosActivos && (
@@ -469,7 +469,7 @@ export default function TablaHistorial({
             title="Restablecer a semana actual"
             style={{
               padding: '8px 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
-              background: c.bg, color: textSecundario, fontSize: '13px', fontWeight: '700',
+              background: c.bg, color: textSecundario, fontSize: '14.5px', fontWeight: '700',
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
             }}
           >
@@ -482,7 +482,7 @@ export default function TablaHistorial({
             onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
             style={{
               padding: '8px 14px', borderRadius: '8px', border: 'none',
-              background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800',
+              background: c.accent, color: '#fff', fontSize: '14.5px', fontWeight: '800',
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: 'auto'
             }}
           >
@@ -502,9 +502,9 @@ export default function TablaHistorial({
       ) : (
         <div style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '15.5px' }}>
               <thead>
-                <tr style={{ background: c.surface, borderBottom: `1px solid ${c.border}`, color: textSecundario, fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <tr style={{ background: c.surface, borderBottom: `1px solid ${c.border}`, color: textSecundario, fontSize: '16.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   {esControlRH && (
                     <th style={{ padding: '13px 14px', width: '32px' }}>
                       <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex' }}>
@@ -565,20 +565,20 @@ export default function TablaHistorial({
                       <td style={{ padding: '14px', minWidth: '230px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           <span style={{
-                            fontFamily: 'ui-monospace, monospace', fontSize: '13px', fontWeight: '900',
+                            fontFamily: 'ui-monospace, monospace', fontSize: '14.5px', fontWeight: '900',
                             color: esAut ? '#22c55e' : '#ef4444', background: esAut ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)',
                             padding: '2px 8px', borderRadius: '5px'
                           }}>
                             {s.folio}
                           </span>
-                          <span style={{ fontSize: '13px', fontWeight: '800', color: textSecundario }}>
+                          <span style={{ fontSize: '14.5px', fontWeight: '800', color: textSecundario }}>
                             #{u.numero_empleado}
                           </span>
                         </div>
-                        <div style={{ fontWeight: '800', color: c.text, fontSize: '15px', lineHeight: 1.25 }}>
+                        <div style={{ fontWeight: '800', color: c.text, fontSize: '16.5px', lineHeight: 1.25 }}>
                           {u.nombre_completo || 'Colaborador'}
                         </div>
-                        <div style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600', marginTop: '2px' }}>
+                        <div style={{ fontSize: '15.5px', color: textSecundario, fontWeight: '600', marginTop: '2px' }}>
                           {u.departamentos?.nombre || 'General'}{u.area && u.area !== u.departamentos?.nombre ? ` • ${u.area}` : ''}
                         </div>
                       </td>
@@ -592,15 +592,15 @@ export default function TablaHistorial({
                           }}>
                             {s.tipo_permiso}
                           </span>
-                          <span style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>
+                          <span style={{ fontSize: '16.5px', fontWeight: '800', color: c.text }}>
                             {s.fecha_permiso}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${s.fecha_fin}` : ''}
                           </span>
                         </div>
-                        <div style={{ fontSize: '13px', color: textSecundario, fontWeight: '600' }}>
+                        <div style={{ fontSize: '14.5px', color: textSecundario, fontWeight: '600' }}>
                           {horarioSolicitado}
                         </div>
                         {motivoTexto && (
-                          <div style={{ fontSize: '12.5px', color: textSecundario, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }} title={motivoTexto}>
+                          <div style={{ fontSize: '15.5px', color: textSecundario, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }} title={motivoTexto}>
                             {categoria ? `${categoria}: ` : ''}{motivoTexto}
                           </div>
                         )}
@@ -609,19 +609,19 @@ export default function TablaHistorial({
                       {/* 3. SELLO DE VIGILANCIA */}
                       <td style={{ padding: '14px', minWidth: '175px' }}>
                         {!esAut ? (
-                          <span style={{ fontSize: '13px', color: '#ef4444', fontWeight: '700' }}>Cancelado / Rechazado</span>
+                          <span style={{ fontSize: '14.5px', color: '#ef4444', fontWeight: '700' }}>Cancelado / Rechazado</span>
                         ) : seRegresoCasa ? (
-                          <span style={{ fontSize: '13px', color: '#f59e0b', fontWeight: '800' }}>
+                          <span style={{ fontSize: '14.5px', color: '#f59e0b', fontWeight: '800' }}>
                             ↩️ Regresado {horaRegresadoCaseta ? `(${horaRegresadoCaseta})` : 'a casa'}
                           </span>
                         ) : !aplicaCaseta ? (
-                          <span style={{ fontSize: '13px', color: textSecundario, fontWeight: '600' }}>No requiere caseta</span>
+                          <span style={{ fontSize: '14.5px', color: textSecundario, fontWeight: '600' }}>No requiere caseta</span>
                         ) : (horaSalidaCaseta || horaEntradaCaseta) ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             {horaSalidaCaseta && (
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                fontSize: '13px', fontWeight: '800', color: '#38bdf8'
+                                fontSize: '14.5px', fontWeight: '800', color: '#38bdf8'
                               }}>
                                 <CheckCircle2 size={14} /> Salida: {horaSalidaCaseta}
                               </span>
@@ -629,12 +629,12 @@ export default function TablaHistorial({
                             {horaEntradaCaseta ? (
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                fontSize: '13px', fontWeight: '800', color: '#22c55e'
+                                fontSize: '14.5px', fontWeight: '800', color: '#22c55e'
                               }}>
                                 <CheckCircle2 size={14} /> {tipo === 'retardo' ? 'Entrada' : 'Reingreso'}: {horaEntradaCaseta}
                               </span>
                             ) : (tipo === 'salida' && requiereRegreso) ? (
-                              <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#f59e0b' }}>
+                              <span style={{ fontSize: '15.5px', fontWeight: '800', color: '#f59e0b' }}>
                                 • Pendiente reingreso
                               </span>
                             ) : null}
@@ -642,7 +642,7 @@ export default function TablaHistorial({
                         ) : (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            fontSize: '13px', fontWeight: '700', color: textSecundario
+                            fontSize: '14.5px', fontWeight: '700', color: textSecundario
                           }}>
                             <Clock size={14} /> Sin sello en puerta
                           </span>
@@ -672,7 +672,7 @@ export default function TablaHistorial({
                           />
                         </div>
                         {!esAut && motivoRechazo && (
-                          <div style={{ fontSize: '12.5px', color: '#ef4444', fontWeight: '700', marginTop: '4px' }}>
+                          <div style={{ fontSize: '15.5px', color: '#ef4444', fontWeight: '700', marginTop: '4px' }}>
                             Motivo rechazo: {motivoRechazo}
                           </div>
                         )}
@@ -682,7 +682,7 @@ export default function TablaHistorial({
                       <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          fontSize: '12.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
+                          fontSize: '15.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
                           backgroundColor: !esAut ? 'rgba(239,68,68,0.14)' : seRegresoCasa ? 'rgba(245,158,11,0.16)' : 'rgba(34,197,94,0.14)',
                           color: !esAut ? '#ef4444' : seRegresoCasa ? '#f59e0b' : '#22c55e',
                           border: `1px solid ${!esAut ? 'rgba(239,68,68,0.3)' : seRegresoCasa ? 'rgba(245,158,11,0.4)' : 'rgba(34,197,94,0.3)'}`
@@ -699,7 +699,7 @@ export default function TablaHistorial({
                             onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
                             style={{
                               padding: '8px 13px', borderRadius: '8px', border: `1px solid ${c.border}`,
-                              background: c.bg, color: c.text, fontSize: '13px', fontWeight: '800',
+                              background: c.bg, color: c.text, fontSize: '14.5px', fontWeight: '800',
                               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
                             }}
                           >
@@ -716,7 +716,7 @@ export default function TablaHistorial({
 
           {/* PAGINACIÓN */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: `1px solid ${c.border}`, background: c.surface }}>
-            <span style={{ fontSize: '13px', color: textSecundario, fontWeight: '600' }}>
+            <span style={{ fontSize: '14.5px', color: textSecundario, fontWeight: '600' }}>
               Mostrando {solicitudesPaginadas.length} de {solicitudesProcesadas.length} registros
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -727,7 +727,7 @@ export default function TablaHistorial({
               >
                 <ChevronLeft size={16} />
               </button>
-              <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
+              <span style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
                 Página {paginaActual} de {totalPaginas}
               </span>
               <button
