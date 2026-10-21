@@ -181,34 +181,34 @@ export default function TarjetaAprobacion({
         background: c.surfaceCard,
         border: `1px solid ${c.border}`,
         borderLeft: `4px solid ${estilo.color}`,
-        borderRadius: '12px',
-        padding: '14px 16px',
+        borderRadius: '14px',
+        padding: '16px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
+        gap: '12px',
         boxShadow: modoOscuro ? '0 2px 8px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.03)'
       }}
     >
       {/* RENGLÓN 1: CABECERA (AVATAR + NOMBRE/PUESTO A LA IZQUIERDA | BADGE DE TIPO A LA DERECHA) */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '13px', minWidth: 0, flex: 1 }}>
           <img
             src={urlFoto}
             alt=""
             style={{ width: '38px', height: '38px', borderRadius: '9px', objectFit: 'cover', border: `1px solid ${c.border}`, flexShrink: 0 }}
           />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
+            <div style={{ fontSize: '15.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
               {aTitulo(u.nombre_completo || 'Colaborador')}
             </div>
-            <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: '13.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {subtituloFicha}
             </div>
           </div>
         </div>
 
         <span style={{
-          fontSize: '10.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg,
+          fontSize: '12.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg,
           border: `1px solid ${estilo.border}`, padding: '3px 9px', borderRadius: '6px', flexShrink: 0
         }}>
           {estilo.text}
@@ -220,12 +220,12 @@ export default function TarjetaAprobacion({
         background: modoOscuro ? 'rgba(255,255,255,0.03)' : '#f8fafc',
         border: `1px solid ${c.border}`,
         borderRadius: '9px',
-        padding: '9px 12px',
+        padding: '9px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: '5px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '12px', fontWeight: '700', color: c.text }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '14px', fontWeight: '700', color: c.text }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               <Calendar size={12.5} color={c.textMuted} />
@@ -244,7 +244,7 @@ export default function TarjetaAprobacion({
 
           {reincidencias > 0 && (
             <span style={{
-              fontSize: '10px', fontWeight: '800', color: '#dc2626', background: 'rgba(239,68,68,0.1)',
+              fontSize: '12px', fontWeight: '800', color: '#dc2626', background: 'rgba(239,68,68,0.1)',
               padding: '2px 6px', borderRadius: '5px', display: 'inline-flex', alignItems: 'center', gap: '3px'
             }}>
               <AlertTriangle size={11} /> {reincidencias} retardo(s) previo(s)
@@ -252,7 +252,7 @@ export default function TarjetaAprobacion({
           )}
         </div>
 
-        <div style={{ fontSize: '12px', color: c.textSubtle, lineHeight: 1.35 }}>
+        <div style={{ fontSize: '14px', color: c.textSubtle, lineHeight: 1.35 }}>
           {etiqueta && (
             <span style={{ fontWeight: '700', color: c.textMuted }}>
               {etiqueta}:{' '}
@@ -267,7 +267,7 @@ export default function TarjetaAprobacion({
             display: 'flex', flexDirection: 'column', gap: '2px'
           }}>
             {notasPrevias.map((n, idx) => (
-              <div key={idx} style={{ fontSize: '11.5px', color: c.textSubtle }}>
+              <div key={idx} style={{ fontSize: '13.5px', color: c.textSubtle }}>
                 <strong style={{ color: c.accent }}>💬 {n.autor}:</strong> {n.texto}
               </div>
             ))}
@@ -276,19 +276,19 @@ export default function TarjetaAprobacion({
       </div>
 
       {/* RENGLÓN 3: AVALES PREVIOS (SI LOS HAY) + BOTONES SIMÉTRICOS */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '2px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '2px' }}>
         {(avalesPrevios.length > 0 || esperandoA) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             {avalesPrevios.length > 0 && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: '4px',
-                fontSize: '11px', fontWeight: '700', color: '#16a34a'
+                fontSize: '13px', fontWeight: '700', color: '#16a34a'
               }}>
                 <CheckCircle2 size={12} /> Avaló: {avalesPrevios.join(', ')}
               </span>
             )}
             {esperandoA && (
-              <span style={{ fontSize: '11px', fontWeight: '700', color: '#d97706' }}>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706' }}>
                 ⏳ Turno de: {formatearNombreCorto(esperandoA)}
               </span>
             )}
@@ -300,8 +300,8 @@ export default function TarjetaAprobacion({
             <button
               onClick={() => onForzarFirma(solicitud)}
               style={{
-                flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
-                backgroundColor: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: '12px', fontWeight: '700',
+                flex: 1, padding: '8px 14px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
+                backgroundColor: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: '14px', fontWeight: '700',
                 cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
               }}
             >
@@ -314,8 +314,8 @@ export default function TarjetaAprobacion({
               <button
                 onClick={() => onRechazar(solicitud)}
                 style={{
-                  flex: 1, maxWidth: '160px', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
-                  background: 'transparent', color: c.textMuted, fontSize: '12px', fontWeight: '700',
+                  flex: 1, maxWidth: '160px', padding: '8px 14px', borderRadius: '8px', border: `1px solid ${c.border}`,
+                  background: 'transparent', color: c.textMuted, fontSize: '14px', fontWeight: '700',
                   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
                 }}
               >
@@ -324,8 +324,8 @@ export default function TarjetaAprobacion({
               <button
                 onClick={() => onAprobar(solicitud)}
                 style={{
-                  flex: 1.2, maxWidth: '180px', padding: '8px 14px', borderRadius: '8px', border: 'none',
-                  backgroundColor: c.accent, color: '#fff', fontSize: '12px', fontWeight: '800',
+                  flex: 1.2, maxWidth: '180px', padding: '8px 16px', borderRadius: '8px', border: 'none',
+                  backgroundColor: c.accent, color: '#fff', fontSize: '14px', fontWeight: '800',
                   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                 }}
               >

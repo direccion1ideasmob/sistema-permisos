@@ -28,7 +28,7 @@ export default function ModalRechazoPermiso({
         borderRadius: '16px', width: '100%', maxWidth: '380px',
         padding: '22px', boxShadow: '0 25px 50px rgba(0,0,0,0.5)', boxSizing: 'border-box'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
           <div style={{
             width: '36px', height: '36px', borderRadius: '8px',
             backgroundColor: c.dangerSoft, display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -36,18 +36,18 @@ export default function ModalRechazoPermiso({
             <XCircle size={20} color={c.danger} />
           </div>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: '800', color: c.danger }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: c.danger }}>
               RECHAZAR SOLICITUD
             </div>
-            <div style={{ fontSize: '11px', color: c.textMuted }}>
+            <div style={{ fontSize: '13px', color: c.textMuted }}>
               {solicitud.tipo_permiso?.toUpperCase()} • {solicitud.usuarios?.nombre_completo}
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '5px' }}>
+            <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', marginBottom: '5px' }}>
               Motivo o Razón del Rechazo *
             </label>
             <textarea 
@@ -55,14 +55,14 @@ export default function ModalRechazoPermiso({
               placeholder="Explica por qué no es posible autorizar este pase..."
               value={motivoRechazo} onChange={e => setMotivoRechazo(e.target.value)}
               style={{
-                width: '100%', padding: '8px 10px', borderRadius: '6px',
+                width: '100%', padding: '8px 12px', borderRadius: '6px',
                 border: `1px solid ${c.inputBorder}`, backgroundColor: c.inputBg,
-                color: c.text, fontSize: '12px', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
+                color: c.text, fontSize: '14px', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
               }}
             />
           </div>
 
-          <div style={{ fontSize: '10.5px', color: c.textMuted, fontStyle: 'italic' }}>
+          <div style={{ fontSize: '12.5px', color: c.textMuted, fontStyle: 'italic' }}>
             * Esta explicación se le enviará directamente al colaborador en su notificación.
           </div>
 
@@ -70,8 +70,8 @@ export default function ModalRechazoPermiso({
             <button
               type="button" onClick={onClose}
               style={{
-                padding: '7px 12px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                background: 'transparent', color: c.textMuted, fontSize: '11.5px', cursor: 'pointer'
+                padding: '7px 14px', borderRadius: '6px', border: `1px solid ${c.border}`,
+                background: 'transparent', color: c.textMuted, fontSize: '13.5px', cursor: 'pointer'
               }}
             >
               Cancelar
@@ -80,7 +80,7 @@ export default function ModalRechazoPermiso({
               type="submit" disabled={procesando}
               style={{
                 padding: '7px 16px', borderRadius: '6px', border: 'none',
-                backgroundColor: c.danger, color: '#fff', fontSize: '11.5px', fontWeight: '800',
+                backgroundColor: c.danger, color: '#fff', fontSize: '13.5px', fontWeight: '800',
                 cursor: 'pointer'
               }}
             >

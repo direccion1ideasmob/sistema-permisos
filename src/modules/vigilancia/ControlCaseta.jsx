@@ -107,15 +107,15 @@ export default function ControlCaseta({ c, usuario }) {
   const totalPasesActivos = retenidosEnEspera.length + pasesPorCruzar.length + personalFuera.length;
 
   return (
-    <div style={{ width: '100%', maxWidth: '960px', margin: '0 auto', paddingBottom: '40px', fontFamily: '"Inter", -apple-system, sans-serif' }}>
+    <div style={{ width: '100%', maxWidth: '1220px', margin: '0 auto', paddingBottom: '40px', fontFamily: '"Inter", -apple-system, sans-serif' }}>
       
       {/* CABECERA COMPACTA ADAPTADA A CELULAR Y PC */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '19px', fontWeight: '900', color: theme.text, margin: 0 }}>
             Control de Puerta
           </h1>
-          <div style={{ fontSize: '12px', color: theme.textMuted, fontWeight: '600' }}>
+          <div style={{ fontSize: '14px', color: theme.textMuted, fontWeight: '600' }}>
             Registro de entradas, salidas y pase de lista
           </div>
         </div>
@@ -125,8 +125,8 @@ export default function ControlCaseta({ c, usuario }) {
             onClick={() => setModalAbierto(true)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '9px 14px', background: '#0f172a', color: '#fff',
-              border: 'none', borderRadius: '9px', fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+              padding: '9px 16px', background: '#0f172a', color: '#fff',
+              border: 'none', borderRadius: '9px', fontSize: '14.5px', fontWeight: '800', cursor: 'pointer'
             }}
           >
             <Clock size={15} /> Apoyo: Generar Retardo
@@ -136,7 +136,7 @@ export default function ControlCaseta({ c, usuario }) {
             onClick={cargarDatos}
             title="Actualizar"
             style={{
-              padding: '9px 11px', background: theme.surface,
+              padding: '9px 13px', background: theme.surface,
               border: `1px solid ${theme.border}`, borderRadius: '9px',
               cursor: 'pointer', color: theme.text, display: 'inline-flex', alignItems: 'center'
             }}
@@ -153,7 +153,7 @@ export default function ControlCaseta({ c, usuario }) {
         gap: '6px',
         background: theme.surface,
         padding: '5px',
-        borderRadius: '11px',
+        borderRadius: '13px',
         border: `1px solid ${theme.border}`,
         marginBottom: '16px'
       }}>
@@ -164,7 +164,7 @@ export default function ControlCaseta({ c, usuario }) {
             padding: '9px 8px', borderRadius: '8px', border: 'none',
             background: tabActiva === 'pases' ? theme.accent : 'transparent',
             color: tabActiva === 'pases' ? '#fff' : theme.textMuted,
-            fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+            fontSize: '14.5px', fontWeight: '800', cursor: 'pointer'
           }}
         >
           <DoorOpen size={15} />
@@ -181,7 +181,7 @@ export default function ControlCaseta({ c, usuario }) {
             padding: '9px 8px', borderRadius: '8px', border: 'none',
             background: tabActiva === 'lista' ? theme.accent : 'transparent',
             color: tabActiva === 'lista' ? '#fff' : theme.textMuted,
-            fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+            fontSize: '14.5px', fontWeight: '800', cursor: 'pointer'
           }}
         >
           <ClipboardCheck size={15} />
@@ -195,7 +195,7 @@ export default function ControlCaseta({ c, usuario }) {
             padding: '9px 8px', borderRadius: '8px', border: 'none',
             background: tabActiva === 'consulta' ? theme.accent : 'transparent',
             color: tabActiva === 'consulta' ? '#fff' : theme.textMuted,
-            fontSize: '12.5px', fontWeight: '800', cursor: 'pointer'
+            fontSize: '14.5px', fontWeight: '800', cursor: 'pointer'
           }}
         >
           <Search size={15} />
@@ -205,25 +205,25 @@ export default function ControlCaseta({ c, usuario }) {
 
       {/* BARRA DE BÚSQUEDA RÁPIDA (Y SELECTOR DE FECHA EN MODO CONSULTA) */}
       {(tabActiva === 'lista' || tabActiva === 'consulta') && (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: '1 1 220px' }}>
-            <Search size={15} style={{ position: 'absolute', left: '12px', top: '11px', color: theme.textMuted }} />
+            <Search size={15} style={{ position: 'absolute', left: '14px', top: '13px', color: theme.textMuted }} />
             <input
               type="text"
               placeholder="Buscar por # de nómina o nombre..."
               value={busquedaTexto}
               onChange={(e) => setBusquedaTexto(e.target.value)}
               style={{
-                width: '100%', padding: '9px 12px 9px 34px',
+                width: '100%', padding: '9px 14px 9px 34px',
                 borderRadius: '9px', border: `1px solid ${theme.border}`,
                 background: theme.surface, color: theme.text,
-                fontSize: '13px', boxSizing: 'border-box', outline: 'none'
+                fontSize: '15px', boxSizing: 'border-box', outline: 'none'
               }}
             />
           </div>
 
           {tabActiva === 'consulta' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '9px', padding: '0 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '9px', padding: '0 12px' }}>
               <Calendar size={14} color={theme.textMuted} />
               <input
                 type="date"
@@ -231,7 +231,7 @@ export default function ControlCaseta({ c, usuario }) {
                 onChange={(e) => setFechaConsulta(e.target.value)}
                 style={{
                   border: 'none', background: 'transparent', color: theme.text,
-                  fontSize: '12.5px', fontWeight: '700', padding: '8px 0', outline: 'none'
+                  fontSize: '14.5px', fontWeight: '700', padding: '8px 0', outline: 'none'
                 }}
               />
             </div>

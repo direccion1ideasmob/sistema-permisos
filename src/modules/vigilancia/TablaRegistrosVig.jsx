@@ -21,7 +21,7 @@ export default function TablaRegistrosVig({
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       minWidth: '46px', padding: '4px 7px', borderRadius: '7px',
       background: '#f1f5f9', color: '#0f172a', fontWeight: '900',
-      fontSize: '11.5px', fontFamily: 'monospace', flexShrink: 0
+      fontSize: '13.5px', fontFamily: 'monospace', flexShrink: 0
     }}>
       #{numero || 'S/N'}
     </span>
@@ -46,14 +46,14 @@ export default function TablaRegistrosVig({
           <div style={{
             background: theme.surface,
             border: '1.5px solid #f59e0b',
-            borderRadius: '12px',
+            borderRadius: '14px',
             overflow: 'hidden'
           }}>
             <div style={{
-              padding: '11px 14px',
+              padding: '13px 16px',
               background: 'rgba(245, 158, 11, 0.1)',
               borderBottom: '1px solid rgba(245, 158, 11, 0.3)',
-              fontSize: '12px',
+              fontSize: '14px',
               fontWeight: '900',
               color: '#b45309',
               display: 'flex',
@@ -73,25 +73,25 @@ export default function TablaRegistrosVig({
                   key={p.id}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: '10px', padding: '12px 14px', borderBottom: `1px solid ${theme.border}`,
+                    gap: '12px', padding: '14px 16px', borderBottom: `1px solid ${theme.border}`,
                     flexWrap: 'wrap'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '210px', flex: '1 1 240px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '210px', flex: '1 1 240px' }}>
                     <BadgeNomina numero={p.usuarios?.numero_empleado} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: '800', color: theme.text }}>
+                      <div style={{ fontSize: '15.5px', fontWeight: '800', color: theme.text }}>
                         {p.usuarios?.nombre_completo}
                       </div>
-                      <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
+                      <div style={{ fontSize: '13.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
                         <span style={{
-                          fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px',
+                          fontSize: '12px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px',
                           background: 'rgba(245, 158, 11, 0.15)', color: '#b45309'
                         }}>
                           ⏳ Esperando a: {p.esperandoFirmaDe}
                         </span>
                         {tiempoEspera && (
-                          <span style={{ fontSize: '10.5px', fontWeight: '700', color: '#64748b' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#64748b' }}>
                             • Hace {tiempoEspera}
                           </span>
                         )}
@@ -101,9 +101,9 @@ export default function TablaRegistrosVig({
 
                   {p.horaLlegadaPuerta ? (
                     <span style={{
-                      fontSize: '11px', fontWeight: '800', color: '#15803d',
+                      fontSize: '13px', fontWeight: '800', color: '#15803d',
                       background: '#f0fdf4', border: '1px solid #86efac',
-                      padding: '6px 10px', borderRadius: '8px',
+                      padding: '6px 12px', borderRadius: '8px',
                       display: 'inline-flex', alignItems: 'center', gap: '5px', marginLeft: 'auto'
                     }}>
                       <CheckCircle2 size={13} /> Llegada congelada: {p.horaLlegadaPuerta}
@@ -113,9 +113,9 @@ export default function TablaRegistrosVig({
                       onClick={() => registrarMovimientoPase(p.id, 'congelar_llegada')}
                       disabled={procesandoId === p.id}
                       style={{
-                        padding: '8px 12px', borderRadius: '8px', border: '1px solid #f59e0b',
+                        padding: '8px 14px', borderRadius: '8px', border: '1px solid #f59e0b',
                         background: '#fffbeb', color: '#b45309',
-                        fontSize: '11.5px', fontWeight: '800', cursor: 'pointer',
+                        fontSize: '13.5px', fontWeight: '800', cursor: 'pointer',
                         display: 'inline-flex', alignItems: 'center', gap: '5px', marginLeft: 'auto'
                       }}
                     >
@@ -130,14 +130,14 @@ export default function TablaRegistrosVig({
         )}
 
         {/* 1. AUTORIZADOS O DICTAMINADOS LISTOS PARA ACCIÓN EN CASETA */}
-        <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
-          <div style={{ padding: '11px 14px', borderBottom: `1px solid ${theme.border}`, fontSize: '12px', fontWeight: '900', color: theme.text, display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '14px', overflow: 'hidden' }}>
+          <div style={{ padding: '13px 16px', borderBottom: `1px solid ${theme.border}`, fontSize: '14px', fontWeight: '900', color: theme.text, display: 'flex', justifyContent: 'space-between' }}>
             <span>PASES CON INSTRUCCIÓN PARA CASETA</span>
             <span style={{ color: theme.accent }}>{pasesPorCruzar.length}</span>
           </div>
 
           {pasesPorCruzar.length === 0 ? (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: theme.textMuted, fontSize: '12.5px', fontWeight: '600' }}>
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: theme.textMuted, fontSize: '14.5px', fontWeight: '600' }}>
               No hay pases pendientes de salida o entrada en este momento.
             </div>
           ) : (
@@ -149,20 +149,20 @@ export default function TablaRegistrosVig({
                   key={p.id}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: '10px', padding: '11px 14px', borderBottom: `1px solid ${theme.border}`,
+                    gap: '12px', padding: '13px 16px', borderBottom: `1px solid ${theme.border}`,
                     background: esRegresoCasa ? 'rgba(239,68,68,0.04)' : 'transparent',
                     flexWrap: 'wrap'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '200px', flex: '1 1 220px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '200px', flex: '1 1 220px' }}>
                     <BadgeNomina numero={p.usuarios?.numero_empleado} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: '800', color: theme.text }}>
+                      <div style={{ fontSize: '15.5px', fontWeight: '800', color: theme.text }}>
                         {p.usuarios?.nombre_completo}
                       </div>
-                      <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: '13.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
                         <span style={{
-                          fontSize: '10px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px',
+                          fontSize: '12px', fontWeight: '800', padding: '2px 6px', borderRadius: '4px',
                           background: esRegresoCasa ? 'rgba(239,68,68,0.14)' : (esSalida ? 'rgba(14,165,233,0.12)' : 'rgba(22,163,74,0.12)'),
                           color: esRegresoCasa ? '#dc2626' : (esSalida ? '#0284c7' : '#16a34a'), textTransform: 'uppercase'
                         }}>
@@ -178,9 +178,9 @@ export default function TablaRegistrosVig({
                     onClick={() => registrarMovimientoPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'))}
                     disabled={procesandoId === p.id}
                     style={{
-                      padding: '8px 14px', borderRadius: '8px', border: 'none',
+                      padding: '8px 16px', borderRadius: '8px', border: 'none',
                       background: esRegresoCasa ? '#dc2626' : (esSalida ? '#0284c7' : '#16a34a'), color: '#fff',
-                      fontSize: '12px', fontWeight: '800', cursor: 'pointer',
+                      fontSize: '14px', fontWeight: '800', cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: 'auto'
                     }}
                   >
@@ -195,8 +195,8 @@ export default function TablaRegistrosVig({
 
         {/* 2. PENDIENTES DE REINGRESO HOY */}
         {personalFuera.length > 0 && (
-          <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ padding: '11px 14px', borderBottom: `1px solid ${theme.border}`, fontSize: '12px', fontWeight: '900', color: '#2563eb', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '14px', overflow: 'hidden' }}>
+            <div style={{ padding: '13px 16px', borderBottom: `1px solid ${theme.border}`, fontSize: '14px', fontWeight: '900', color: '#2563eb', display: 'flex', justifyContent: 'space-between' }}>
               <span>PENDIENTES DE REINGRESO A PLANTA</span>
               <span>{personalFuera.length}</span>
             </div>
@@ -206,17 +206,17 @@ export default function TablaRegistrosVig({
                 key={p.id}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  gap: '10px', padding: '11px 14px', borderBottom: `1px solid ${theme.border}`,
+                  gap: '12px', padding: '13px 16px', borderBottom: `1px solid ${theme.border}`,
                   flexWrap: 'wrap'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 220px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 220px' }}>
                   <BadgeNomina numero={p.usuarios?.numero_empleado} />
                   <div>
-                    <div style={{ fontSize: '13.5px', fontWeight: '800', color: theme.text }}>
+                    <div style={{ fontSize: '15.5px', fontWeight: '800', color: theme.text }}>
                       {p.usuarios?.nombre_completo}
                     </div>
-                    <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600' }}>
+                    <div style={{ fontSize: '13.5px', color: theme.textMuted, fontWeight: '600' }}>
                       Salió: {p.horaSalidaCaseta}
                     </div>
                   </div>
@@ -226,8 +226,8 @@ export default function TablaRegistrosVig({
                   onClick={() => registrarMovimientoPase(p.id, 'reingreso')}
                   disabled={procesandoId === p.id}
                   style={{
-                    padding: '8px 14px', borderRadius: '8px', border: 'none',
-                    background: '#2563eb', color: '#fff', fontSize: '12px', fontWeight: '800',
+                    padding: '8px 16px', borderRadius: '8px', border: 'none',
+                    background: '#2563eb', color: '#fff', fontSize: '14px', fontWeight: '800',
                     cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: 'auto'
                   }}
                 >
@@ -241,8 +241,8 @@ export default function TablaRegistrosVig({
 
         {/* 3. CRUCES DE PASE YA SELLADOS HOY */}
         {crucesCompletadosHoy.length > 0 && (
-          <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 14px', borderBottom: `1px solid ${theme.border}`, fontSize: '11.5px', fontWeight: '800', color: theme.textMuted }}>
+          <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '14px', overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', borderBottom: `1px solid ${theme.border}`, fontSize: '13.5px', fontWeight: '800', color: theme.textMuted }}>
               CRUCES CON PASE REGISTRADOS HOY ({crucesCompletadosHoy.length})
             </div>
             {crucesCompletadosHoy.map((p) => (
@@ -250,15 +250,15 @@ export default function TablaRegistrosVig({
                 key={p.id}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  gap: '10px', padding: '9px 14px', borderBottom: `1px solid ${theme.border}`,
-                  fontSize: '12.5px'
+                  gap: '12px', padding: '9px 16px', borderBottom: `1px solid ${theme.border}`,
+                  fontSize: '14.5px'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <BadgeNomina numero={p.usuarios?.numero_empleado} />
                   <span style={{ fontWeight: '700', color: theme.text }}>{p.usuarios?.nombre_completo}</span>
                 </div>
-                <div style={{ fontSize: '11.5px', fontWeight: '700', color: p.seRegresaACasa ? '#dc2626' : '#16a34a' }}>
+                <div style={{ fontSize: '13.5px', fontWeight: '700', color: p.seRegresaACasa ? '#dc2626' : '#16a34a' }}>
                   {p.seRegresaACasa && p.horaRetiroCaseta && `↩️ Se regresó a casa: ${p.horaRetiroCaseta}`}
                   {!p.seRegresaACasa && p.horaSalidaCaseta && `Salida: ${p.horaSalidaCaseta}`}
                   {!p.seRegresaACasa && p.horaSalidaCaseta && p.horaEntradaCaseta && ' • '}
@@ -283,7 +283,7 @@ export default function TablaRegistrosVig({
 
   if (tabActiva === 'lista') {
     return (
-      <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+      <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '14px', overflow: 'hidden' }}>
         {personalFiltrado.map((emp) => {
           const reg = mapaAsistencias[emp.id];
           const tieneEntrada = Boolean(reg?.hora_entrada);
@@ -294,13 +294,13 @@ export default function TablaRegistrosVig({
               key={emp.id}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                gap: '10px', padding: '10px 14px', borderBottom: `1px solid ${theme.border}`,
+                gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${theme.border}`,
                 flexWrap: 'wrap'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 200px', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 200px', minWidth: 0 }}>
                 <BadgeNomina numero={emp.numero_empleado} />
-                <div style={{ fontSize: '13px', fontWeight: '800', color: theme.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '15px', fontWeight: '800', color: theme.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {emp.nombre_completo}
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function TablaRegistrosVig({
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
                 {tieneEntrada ? (
                   <span style={{
-                    fontSize: '11px', fontWeight: '800', color: '#16a34a',
+                    fontSize: '13px', fontWeight: '800', color: '#16a34a',
                     background: 'rgba(22,163,74,0.1)', padding: '5px 9px', borderRadius: '7px',
                     display: 'inline-flex', alignItems: 'center', gap: '4px'
                   }}>
@@ -319,8 +319,8 @@ export default function TablaRegistrosVig({
                     onClick={() => marcarAsistencia(emp.id, 'entrada')}
                     disabled={procesandoId === `${emp.id}-entrada`}
                     style={{
-                      padding: '6px 12px', borderRadius: '7px', border: 'none',
-                      background: '#16a34a', color: '#fff', fontSize: '11.5px',
+                      padding: '6px 14px', borderRadius: '7px', border: 'none',
+                      background: '#16a34a', color: '#fff', fontSize: '13.5px',
                       fontWeight: '800', cursor: 'pointer'
                     }}
                   >
@@ -331,7 +331,7 @@ export default function TablaRegistrosVig({
                 {tieneEntrada && (
                   tieneSalida ? (
                     <span style={{
-                      fontSize: '11px', fontWeight: '800', color: '#0284c7',
+                      fontSize: '13px', fontWeight: '800', color: '#0284c7',
                       background: 'rgba(2,132,199,0.1)', padding: '5px 9px', borderRadius: '7px'
                     }}>
                       Salida: {reg.hora_salida}
@@ -341,8 +341,8 @@ export default function TablaRegistrosVig({
                       onClick={() => marcarAsistencia(emp.id, 'salida')}
                       disabled={procesandoId === `${emp.id}-salida`}
                       style={{
-                        padding: '6px 11px', borderRadius: '7px', border: `1px solid ${theme.border}`,
-                        background: 'transparent', color: theme.text, fontSize: '11.5px',
+                        padding: '6px 13px', borderRadius: '7px', border: `1px solid ${theme.border}`,
+                        background: 'transparent', color: theme.text, fontSize: '13.5px',
                         fontWeight: '700', cursor: 'pointer'
                       }}
                     >
@@ -356,7 +356,7 @@ export default function TablaRegistrosVig({
         })}
 
         {personalFiltrado.length === 0 && (
-          <div style={{ padding: '24px', textAlign: 'center', color: theme.textMuted, fontSize: '13px' }}>
+          <div style={{ padding: '24px', textAlign: 'center', color: theme.textMuted, fontSize: '15px' }}>
             No se encontraron coincidencias.
           </div>
         )}
@@ -366,7 +366,7 @@ export default function TablaRegistrosVig({
 
   if (tabActiva === 'consulta') {
     return (
-      <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+      <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: '14px', overflow: 'hidden' }}>
         {personalFiltrado.map((emp) => {
           const reg = mapaAsistencias[emp.id];
           const asistio = Boolean(reg?.hora_entrada || reg?.hora_salida);
@@ -376,18 +376,18 @@ export default function TablaRegistrosVig({
               key={emp.id}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                gap: '10px', padding: '10px 14px', borderBottom: `1px solid ${theme.border}`,
+                gap: '12px', padding: '12px 16px', borderBottom: `1px solid ${theme.border}`,
                 flexWrap: 'wrap'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 200px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 200px' }}>
                 <BadgeNomina numero={emp.numero_empleado} />
-                <span style={{ fontSize: '13px', fontWeight: '800', color: theme.text }}>
+                <span style={{ fontSize: '15px', fontWeight: '800', color: theme.text }}>
                   {emp.nombre_completo}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', fontWeight: '800' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', fontWeight: '800' }}>
                 {asistio ? (
                   <>
                     <span style={{ color: '#16a34a', background: 'rgba(22,163,74,0.1)', padding: '4px 8px', borderRadius: '6px' }}>

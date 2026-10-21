@@ -172,18 +172,18 @@ export default function Aprobaciones() {
       </div>
 
       {cargando ? (
-        <div style={{ textAlign: 'center', padding: '30px', color: c.textMuted, fontSize: '12px' }}>
+        <div style={{ textAlign: 'center', padding: '30px', color: c.textMuted, fontSize: '14px' }}>
           Cargando solicitudes...
         </div>
       ) : (!esRH && tabActiva === 'historial') ? (
         <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} />
       ) : listadoActual.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '13px', background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px' }}>
+        <div style={{ textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '15px', background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px' }}>
           {tabActiva === 'pendientes' && (esRH ? 'No hay pases pendientes por dictaminar.' : 'No tienes solicitudes pendientes por autorizar.')}
           {tabActiva === 'transito' && 'No hay permisos en tránsito actualmente.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {listadoActual.map(solicitud => (
             <TarjetaAprobacion
               key={solicitud.id}

@@ -20,7 +20,7 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
     gap: 6px;
     background: ${c.bg};
     padding: 4px;
-    border-radius: 10px;
+    border-radius: 12px;
     border: 1px solid ${c.border};
     width: 100%;
     max-width: 100%;
@@ -38,13 +38,13 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
     align-items: center;
     justify-content: center;
     gap: 7px;
-    padding: 9px 12px;
+    padding: 9px 14px;
     border: 1px solid transparent;
     border-radius: 7px;
     background: transparent;
     color: ${c.textMuted};
     font-family: inherit;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -60,7 +60,7 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
     background: ${c.surfaceCard};
     color: ${c.accent};
     border-color: ${c.border};
-    box-shadow: ${modoOscuro ? '0 4px 12px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.06)'};
+    box-shadow: ${modoOscuro ? '0 4px 14px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.06)'};
   }
 
   .tab-badge {
@@ -71,7 +71,7 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
     height: 18px;
     padding: 0 5px;
     border-radius: 999px;
-    font-size: 10.5px;
+    font-size: 12.5px;
     font-weight: 800;
     line-height: 1;
   }
@@ -79,11 +79,11 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
   .card-aprobacion {
     background: ${c.surfaceCard};
     border: 1px solid ${c.border};
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
     box-sizing: border-box;
     width: 100%;
   }
@@ -93,8 +93,8 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
-    padding-top: 12px;
+    gap: 14px;
+    padding-top: 14px;
     border-top: 1px solid ${c.borderDivider};
   }
 
@@ -107,8 +107,8 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
 
   @media (max-width: 600px) {
     .tab-btn {
-      padding: 8px 10px;
-      font-size: 11.5px;
+      padding: 8px 12px;
+      font-size: 13.5px;
       gap: 5px;
     }
     .footer-container {

@@ -56,14 +56,14 @@ export default function ModalDictamenAprobar({
           box-shadow: 0 25px 50px rgba(0,0,0,0.5);
           font-family: "Inter", system-ui, -apple-system, sans-serif;
         }
-        .grid-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .botones-accion { display: flex; gap: 10px; margin-top: 4px; }
+        .grid-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .botones-accion { display: flex; gap: 12px; margin-top: 4px; }
 
         @media (max-width: 480px) {
           .modal-container { padding: 20px !important; border-radius: 16px !important; }
           .grid-opciones { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
           .botones-accion { flex-direction: column !important; }
-          .botones-accion button { width: 100% !important; padding: 14px 10px !important; }
+          .botones-accion button { width: 100% !important; padding: 16px 12px !important; }
         }
       `}</style>
 
@@ -80,9 +80,9 @@ export default function ModalDictamenAprobar({
               <div style={{ fontSize: '18px', fontWeight: '900', color: c.text, letterSpacing: '-0.02em' }}>
                 Resolución de Pase
               </div>
-              <div style={{ fontSize: '13px', color: c.textMuted, marginTop: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '15px', color: c.textMuted, marginTop: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 Evaluando a <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo?.split(' ')[0]}</strong>
-                <span style={{ background: c.accentSoft, color: c.accent, padding: '2px 6px', borderRadius: '6px', fontWeight: '800', fontSize: '10.5px', letterSpacing: '0.02em' }}>
+                <span style={{ background: c.accentSoft, color: c.accent, padding: '2px 6px', borderRadius: '6px', fontWeight: '800', fontSize: '12.5px', letterSpacing: '0.02em' }}>
                   {solicitud.tipo_permiso?.toUpperCase()}
                 </span>
               </div>
@@ -97,14 +97,14 @@ export default function ModalDictamenAprobar({
 
           {notasFlujo && notasFlujo.length > 0 && (
             <div style={{
-              background: c.surface, border: `1px solid ${c.border}`, borderRadius: '10px',
-              padding: '9px 12px', display: 'flex', flexDirection: 'column', gap: '4px'
+              background: c.surface, border: `1px solid ${c.border}`, borderRadius: '12px',
+              padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: '4px'
             }}>
-              <span style={{ fontSize: '10px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '12px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>
                 Comentarios previos en el flujo:
               </span>
               {notasFlujo.map((n, idx) => (
-                <div key={idx} style={{ fontSize: '12px', color: c.text, lineHeight: 1.35 }}>
+                <div key={idx} style={{ fontSize: '14px', color: c.text, lineHeight: 1.35 }}>
                   <strong style={{ color: c.accent }}>{n.autor}:</strong> {n.texto}
                 </div>
               ))}
@@ -128,7 +128,7 @@ export default function ModalDictamenAprobar({
                       setDictamenPago(op.key);
                     }}
                     style={{
-                      padding: '13px 10px', borderRadius: '12px', textAlign: 'center',
+                      padding: '15px 12px', borderRadius: '14px', textAlign: 'center',
                       border: seleccionada ? `2px solid ${colorActivo}` : `1px solid ${c.border}`,
                       backgroundColor: seleccionada ? bgActivo : c.surface,
                       cursor: (esVacaciones && op.key !== 'Con goce') ? 'not-allowed' : 'pointer',
@@ -139,7 +139,7 @@ export default function ModalDictamenAprobar({
                     }}
                   >
                     <Icono size={21} color={seleccionada ? colorActivo : c.textMuted} strokeWidth={seleccionada ? 2.5 : 1.5} />
-                    <span style={{ fontSize: '12px', fontWeight: seleccionada ? '800' : '600', color: seleccionada ? colorActivo : c.text }}>
+                    <span style={{ fontSize: '14px', fontWeight: seleccionada ? '800' : '600', color: seleccionada ? colorActivo : c.text }}>
                       {op.label}
                     </span>
 
@@ -155,8 +155,8 @@ export default function ModalDictamenAprobar({
 
             {esSeleccionRegreso && (
               <div style={{
-                fontSize: '11.5px', color: '#b45309', background: 'rgba(245, 158, 11, 0.1)',
-                border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '9px', padding: '8px 11px',
+                fontSize: '13.5px', color: '#b45309', background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '9px', padding: '8px 13px',
                 fontWeight: '600', lineHeight: 1.35
               }}>
                 ↩️ Se generará la papeleta oficial con la leyenda <strong>"SE REGRESA (SIN ACCESO)"</strong> para respaldo de RH y aviso a Vigilancia.
@@ -164,7 +164,7 @@ export default function ModalDictamenAprobar({
             )}
 
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '14px', left: '12px', color: c.textSubtle }}>
+              <div style={{ position: 'absolute', top: '16px', left: '14px', color: c.textSubtle }}>
                 <MessageSquare size={16} />
               </div>
               <textarea
@@ -172,9 +172,9 @@ export default function ModalDictamenAprobar({
                 value={comentarios} onChange={e => setComentarios(e.target.value)}
                 rows={2}
                 style={{
-                  width: '100%', padding: '12px 12px 12px 38px', borderRadius: '12px',
+                  width: '100%', padding: '14px 14px 14px 38px', borderRadius: '14px',
                   border: `1px solid ${c.inputBorder}`, backgroundColor: c.inputBg,
-                  color: c.text, fontSize: '13px', outline: 'none', boxSizing: 'border-box',
+                  color: c.text, fontSize: '15px', outline: 'none', boxSizing: 'border-box',
                   fontWeight: '500', resize: 'none', fontFamily: 'inherit'
                 }}
               />
@@ -183,16 +183,16 @@ export default function ModalDictamenAprobar({
             <div className="botones-accion">
               <button
                 type="button" onClick={onClose}
-                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted, fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted, fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}
               >
                 Cancelar
               </button>
               <button
                 type="submit" disabled={procesando}
                 style={{
-                  flex: 1.5, padding: '12px', borderRadius: '10px', border: 'none',
+                  flex: 1.5, padding: '14px', borderRadius: '12px', border: 'none',
                   backgroundColor: esSeleccionRegreso ? '#d97706' : c.accent, color: '#fff',
-                  fontSize: '13px', fontWeight: '800', cursor: 'pointer',
+                  fontSize: '15px', fontWeight: '800', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
               >
