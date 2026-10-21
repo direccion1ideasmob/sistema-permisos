@@ -90,6 +90,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       requiereRegreso,
       seRegresaACasa,
       horaRetiroCaseta,
+      seRegresaACasa,
+      horaRetiroCaseta,
       horaSalidaCaseta,
       horaEntradaCaseta,
       usuarios: {

@@ -107,6 +107,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
   const getDictamenPago = (p) => {
     if (p.estado_general === 'rechazado') return 'RECHAZADO';
     const pago = (p.pago || '').toLowerCase();
+    if (pago.includes('regresa')) return 'SE REGRESA (SIN ACCESO)';
     if (pago.includes('con goce')) return 'CON GOCE DE SUELDO';
     if (pago.includes('sin goce')) return 'SIN GOCE DE SUELDO';
     if (pago.includes('tiempo')) return 'REPOSICIÓN DE TIEMPO';
@@ -155,7 +156,6 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
 
   const debeOcultarFirma = (estado) => ['escalado', 'auto_aprobado', 'omitido'].includes((estado || '').toLowerCase());
 
-  // Retícula idéntica para Caja 1 y Caja 2 para que las 4 columnas queden perfectamente alineadas a plomo
   const gridCuatroColumnas = '1.35fr 1.05fr 1.15fr 1fr';
 
   return (
@@ -196,11 +196,14 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
           <div ref={contenedorRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {listaPermisos.map((p, index) => {
               const tipo = (p.tipo_permiso || '').toLowerCase();
+              const seRegresaTrabajador = (p.pago || '').toLowerCase().includes('regresa');
               const {
                 horarioSolicitado,
                 horaSalidaCaseta,
                 horaEntradaCaseta,
-                supervisorSubarea
+                horaRegresadoCaseta,
+                supervisorSubarea,
+                notasFlujo
               } = parsearDatosObservaciones(p.observaciones);
               const { categoria, texto: motivoCrudo } = limpiarMotivo(p.asunto_motivo);
 
@@ -269,7 +272,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
                   </div>
 
-                  {/* 2. CAJA COLABORADOR (MISMA RETÍCULA DE 4 COLUMNAS QUE LA CAJA DE ABAJO) */}
+                  {/* 2. CAJA COLABORADOR */}
                   <div style={{
                     display: 'grid', gridTemplateColumns: gridCuatroColumnas, gap: '12px', alignItems: 'start',
                     padding: '11px 16px', background: '#f8fafc', border: '1px solid #cbd5e1',
@@ -296,7 +299,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
                   </div>
 
-                  {/* 3. CAJA INCIDENCIA (ALINEADA A PLOMO CON LAS 4 COLUMNAS DE ARRIBA) */}
+                  {/* 3. CAJA INCIDENCIA */}
                   <div style={{
                     display: 'grid', gridTemplateColumns: gridCuatroColumnas, gap: '12px', alignItems: 'center',
                     padding: '11px 16px', background: '#ffffff', border: '1px solid #cbd5e1',
@@ -319,7 +322,11 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                         <ShieldCheck size={10.5} strokeWidth={2.5} color="#0f172a" />
                         CONTROL DE ACCESO
                       </span>
-                      {tieneSelloCaseta ? (
+                      {seRegresaTrabajador ? (
+                        <strong style={{ color: '#b45309', fontSize: '10.5px', display: 'block' }}>
+                          Se regresa a casa {horaRegresadoCaseta ? `(${horaRegresadoCaseta})` : '(Sin ingreso)'}
+                        </strong>
+                      ) : tieneSelloCaseta ? (
                         <strong style={{ color: '#0f172a', fontSize: '10.5px', display: 'block' }}>
                           {horaSalidaCaseta ? `Salida: ${horaSalidaCaseta}` : ''}
                           {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
@@ -334,20 +341,47 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
 
                     <div>
                       <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>DICTAMEN NÓMINA</span>
-                      <strong style={{ fontSize: '10.5px', color: '#0f172a' }}>{getDictamenPago(p)}</strong>
+                      <strong style={{ fontSize: '10.5px', color: seRegresaTrabajador ? '#b45309' : '#0f172a' }}>{getDictamenPago(p)}</strong>
                     </div>
                   </div>
 
-                  {/* 4. CAJA MOTIVO (ALTURA EQUILIBRADA DE 78px PARA REPARTIR EL ESPACIO VERTICAL SIN HUECOS) */}
+                  {/* 4. CAJA DIVIDIDA: MOTIVO DEL COLABORADOR A LA IZQUIERDA | COMENTARIOS DE FLUJO A UN COSTADO */}
                   <div style={{
-                    padding: '11px 16px', border: '1px solid #cbd5e1', borderRadius: '8px',
-                    background: '#fcfcfd', minHeight: '78px'
+                    display: 'grid',
+                    gridTemplateColumns: '1.25fr 1fr',
+                    gap: '16px',
+                    padding: '11px 16px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    background: '#fcfcfd',
+                    minHeight: '78px'
                   }}>
-                    <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
-                      MOTIVO {etiquetaMotivo ? `• ${etiquetaMotivo}` : ''}
-                    </span>
-                    <div style={{ color: '#0f172a', fontSize: '13.5px', lineHeight: 1.5, fontWeight: '600' }}>
-                      {justificacionLimpia || 'Sin justificación adicional.'}
+                    <div style={{ borderRight: '1px solid #e2e8f0', paddingRight: '12px' }}>
+                      <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>
+                        MOTIVO {etiquetaMotivo ? `• ${etiquetaMotivo}` : ''}
+                      </span>
+                      <div style={{ color: '#0f172a', fontSize: '13.5px', lineHeight: 1.5, fontWeight: '600' }}>
+                        {justificacionLimpia || 'Sin justificación adicional.'}
+                      </div>
+                    </div>
+
+                    <div style={{ paddingLeft: '2px' }}>
+                      <span style={{ fontSize: '8.5px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                        COMENTARIOS DE AUTORIZACIÓN
+                      </span>
+                      {notasFlujo && notasFlujo.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {notasFlujo.map((n, idx) => (
+                            <div key={idx} style={{ fontSize: '10.5px', color: '#0f172a', lineHeight: 1.35 }}>
+                              <strong style={{ color: '#334155' }}>{n.autor}:</strong> {n.texto}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '10.5px', color: '#94a3b8', fontStyle: 'italic', marginTop: '4px' }}>
+                          Sin observaciones adicionales.
+                        </div>
+                      )}
                     </div>
                   </div>
 
