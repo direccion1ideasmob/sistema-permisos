@@ -13,7 +13,7 @@ export const parsearDatosObservaciones = (obs = '') => {
     .trim();
 
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
-  const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i) || texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+  const mEntrada = texto.match(/\[(?:ENTRADA\vert{}REINGRESO) CASETA:\s*([^\]]+)\]/i) || texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
   const mRegresado = texto.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
   const mSubarea = texto.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
   const mRechazo = texto.match(/RECHAZO:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
@@ -44,7 +44,7 @@ export const parsearDatosObservaciones = (obs = '') => {
 };
 
 export const limpiarMotivo = (asunto = '') => {
-  const m = String(asunto || '').match(/^\[(.*?)\]\s*(.*)$/);
+  const m = String(asunto || '').match(/^\[(.*?)\]\s*(.*)\$/);
   if (m) return { categoria: m[1].trim(), texto: m[2].trim() };
   return { categoria: '', texto: String(asunto || '').trim() };
 };
@@ -113,8 +113,6 @@ export default function TablaHistorial({
   const [seleccionados, setSeleccionados] = useState([]);
 
   const registrosPorPagina = 12;
-
-  // Color secundario de alto contraste para que en laptop de 14" (modo oscuro) no se vea apagado
   const textSecundario = modoOscuro ? '#cbd5e1' : '#475569';
 
   const infoSemana = useMemo(() => obtenerRangoSemana(offsetSemana), [offsetSemana]);
@@ -231,7 +229,8 @@ export default function TablaHistorial({
     modoPeriodo !== 'semana' ||
     offsetSemana !== 0;
 
-  const ChipFirma = ({ rolLabel, nombre, estado }) => {
+  // Renglón de firma compacto y alineado para apilarse en 1 sola columna vertical
+  const FilaFirma = ({ rolLabel, nombre, estado }) => {
     const est = (estado || 'pendiente').toLowerCase();
     if (est === 'omitido' || (!nombre && est !== 'rechazado')) return null;
 
@@ -240,33 +239,36 @@ export default function TablaHistorial({
     const color = ok ? '#22c55e' : rech ? '#ef4444' : textSecundario;
 
     return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: '5px',
-        fontSize: '15.5px', fontWeight: '700', padding: '4px 9px', borderRadius: '6px',
-        background: c.bg, border: `1px solid ${c.border}`, color: c.text, whiteSpace: 'nowrap'
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '6px',
+        fontSize: '12px', lineHeight: 1.35, color: c.text, whiteSpace: 'nowrap'
       }}>
-        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color }} />
-        <span style={{ color: textSecundario }}>{rolLabel}:</span>
-        <strong>{acortarNombre(nombre || 'Autorizado')}</strong>
-      </span>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span style={{ color: textSecundario, fontWeight: '700', minWidth: '52px' }}>{rolLabel}:</span>
+        <strong style={{ fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {acortarNombre(nombre || 'Autorizado')}
+        </strong>
+      </div>
     );
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+  const alturaControl = '36px';
 
-      {/* 1. BARRA SUPERIOR UNIFICADA (PESTAÑAS NÓMINA + NAVEGADOR DE SEMANA + EXPORTAR EXCEL) */}
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+
+      {/* 1. BARRA SUPERIOR UNIFICADA CON ALTURA SIMÉTRICA (42px) */}
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         {esControlRH && (
-          <div className="tabs-aprobacion-bar" style={{ flex: '1 1 280px' }}>
+          <div className="tabs-aprobacion-bar" style={{ flex: '1 1 380px', margin: 0, height: '42px', boxSizing: 'border-box' }}>
             <button
               className={`tab-btn ${areaActiva === 'produccion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('produccion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '16.5px', padding: '10px 14px' }}
+              style={{ fontSize: '13px', height: '100%', padding: '0 14px' }}
             >
-              <Factory size={16} />
+              <Factory size={15} />
               <span>Producción</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '16.5px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '11.5px' }}>
                 {pasesPorArea.produccion?.length || 0}
               </span>
             </button>
@@ -274,11 +276,11 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'administracion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('administracion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '16.5px', padding: '10px 14px' }}
+              style={{ fontSize: '13px', height: '100%', padding: '0 14px' }}
             >
-              <Building2 size={16} />
+              <Building2 size={15} />
               <span>Administración</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '16.5px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '11.5px' }}>
                 {pasesPorArea.administracion?.length || 0}
               </span>
             </button>
@@ -286,24 +288,24 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'obra' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('obra'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '16.5px', padding: '10px 14px' }}
+              style={{ fontSize: '13px', height: '100%', padding: '0 14px' }}
             >
-              <HardHat size={16} />
+              <HardHat size={15} />
               <span>Obra</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '16.5px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '11.5px' }}>
                 {pasesPorArea.obra?.length || 0}
               </span>
             </button>
           </div>
         )}
 
-        {/* SELECTOR EJECUTIVO DE CORTE SEMANAL */}
+        {/* SELECTOR SEMANAL EN UNA SOLA LÍNEA DE 42px DE ALTO */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px',
           background: c.surfaceCard, border: `1px solid ${c.border}`,
-          padding: '6px 12px', borderRadius: '10px', flexWrap: 'wrap'
+          padding: '0 12px', height: '42px', boxSizing: 'border-box', borderRadius: '10px'
         }}>
-          <CalendarDays size={16} color={c.accent} />
+          <CalendarDays size={15} color={c.accent} />
 
           {modoPeriodo === 'semana' && !usandoRangoManual ? (
             <>
@@ -311,28 +313,28 @@ export default function TablaHistorial({
                 onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
                 title="Semana anterior"
                 style={{
-                  padding: '5px 8px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center'
+                  width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${c.border}`,
+                  background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
               >
                 <ChevronLeft size={15} />
               </button>
 
-              <div style={{ padding: '0 8px', textAlign: 'center', minWidth: '155px' }}>
-                <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
-                  Semana {infoSemana.numSemana} {offsetSemana === 0 ? '(Actual)' : offsetSemana === -1 ? '(Pasada)' : ''}
-                </div>
-                <div style={{ fontSize: '11.5px', fontWeight: '600', color: textSecundario }}>
-                  {infoSemana.etiquetaRango}
-                </div>
+              <div style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
+                  Semana {infoSemana.numSemana}
+                </span>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: textSecundario, marginLeft: '6px' }}>
+                  ({infoSemana.etiquetaRango})
+                </span>
               </div>
 
               <button
                 onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); setSeleccionados([]); }}
                 title="Semana siguiente"
                 style={{
-                  padding: '5px 8px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center'
+                  width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${c.border}`,
+                  background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
               >
                 <ChevronRight size={15} />
@@ -342,19 +344,19 @@ export default function TablaHistorial({
                 <button
                   onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
                   style={{
-                    padding: '5px 10px', borderRadius: '6px', border: 'none',
-                    background: c.accentSoft, color: c.accent, fontSize: '16.5px', fontWeight: '800', cursor: 'pointer'
+                    height: '28px', padding: '0 9px', borderRadius: '6px', border: 'none',
+                    background: c.accentSoft, color: c.accent, fontSize: '12px', fontWeight: '800', cursor: 'pointer'
                   }}
                 >
-                  Hoy
+                  Actual
                 </button>
               )}
 
               <button
                 onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
                 style={{
-                  padding: '5px 10px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: textSecundario, fontSize: '16.5px', fontWeight: '700', cursor: 'pointer'
+                  height: '28px', padding: '0 10px', borderRadius: '6px', border: `1px solid ${c.border}`,
+                  background: c.bg, color: textSecundario, fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap'
                 }}
               >
                 Ver Todo ({solicitudes.length})
@@ -362,8 +364,8 @@ export default function TablaHistorial({
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
-                {usandoRangoManual ? 'Rango personalizado activo' : `Mostrando todo (${solicitudes.length})`}
+              <span style={{ fontSize: '12.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap' }}>
+                {usandoRangoManual ? 'Rango manual' : `Todo (${solicitudes.length})`}
               </span>
               <button
                 onClick={() => {
@@ -374,11 +376,11 @@ export default function TablaHistorial({
                   setPaginaActual(1);
                 }}
                 style={{
-                  padding: '5px 10px', borderRadius: '6px', border: 'none',
-                  background: c.accent, color: '#fff', fontSize: '16.5px', fontWeight: '800', cursor: 'pointer'
+                  height: '28px', padding: '0 10px', borderRadius: '6px', border: 'none',
+                  background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
                 }}
               >
-                Volver a Semana Actual
+                Semana Actual
               </button>
             </div>
           )}
@@ -389,8 +391,8 @@ export default function TablaHistorial({
             onClick={onAbrirExportar}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '10px 16px', borderRadius: '9px', border: 'none',
-              background: c.accent, color: '#fff', fontSize: '16.5px', fontWeight: '800', cursor: 'pointer'
+              padding: '0 16px', height: '42px', boxSizing: 'border-box', borderRadius: '10px', border: 'none',
+              background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
             }}
           >
             <FileSpreadsheet size={16} /> Exportar Excel
@@ -398,19 +400,23 @@ export default function TablaHistorial({
         )}
       </div>
 
-      {/* 2. BARRA ÚNICA DE FILTROS EN UNA SOLA LÍNEA */}
+      {/* 2. BARRA DE FILTROS SIMÉTRICA (TODOS LOS CONTROLES A 36px DE ALTO) */}
       <div style={{
-        background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '11px',
-        padding: '12px 14px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'
+        background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px',
+        padding: '10px 12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 12px', flex: '1.5 1 220px' }}>
-          <Search size={16} color={textSecundario} />
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px', background: c.bg,
+          border: `1px solid ${c.border}`, borderRadius: '8px', padding: '0 12px',
+          height: alturaControl, boxSizing: 'border-box', flex: '1 1 220px'
+        }}>
+          <Search size={15} color={textSecundario} />
           <input
             type="text"
-            placeholder="Folio, nombre o #empleado..."
+            placeholder="Buscar por folio, nombre o #empleado..."
             value={busqueda}
             onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
-            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '16.5px', width: '100%' }}
+            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13px', width: '100%' }}
           />
         </div>
 
@@ -418,7 +424,10 @@ export default function TablaHistorial({
           <select
             value={deptoFiltro}
             onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-            style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '14.5px', fontWeight: '700', outline: 'none' }}
+            style={{
+              background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
+              padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '12.5px', fontWeight: '700', outline: 'none'
+            }}
           >
             <option value="todos">Todos los Deptos</option>
             {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
@@ -428,7 +437,10 @@ export default function TablaHistorial({
         <select
           value={tipoFiltro}
           onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '14.5px', fontWeight: '700', outline: 'none' }}
+          style={{
+            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
+            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '12.5px', fontWeight: '700', outline: 'none'
+          }}
         >
           <option value="todos">Todos los Tipos</option>
           <option value="salida">Salida</option>
@@ -440,7 +452,10 @@ export default function TablaHistorial({
         <select
           value={filtroEstado}
           onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '14.5px', fontWeight: '700', outline: 'none' }}
+          style={{
+            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
+            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '12.5px', fontWeight: '700', outline: 'none'
+          }}
         >
           <option value="todos">Autorizados y Rechazados</option>
           <option value="autorizado">Solo Autorizados</option>
@@ -452,7 +467,10 @@ export default function TablaHistorial({
           value={fechaInicio}
           onChange={(e) => { setFechaInicio(e.target.value); setPaginaActual(1); }}
           title="Desde fecha específica"
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '14.5px', outline: 'none' }}
+          style={{
+            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
+            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '12.5px', outline: 'none'
+          }}
         />
 
         <input
@@ -460,7 +478,10 @@ export default function TablaHistorial({
           value={fechaFin}
           onChange={(e) => { setFechaFin(e.target.value); setPaginaActual(1); }}
           title="Hasta fecha específica"
-          style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '14.5px', outline: 'none' }}
+          style={{
+            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
+            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '12.5px', outline: 'none'
+          }}
         />
 
         {hayFiltrosActivos && (
@@ -468,12 +489,12 @@ export default function TablaHistorial({
             onClick={limpiarFiltros}
             title="Restablecer a semana actual"
             style={{
-              padding: '8px 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
-              background: c.bg, color: textSecundario, fontSize: '14.5px', fontWeight: '700',
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+              padding: '0 12px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
+              border: `1px solid ${c.border}`, background: c.bg, color: textSecundario,
+              fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
             }}
           >
-            <RotateCcw size={14} /> Limpiar
+            <RotateCcw size={13} /> Limpiar
           </button>
         )}
 
@@ -481,45 +502,58 @@ export default function TablaHistorial({
           <button
             onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
             style={{
-              padding: '8px 14px', borderRadius: '8px', border: 'none',
-              background: c.accent, color: '#fff', fontSize: '14.5px', fontWeight: '800',
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: 'auto'
+              padding: '0 14px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
+              border: 'none', background: c.accent, color: '#fff', fontSize: '12.5px', fontWeight: '800',
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
             }}
           >
-            <Printer size={15} /> Imprimir ({seleccionados.length})
+            <Printer size={14} /> Imprimir ({seleccionados.length})
           </button>
         )}
       </div>
 
-      {/* 3. TABLA CON TIPOGRAFÍA GRANDE Y ALTO CONTRASTE PARA LAPTOP DE 14" */}
+      {/* 3. TABLA CUADRADA CON PORCENTAJES FIJOS Y FIRMAS EN 1 SOLA COLUMNA VERTICAL */}
       {solicitudesPaginadas.length === 0 ? (
         <div style={{
           background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-          padding: '36px', textAlign: 'center', color: textSecundario, fontSize: '14.5px', fontWeight: '600'
+          padding: '36px', textAlign: 'center', color: textSecundario, fontSize: '14px', fontWeight: '600'
         }}>
           No hay permisos registrados en {modoPeriodo === 'semana' && !usandoRangoManual ? `la Semana ${infoSemana.numSemana} (${infoSemana.etiquetaRango})` : 'el periodo seleccionado'}.
         </div>
       ) : (
         <div style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '15.5px' }}>
+            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13.5px' }}>
+              <colgroup>
+                {esControlRH && <col style={{ width: '38px' }} />}
+                <col style={{ width: esControlRH ? '23%' : '26%' }} />
+                <col style={{ width: esControlRH ? '27%' : '30%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '17%' }} />
+                <col style={{ width: '10%' }} />
+                {esControlRH && <col style={{ width: '95px' }} />}
+              </colgroup>
               <thead>
-                <tr style={{ background: c.surface, borderBottom: `1px solid ${c.border}`, color: textSecundario, fontSize: '16.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <tr style={{
+                  background: c.surface, borderBottom: `1px solid ${c.border}`,
+                  color: textSecundario, fontSize: '11.5px', fontWeight: '800',
+                  textTransform: 'uppercase', letterSpacing: '0.03em'
+                }}>
                   {esControlRH && (
-                    <th style={{ padding: '10px 10px', width: '32px' }}>
-                      <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex' }}>
+                    <th style={{ padding: '11px 10px 11px 14px', verticalAlign: 'middle' }}>
+                      <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                         {seleccionados.length > 0 && seleccionados.length === solicitudesPaginadas.length
-                          ? <CheckSquare size={17} color={c.accent} />
-                          : <Square size={17} />}
+                          ? <CheckSquare size={16} color={c.accent} />
+                          : <Square size={16} />}
                       </div>
                     </th>
                   )}
-                  <th style={{ padding: '10px 10px' }}>Folio / Colaborador</th>
-                  <th style={{ padding: '10px 10px' }}>Incidencia / Horario</th>
-                  <th style={{ padding: '10px 10px' }}>Sello Vigilancia (Caseta)</th>
-                  <th style={{ padding: '10px 10px' }}>Cadena de Firmas</th>
-                  <th style={{ padding: '10px 10px' }}>Dictamen</th>
-                  {esControlRH && <th style={{ padding: '10px 10px', textAlign: 'right' }}>Papeleta</th>}
+                  <th style={{ padding: '11px 12px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Folio / Colaborador</th>
+                  <th style={{ padding: '11px 12px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Incidencia / Horario</th>
+                  <th style={{ padding: '11px 12px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Sello Caseta</th>
+                  <th style={{ padding: '11px 12px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Cadena de Firmas</th>
+                  <th style={{ padding: '11px 12px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>Dictamen</th>
+                  {esControlRH && <th style={{ padding: '11px 14px 11px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>Papeleta</th>}
                 </tr>
               </thead>
               <tbody>
@@ -552,89 +586,106 @@ export default function TablaHistorial({
                       }}
                     >
                       {esControlRH && (
-                        <td style={{ padding: '11px 10px' }} onClick={() => toggleSeleccion(s.id)}>
-                          <div style={{ cursor: 'pointer', display: 'flex' }}>
+                        <td style={{ padding: '12px 10px 12px 14px', verticalAlign: 'middle' }} onClick={() => toggleSeleccion(s.id)}>
+                          <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                             {seleccionado
-                              ? <CheckSquare size={17} color={c.accent} />
-                              : <Square size={17} color={textSecundario} style={{ opacity: 0.6 }} />}
+                              ? <CheckSquare size={16} color={c.accent} />
+                              : <Square size={16} color={textSecundario} style={{ opacity: 0.6 }} />}
                           </div>
                         </td>
                       )}
 
-                      {/* 1. FOLIO + COLABORADOR */}
-                      <td style={{ padding: '11px 10px', minWidth: '185px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      {/* 1. FOLIO + COLABORADOR (NOMBRE EN 1 SOLA LÍNEA) */}
+                      <td style={{ padding: '12px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
                           <span style={{
-                            fontFamily: 'ui-monospace, monospace', fontSize: '14.5px', fontWeight: '900',
-                            color: esAut ? '#22c55e' : '#ef4444', background: esAut ? 'rgba(34,197,94,0.14)' : 'rgba(239,68,68,0.14)',
-                            padding: '2px 8px', borderRadius: '5px'
+                            fontFamily: 'ui-monospace, monospace', fontSize: '12px', fontWeight: '900',
+                            color: esAut ? '#16a34a' : '#ef4444',
+                            background: esAut ? 'rgba(22,163,74,0.12)' : 'rgba(239,68,68,0.12)',
+                            padding: '1px 7px', borderRadius: '4px'
                           }}>
                             {s.folio}
                           </span>
-                          <span style={{ fontSize: '14.5px', fontWeight: '800', color: textSecundario }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: '800', color: textSecundario }}>
                             #{u.numero_empleado}
                           </span>
                         </div>
-                        <div style={{ fontWeight: '800', color: c.text, fontSize: '16.5px', lineHeight: 1.25 }}>
+                        <div
+                          title={u.nombre_completo}
+                          style={{
+                            fontWeight: '800', color: c.text, fontSize: '14px',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                          }}
+                        >
                           {u.nombre_completo || 'Colaborador'}
                         </div>
-                        <div style={{ fontSize: '15.5px', color: textSecundario, fontWeight: '600', marginTop: '2px' }}>
+                        <div style={{
+                          fontSize: '12px', color: textSecundario, fontWeight: '600', marginTop: '2px',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                        }}>
                           {u.departamentos?.nombre || 'General'}{u.area && u.area !== u.departamentos?.nombre ? ` • ${u.area}` : ''}
                         </div>
                       </td>
 
-                      {/* 2. INCIDENCIA + FECHA + MOTIVO */}
-                      <td style={{ padding: '11px 10px', minWidth: '180px', maxWidth: '235px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      {/* 2. INCIDENCIA + FECHA + MOTIVO AMPLIO */}
+                      <td style={{ padding: '12px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
                           <span style={{
-                            fontSize: '11.5px', fontWeight: '800', textTransform: 'uppercase',
-                            padding: '2px 8px', borderRadius: '5px', background: c.bg, border: `1px solid ${c.border}`, color: c.text
+                            fontSize: '11px', fontWeight: '800', textTransform: 'uppercase',
+                            padding: '1px 7px', borderRadius: '4px', background: c.bg, border: `1px solid ${c.border}`, color: c.text
                           }}>
                             {s.tipo_permiso}
                           </span>
-                          <span style={{ fontSize: '16.5px', fontWeight: '800', color: c.text }}>
+                          <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
                             {s.fecha_permiso}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${s.fecha_fin}` : ''}
                           </span>
                         </div>
-                        <div style={{ fontSize: '14.5px', color: textSecundario, fontWeight: '600' }}>
+                        <div style={{ fontSize: '12.5px', color: c.text, fontWeight: '600' }}>
                           {horarioSolicitado}
                         </div>
                         {motivoTexto && (
-                          <div style={{ fontSize: '15.5px', color: textSecundario, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '3px' }} title={motivoTexto}>
-                            {categoria ? `${categoria}: ` : ''}{motivoTexto}
+                          <div
+                            title={`${categoria ? `\${categoria}: ` : ''}${motivoTexto}`}
+                            style={{
+                              fontSize: '12.5px', color: textSecundario, marginTop: '2px',
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                            }}
+                          >
+                            {categoria ? <strong style={{ fontWeight: '700' }}>{categoria}: </strong> : null}
+                            {motivoTexto}
                           </div>
                         )}
                       </td>
 
                       {/* 3. SELLO DE VIGILANCIA */}
-                      <td style={{ padding: '11px 10px', minWidth: '145px' }}>
+                      <td style={{ padding: '12px', verticalAlign: 'middle' }}>
                         {!esAut ? (
-                          <span style={{ fontSize: '14.5px', color: '#ef4444', fontWeight: '700' }}>Cancelado / Rechazado</span>
+                          <span style={{ fontSize: '12.5px', color: '#ef4444', fontWeight: '700' }}>Cancelado / Rechazado</span>
                         ) : seRegresoCasa ? (
-                          <span style={{ fontSize: '14.5px', color: '#f59e0b', fontWeight: '800' }}>
+                          <span style={{ fontSize: '12.5px', color: '#d97706', fontWeight: '800' }}>
                             ↩️ Regresado {horaRegresadoCaseta ? `(${horaRegresadoCaseta})` : 'a casa'}
                           </span>
                         ) : !aplicaCaseta ? (
-                          <span style={{ fontSize: '14.5px', color: textSecundario, fontWeight: '600' }}>No requiere caseta</span>
+                          <span style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600' }}>No requiere caseta</span>
                         ) : (horaSalidaCaseta || horaEntradaCaseta) ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                             {horaSalidaCaseta && (
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                fontSize: '14.5px', fontWeight: '800', color: '#38bdf8'
+                                fontSize: '12.5px', fontWeight: '800', color: '#0284c7'
                               }}>
-                                <CheckCircle2 size={14} /> Salida: {horaSalidaCaseta}
+                                <CheckCircle2 size={13} /> Salida: {horaSalidaCaseta}
                               </span>
                             )}
                             {horaEntradaCaseta ? (
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                fontSize: '14.5px', fontWeight: '800', color: '#22c55e'
+                                fontSize: '12.5px', fontWeight: '800', color: '#16a34a'
                               }}>
-                                <CheckCircle2 size={14} /> {tipo === 'retardo' ? 'Entrada' : 'Reingreso'}: {horaEntradaCaseta}
+                                <CheckCircle2 size={13} /> {tipo === 'retardo' ? 'Entrada' : 'Reingreso'}: {horaEntradaCaseta}
                               </span>
                             ) : (tipo === 'salida' && requiereRegreso) ? (
-                              <span style={{ fontSize: '15.5px', fontWeight: '800', color: '#f59e0b' }}>
+                              <span style={{ fontSize: '12px', fontWeight: '800', color: '#d97706' }}>
                                 • Pendiente reingreso
                               </span>
                             ) : null}
@@ -642,68 +693,68 @@ export default function TablaHistorial({
                         ) : (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            fontSize: '14.5px', fontWeight: '700', color: textSecundario
+                            fontSize: '12.5px', fontWeight: '700', color: textSecundario
                           }}>
-                            <Clock size={14} /> Sin sello en puerta
+                            <Clock size={13} /> Sin sello en puerta
                           </span>
                         )}
                       </td>
 
-                      {/* 4. CADENA DE FIRMAS */}
-                      <td style={{ padding: '11px 10px', minWidth: '205px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {/* 4. CADENA DE FIRMAS EN 1 SOLA COLUMNA VERTICAL ORDENADA */}
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           {supervisorSubarea && (
-                            <ChipFirma rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />
+                            <FilaFirma rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />
                           )}
-                          <ChipFirma
+                          <FilaFirma
                             rolLabel="Jefe"
                             nombre={s.firmante1?.nombre_completo}
                             estado={s.firma_1_estado}
                           />
-                          <ChipFirma
+                          <FilaFirma
                             rolLabel="Gerente"
                             nombre={s.firmante2?.nombre_completo}
                             estado={s.firma_2_estado}
                           />
-                          <ChipFirma
+                          <FilaFirma
                             rolLabel="RH"
                             nombre={s.firmante3?.nombre_completo}
                             estado={s.firma_3_estado}
                           />
                         </div>
                         {!esAut && motivoRechazo && (
-                          <div style={{ fontSize: '15.5px', color: '#ef4444', fontWeight: '700', marginTop: '4px' }}>
-                            Motivo rechazo: {motivoRechazo}
+                          <div style={{ fontSize: '11.5px', color: '#ef4444', fontWeight: '700', marginTop: '3px' }}>
+                            Rechazo: {motivoRechazo}
                           </div>
                         )}
                       </td>
 
-                      {/* 5. DICTAMEN DE NÓMINA */}
-                      <td style={{ padding: '11px 10px', whiteSpace: 'nowrap' }}>
+                      {/* 5. DICTAMEN DE NÓMINA CENTRADO CON SU ENCABEZADO */}
+                      <td style={{ padding: '12px 8px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          fontSize: '15.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
-                          backgroundColor: !esAut ? 'rgba(239,68,68,0.14)' : seRegresoCasa ? 'rgba(245,158,11,0.16)' : 'rgba(34,197,94,0.14)',
-                          color: !esAut ? '#ef4444' : seRegresoCasa ? '#f59e0b' : '#22c55e',
-                          border: `1px solid ${!esAut ? 'rgba(239,68,68,0.3)' : seRegresoCasa ? 'rgba(245,158,11,0.4)' : 'rgba(34,197,94,0.3)'}`
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                          fontSize: '12px', fontWeight: '800', padding: '5px 10px', borderRadius: '6px',
+                          backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
+                          color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
+                          border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
                         }}>
-                          {esAut ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                          {esAut ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
                           {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
                         </span>
                       </td>
 
-                      {/* 6. BOTÓN DIRECTO DE PAPELETA */}
+                      {/* 6. BOTÓN PAPELETA ALINEADO A LA DERECHA */}
                       {esControlRH && (
-                        <td style={{ padding: '11px 10px', textAlign: 'right' }}>
+                        <td style={{ padding: '12px 14px 12px 8px', verticalAlign: 'middle', textAlign: 'right' }}>
                           <button
                             onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
                             style={{
-                              padding: '8px 13px', borderRadius: '8px', border: `1px solid ${c.border}`,
-                              background: c.bg, color: c.text, fontSize: '14.5px', fontWeight: '800',
-                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
+                              padding: '7px 11px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                              background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800',
+                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                             }}
                           >
-                            <Printer size={15} color="#22c55e" /> Papeleta
+                            <Printer size={14} color="#16a34a" /> Papeleta
                           </button>
                         </td>
                       )}
@@ -715,27 +766,27 @@ export default function TablaHistorial({
           </div>
 
           {/* PAGINACIÓN */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: `1px solid ${c.border}`, background: c.surface }}>
-            <span style={{ fontSize: '14.5px', color: textSecundario, fontWeight: '600' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderTop: `1px solid ${c.border}`, background: c.surface }}>
+            <span style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600' }}>
               Mostrando {solicitudesPaginadas.length} de {solicitudesProcesadas.length} registros
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
                 onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
                 disabled={paginaActual === 1}
-                style={{ padding: '6px 10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === 1 ? 'not-allowed' : 'pointer', opacity: paginaActual === 1 ? 0.5 : 1 }}
+                style={{ padding: '5px 9px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === 1 ? 'not-allowed' : 'pointer', opacity: paginaActual === 1 ? 0.5 : 1 }}
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={15} />
               </button>
-              <span style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
+              <span style={{ fontSize: '12.5px', fontWeight: '800', color: c.text }}>
                 Página {paginaActual} de {totalPaginas}
               </span>
               <button
                 onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
                 disabled={paginaActual === totalPaginas}
-                style={{ padding: '6px 10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === totalPaginas ? 'not-allowed' : 'pointer', opacity: paginaActual === totalPaginas ? 0.5 : 1 }}
+                style={{ padding: '5px 9px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === totalPaginas ? 'not-allowed' : 'pointer', opacity: paginaActual === totalPaginas ? 0.5 : 1 }}
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={15} />
               </button>
             </div>
           </div>
