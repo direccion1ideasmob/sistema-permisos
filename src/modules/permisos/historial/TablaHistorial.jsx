@@ -258,7 +258,7 @@ export default function TablaHistorial({
       {/* 1. BARRA SUPERIOR UNIFICADA (PESTAÑAS NÓMINA + NAVEGADOR DE SEMANA + EXPORTAR EXCEL) */}
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         {esControlRH && (
-          <div className="tabs-aprobacion-bar" style={{ flex: '1 1 360px' }}>
+          <div className="tabs-aprobacion-bar" style={{ flex: '1 1 280px' }}>
             <button
               className={`tab-btn ${areaActiva === 'produccion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('produccion'); setPaginaActual(1); setSeleccionados([]); }}
@@ -318,7 +318,7 @@ export default function TablaHistorial({
                 <ChevronLeft size={15} />
               </button>
 
-              <div style={{ padding: '0 8px', textAlign: 'center', minWidth: '190px' }}>
+              <div style={{ padding: '0 8px', textAlign: 'center', minWidth: '155px' }}>
                 <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
                   Semana {infoSemana.numSemana} {offsetSemana === 0 ? '(Actual)' : offsetSemana === -1 ? '(Pasada)' : ''}
                 </div>
@@ -506,7 +506,7 @@ export default function TablaHistorial({
               <thead>
                 <tr style={{ background: c.surface, borderBottom: `1px solid ${c.border}`, color: textSecundario, fontSize: '16.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   {esControlRH && (
-                    <th style={{ padding: '13px 14px', width: '32px' }}>
+                    <th style={{ padding: '10px 10px', width: '32px' }}>
                       <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex' }}>
                         {seleccionados.length > 0 && seleccionados.length === solicitudesPaginadas.length
                           ? <CheckSquare size={17} color={c.accent} />
@@ -514,12 +514,12 @@ export default function TablaHistorial({
                       </div>
                     </th>
                   )}
-                  <th style={{ padding: '13px 14px' }}>Folio / Colaborador</th>
-                  <th style={{ padding: '13px 14px' }}>Incidencia / Horario</th>
-                  <th style={{ padding: '13px 14px' }}>Sello Vigilancia (Caseta)</th>
-                  <th style={{ padding: '13px 14px' }}>Cadena de Firmas</th>
-                  <th style={{ padding: '13px 14px' }}>Dictamen</th>
-                  {esControlRH && <th style={{ padding: '13px 14px', textAlign: 'right' }}>Papeleta</th>}
+                  <th style={{ padding: '10px 10px' }}>Folio / Colaborador</th>
+                  <th style={{ padding: '10px 10px' }}>Incidencia / Horario</th>
+                  <th style={{ padding: '10px 10px' }}>Sello Vigilancia (Caseta)</th>
+                  <th style={{ padding: '10px 10px' }}>Cadena de Firmas</th>
+                  <th style={{ padding: '10px 10px' }}>Dictamen</th>
+                  {esControlRH && <th style={{ padding: '10px 10px', textAlign: 'right' }}>Papeleta</th>}
                 </tr>
               </thead>
               <tbody>
@@ -552,7 +552,7 @@ export default function TablaHistorial({
                       }}
                     >
                       {esControlRH && (
-                        <td style={{ padding: '14px' }} onClick={() => toggleSeleccion(s.id)}>
+                        <td style={{ padding: '11px 10px' }} onClick={() => toggleSeleccion(s.id)}>
                           <div style={{ cursor: 'pointer', display: 'flex' }}>
                             {seleccionado
                               ? <CheckSquare size={17} color={c.accent} />
@@ -562,7 +562,7 @@ export default function TablaHistorial({
                       )}
 
                       {/* 1. FOLIO + COLABORADOR */}
-                      <td style={{ padding: '14px', minWidth: '230px' }}>
+                      <td style={{ padding: '11px 10px', minWidth: '185px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           <span style={{
                             fontFamily: 'ui-monospace, monospace', fontSize: '14.5px', fontWeight: '900',
@@ -584,7 +584,7 @@ export default function TablaHistorial({
                       </td>
 
                       {/* 2. INCIDENCIA + FECHA + MOTIVO */}
-                      <td style={{ padding: '14px', minWidth: '220px', maxWidth: '300px' }}>
+                      <td style={{ padding: '11px 10px', minWidth: '180px', maxWidth: '235px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           <span style={{
                             fontSize: '11.5px', fontWeight: '800', textTransform: 'uppercase',
@@ -607,7 +607,7 @@ export default function TablaHistorial({
                       </td>
 
                       {/* 3. SELLO DE VIGILANCIA */}
-                      <td style={{ padding: '14px', minWidth: '175px' }}>
+                      <td style={{ padding: '11px 10px', minWidth: '145px' }}>
                         {!esAut ? (
                           <span style={{ fontSize: '14.5px', color: '#ef4444', fontWeight: '700' }}>Cancelado / Rechazado</span>
                         ) : seRegresoCasa ? (
@@ -650,7 +650,7 @@ export default function TablaHistorial({
                       </td>
 
                       {/* 4. CADENA DE FIRMAS */}
-                      <td style={{ padding: '14px', minWidth: '240px' }}>
+                      <td style={{ padding: '11px 10px', minWidth: '205px' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                           {supervisorSubarea && (
                             <ChipFirma rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />
@@ -679,7 +679,7 @@ export default function TablaHistorial({
                       </td>
 
                       {/* 5. DICTAMEN DE NÓMINA */}
-                      <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '11px 10px', whiteSpace: 'nowrap' }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '5px',
                           fontSize: '15.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
@@ -694,7 +694,7 @@ export default function TablaHistorial({
 
                       {/* 6. BOTÓN DIRECTO DE PAPELETA */}
                       {esControlRH && (
-                        <td style={{ padding: '14px', textAlign: 'right' }}>
+                        <td style={{ padding: '11px 10px', textAlign: 'right' }}>
                           <button
                             onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
                             style={{

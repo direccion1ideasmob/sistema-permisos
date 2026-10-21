@@ -11,28 +11,3 @@ html, body, #root {
   padding: 0;
   background-color: #ffffff;
 }
-
-/* === ESCALA LEGIBILIDAD LAPTOP 14 PULGADAS === */
-@media screen and (min-width: 1024px) and (max-width: 1650px) {
-  body {
-    zoom: 1.08;
-    -webkit-font-smoothing: antialiased;
-  }
-}
-@media print {
-  body {
-    zoom: 1 !important;
-  }
-}
-
-/* === ESCALA LEGIBILIDAD LAPTOP 14 PULGADAS === */
-@media screen and (min-width: 900px) {
-  html {
-    zoom: 1.12;
-  }
-}
-@media print {
-  html, body {
-    zoom: 1 !important;
-  }
-}
