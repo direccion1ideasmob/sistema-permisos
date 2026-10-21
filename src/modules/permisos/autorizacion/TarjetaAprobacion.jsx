@@ -92,8 +92,13 @@ export default function TarjetaAprobacion({
     let nombreSubarea = null;
     let nombreJefe = null;
     let nombreGerente = null;
+    const notasPrevias = [];
 
     for (const s of partes.slice(1)) {
+      const mNota = s.match(/^Nota\s+([^:]+):\s*(.+)$/i);
+      if (mNota) notasPrevias.push({ autor: mNota[1].trim(), texto: mNota[2].trim() });
+      const mRes = s.match(/^Res:\s*(.+)$/i);
+      if (mRes) notasPrevias.push({ autor: 'Nota', texto: mRes[1].trim() });
       const mSub = s.match(/VoBo Sub[áa]rea:\s*(.*)/i);
       if (mSub) nombreSubarea = mSub[1].trim();
       const mJefe = s.match(/VoBo Jefe:\s*(.*)/i);
@@ -102,10 +107,10 @@ export default function TarjetaAprobacion({
       if (mGer) nombreGerente = mGer[1].trim();
     }
 
-    return { horarioRaw, nombreSubarea, nombreJefe, nombreGerente };
+    return { horarioRaw, nombreSubarea, nombreJefe, nombreGerente, notasPrevias };
   };
 
-  const { horarioRaw, nombreSubarea, nombreJefe, nombreGerente } = analizarDatos(solicitud.observaciones);
+  const { horarioRaw, nombreSubarea, nombreJefe, nombreGerente, notasPrevias } = analizarDatos(solicitud.observaciones);
 
   const procesarMotivo = (textoCrudo = '') => {
     const txt = String(textoCrudo || '').trim();
@@ -255,6 +260,19 @@ export default function TarjetaAprobacion({
           )}
           <span style={{ fontWeight: '600', color: c.text }}>"{redaccion}"</span>
         </div>
+
+        {notasPrevias && notasPrevias.length > 0 && (
+          <div style={{
+            marginTop: '4px', paddingTop: '5px', borderTop: `1px dashed ${c.border}`,
+            display: 'flex', flexDirection: 'column', gap: '2px'
+          }}>
+            {notasPrevias.map((n, idx) => (
+              <div key={idx} style={{ fontSize: '11.5px', color: c.textSubtle }}>
+                <strong style={{ color: c.accent }}>💬 {n.autor}:</strong> {n.texto}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* RENGLÓN 3: AVALES PREVIOS (SI LOS HAY) + BOTONES SIMÉTRICOS */}

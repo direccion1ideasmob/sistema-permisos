@@ -42,7 +42,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     supabase
       .from('permisos')
       .select(`
-        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, observaciones, estado_general, created_at,
+        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, pago, observaciones, estado_general, created_at,
         usuarios:usuario_id (id, numero_empleado, nombre_completo, sede_id)
       `)
       .eq('fecha_permiso', hoy)
@@ -74,6 +74,9 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     const obs = rawPase.observaciones || '';
     const { horaSalidaCaseta, horaEntradaCaseta } = extraerHorasCaseta(obs);
+    const mRetiro = obs.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
+    const horaRetiroCaseta = mRetiro ? mRetiro[1].trim() : null;
+    const seRegresaACasa = (rawPase.pago || "").toLowerCase().includes("regresa");
     const yaSalio = Boolean(horaSalidaCaseta);
     const yaRegreso = Boolean(horaEntradaCaseta);
     const requiereRegreso = obs.toLowerCase().includes('regresa:');
@@ -85,6 +88,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       tipo_permiso: tipo,
       horarioProgramado: extraerHorarioProgramado(obs),
       requiereRegreso,
+      seRegresaACasa,
+      horaRetiroCaseta,
       horaSalidaCaseta,
       horaEntradaCaseta,
       usuarios: {
@@ -96,7 +101,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     if (
       rawPase.estado_general === 'completado_caseta' ||
-      (tipo === 'retardo' && yaRegreso) ||
+      (tipo === 'retardo' && !seRegresaACasa && yaRegreso) ||
+      (tipo === 'retardo' && seRegresaACasa && Boolean(horaRetiroCaseta)) ||
       (tipo === 'salida' && yaSalio && (!requiereRegreso || yaRegreso))
     ) {
       crucesCompletadosHoy.push(p);
@@ -146,7 +152,10 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   let etiquetaBitacora = `[ENTRADA CASETA: ${horaFormateada} hrs]`;
   let cierraCicloCaseta = true;
 
-  if (mov.includes('salida') || (tipo === 'salida' && !obsActual.includes('[SALIDA CASETA:'))) {
+  if (mov.includes('retiro')) {
+    etiquetaBitacora = `[REGRESADO EN PUERTA: ${horaFormateada} hrs]`;
+    cierraCicloCaseta = true;
+  } else if (mov.includes('salida') || (tipo === 'salida' && !obsActual.includes('[SALIDA CASETA:'))) {
     etiquetaBitacora = `[SALIDA CASETA: ${horaFormateada} hrs]`;
     cierraCicloCaseta = !requiereRegreso;
   }

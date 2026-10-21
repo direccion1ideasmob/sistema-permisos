@@ -7,22 +7,39 @@ import {
 // Helpers limpios para extraer datos reales de observaciones sin texto basura
 export const parsearDatosObservaciones = (obs = '') => {
   const texto = String(obs || '');
-  const horarioSolicitado = (texto.split('|')[0] || '')
+  const segmentos = texto.split('|').map(s => s.trim()).filter(Boolean);
+  const horarioSolicitado = (segmentos[0] || '')
     .replace(/🕒|📅/g, '')
     .trim();
 
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
   const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
+  const mRegresado = texto.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
   const mSubarea = texto.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
   const mRechazo = texto.match(/RECHAZO:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
+
+  const notasFlujo = [];
+  segmentos.slice(1).forEach(seg => {
+    const mNota = seg.match(/^Nota\s+([^:]+):\s*(.+)$/i);
+    if (mNota) {
+      notasFlujo.push({ autor: mNota[1].trim(), texto: mNota[2].trim() });
+      return;
+    }
+    const mRes = seg.match(/^Res:\s*(.+)$/i);
+    if (mRes) {
+      notasFlujo.push({ autor: 'Autorización', texto: mRes[1].trim() });
+    }
+  });
 
   return {
     horarioSolicitado: horarioSolicitado || 'Jornada completa',
     horaSalidaCaseta: mSalida ? mSalida[1].trim() : null,
     horaEntradaCaseta: mEntrada ? mEntrada[1].trim() : null,
+    horaRegresadoCaseta: mRegresado ? mRegresado[1].trim() : null,
     requiereRegreso: texto.toLowerCase().includes('regresa:'),
     supervisorSubarea: mSubarea ? mSubarea[1].trim() : null,
-    motivoRechazo: mRechazo ? mRechazo[1].trim() : null
+    motivoRechazo: mRechazo ? mRechazo[1].trim() : null,
+    notasFlujo
   };
 };
 

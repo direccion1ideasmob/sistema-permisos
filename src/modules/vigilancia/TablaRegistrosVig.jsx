@@ -48,6 +48,7 @@ export default function TablaRegistrosVig({
           ) : (
             pasesPorCruzar.map((p) => {
               const esSalida = p.tipo_permiso === 'salida';
+              const esRegresoCasa = Boolean(p.seRegresaACasa);
               return (
                 <div
                   key={p.id}
@@ -66,10 +67,10 @@ export default function TablaRegistrosVig({
                       <div style={{ fontSize: '11.5px', color: theme.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                         <span style={{
                           fontSize: '10px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px',
-                          background: esSalida ? 'rgba(14,165,233,0.12)' : 'rgba(22,163,74,0.12)',
-                          color: esSalida ? '#0284c7' : '#16a34a', textTransform: 'uppercase'
+                          background: esRegresoCasa ? 'rgba(239,68,68,0.14)' : (esSalida ? 'rgba(14,165,233,0.12)' : 'rgba(22,163,74,0.12)'),
+                          color: esRegresoCasa ? '#dc2626' : (esSalida ? '#0284c7' : '#16a34a'), textTransform: 'uppercase'
                         }}>
-                          {esSalida ? 'Salida Autorizada' : 'Entrada Autorizada'}
+                          {esRegresoCasa ? '🚫 SE REGRESA A CASA (NO DAR ACCESO)' : (esSalida ? 'Salida Autorizada' : 'Entrada Autorizada')}
                         </span>
                         <span>•</span>
                         <span>{p.horarioProgramado}</span>
@@ -78,17 +79,17 @@ export default function TablaRegistrosVig({
                   </div>
 
                   <button
-                    onClick={() => registrarMovimientoPase(p.id, esSalida ? 'salida' : 'entrada')}
+                    onClick={() => registrarMovimientoPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'))}
                     disabled={procesandoId === p.id}
                     style={{
                       padding: '8px 14px', borderRadius: '8px', border: 'none',
-                      background: esSalida ? '#0284c7' : '#16a34a', color: '#fff',
+                      background: esRegresoCasa ? '#dc2626' : (esSalida ? '#0284c7' : '#16a34a'), color: '#fff',
                       fontSize: '12px', fontWeight: '800', cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: 'auto'
                     }}
                   >
-                    {esSalida ? <LogOut size={14} /> : <LogIn size={14} />}
-                    {procesandoId === p.id ? 'Sellando...' : (esSalida ? 'Sellar Salida' : 'Sellar Entrada')}
+                    {esRegresoCasa || esSalida ? <LogOut size={14} /> : <LogIn size={14} />}
+                    {procesandoId === p.id ? 'Sellando...' : (esRegresoCasa ? 'Confirmar Retiro' : (esSalida ? 'Sellar Salida' : 'Sellar Entrada'))}
                   </button>
                 </div>
               );

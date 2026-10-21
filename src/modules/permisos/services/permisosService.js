@@ -240,7 +240,14 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   }
 
   if (comentarios && comentarios.trim()) {
-    updates.observaciones = `${updates.observaciones || solicitud.observaciones || ''} | Res: ${comentarios.trim()}`;
+    const partesNom = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
+    const nomCorto = partesNom.length > 2 ? `${partesNom[0]} ${partesNom[partesNom.length - 2]}` : partesNom.join(' ');
+    let etiquetaRolNota = 'Jefe';
+    if (usuario.rol === 'encargado') etiquetaRolNota = 'Subárea';
+    else if (esRH && (!esFirmante1Actual || firma1EstabaListaAntes)) etiquetaRolNota = 'RH';
+    else if (esGerente) etiquetaRolNota = 'Gerencia';
+    const baseObsNota = updates.observaciones || solicitud.observaciones || '';
+    updates.observaciones = `${baseObsNota} | Nota ${etiquetaRolNota} (${nomCorto}): ${comentarios.trim().replace(/\|/g, '/')}`;
   }
 
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
@@ -248,9 +255,12 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
   if (updates.estado_general === 'autorizado') {
     const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
+    const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
     await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
-      titulo: `✅ ${tipoPase} Autorizado`,
-      mensaje: `Folio Oficial: ${nuevoFolioGenerado}\nDictamen: ${dictamenPago}`,
+      titulo: seRegresa ? `↩️ Retardo Dictaminado: Se Regresa` : `✅ ${tipoPase} Autorizado`,
+      mensaje: seRegresa
+        ? `Folio de respaldo: ${nuevoFolioGenerado}\nDictamen: Se regresa al trabajador (Sin acceso en planta)`
+        : `Folio Oficial: ${nuevoFolioGenerado}\nDictamen: ${dictamenPago}`,
       urlDestino: '/mis-permisos'
     });
   } else if (siguientesEnFirmar.length > 0) {
