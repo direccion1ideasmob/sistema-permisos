@@ -129,15 +129,15 @@ export default function Sidebar({
     <>
       <aside style={{
         ...s.sidebar,
-        width: isMobile ? '74vw' : '272px',
-        maxWidth: isMobile ? '290px' : '272px',
+        width: isMobile ? '76vw' : '280px',
+        maxWidth: isMobile ? '295px' : '280px',
         padding: isMobile ? '16px 14px' : '18px 16px',
         backgroundColor: tema.sidebarBg,
         borderRight: `1.5px solid ${tema.border}`,
         position: isMobile ? 'fixed' : 'sticky',
         top: 0,
         transform: isMobile ? (menuAbierto ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-        marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-272px'),
+        marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-280px'),
         boxShadow: modoOscuro ? 'none' : '4px 0 25px rgba(0,0,0,0.05)'
       }}>
 
@@ -148,7 +148,7 @@ export default function Sidebar({
             alt="Marca de agua lateral" 
             style={{
               ...s.sidebarWatermarkImg,
-              opacity: modoOscuro ? 0.26 : 0.32
+              opacity: modoOscuro ? 0.22 : 0.28
             }} 
           />
         </div>
@@ -161,7 +161,7 @@ export default function Sidebar({
               style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
               title={modoOscuro ? "Modo Claro" : "Modo Oscuro"}
             >
-              {modoOscuro ? <Sun size={15} /> : <Moon size={15} />}
+              {modoOscuro ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
             <button 
@@ -175,7 +175,7 @@ export default function Sidebar({
               }}
               title="Activar Notificaciones Push en este dispositivo"
             >
-              <Bell size={15} className={suscribiendo ? "animate-pulse" : ""} />
+              <Bell size={16} className={suscribiendo ? "animate-pulse" : ""} />
             </button>
 
             <button 
@@ -184,26 +184,37 @@ export default function Sidebar({
               title="Contraer menú"
               aria-label="Contraer menú"
             >
-              <X size={16} />
+              <X size={17} />
             </button>
           </div>
         </div>
 
-        {/* 3. PERFIL (FOTO Y TEXTO PROPORCIONALMENTE MÁS GRANDES) */}
-        <div style={{ ...s.profileBox, border: `1.5px solid ${tema.border}`, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
+        {/* 3. PERFIL VERTICAL CENTRADO (FOTO GRANDE + NOMBRE ABAJO) */}
+        <div style={{
+          ...s.profileBox,
+          border: `1.5px solid ${tema.border}`,
+          backgroundColor: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'
+        }}>
           <div
             style={s.avatarWrapper}
             onClick={() => setShowPhotoModal(true)}
-            title="Ver foto de perfil"
+            title="Ver o cambiar foto de perfil"
           >
             <img src={miFoto} alt="Perfil" style={s.avatarImg} />
-            <div style={s.avatarEditBadge}><Camera size={12} color="#fff" /></div>
+            <div style={s.avatarEditBadge}>
+              <Camera size={13} color="#fff" />
+            </div>
           </div>
 
           <div style={s.profileDetails}>
             {editandoNombre ? (
               <input 
-                style={{ ...s.inputEdit, backgroundColor: modoOscuro ? '#000' : '#fff', color: tema.textPrimary, border: `1.5px solid ${tema.border}` }} 
+                style={{
+                  ...s.inputEdit,
+                  backgroundColor: modoOscuro ? '#000' : '#fff',
+                  color: tema.textPrimary,
+                  border: `1.5px solid ${tema.border}`
+                }} 
                 value={nuevoNombre} 
                 onChange={e => setNuevoNombre(e.target.value)} 
                 autoFocus 
@@ -218,37 +229,48 @@ export default function Sidebar({
                   cursor: puedeEditarNombre ? 'pointer' : 'default' 
                 }} 
                 onClick={() => puedeEditarNombre && setEditandoNombre(true)}
-                title={usuarioLogueado?.nombre_completo || ''}
+                title={puedeEditarNombre ? "Clic para editar nombre" : (usuarioLogueado?.nombre_completo || '')}
               >
                 {usuarioLogueado?.nombre_completo || 'Usuario'}
               </span>
             )}
             
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '4px' }}>
               <span style={{ ...s.userRole, color: tema.textSecondary }}>
                 {rol.replace(/_/g, ' ')}
               </span>
               
               <button 
                 onClick={onOpenSeguridad}
-                style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
+                style={{
+                  background: 'transparent',
+                  border: `1px solid ${tema.border}`,
+                  borderRadius: '6px',
+                  color: tema.textSecondary,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '3px 5px',
+                  transition: 'color 0.2s'
+                }}
                 title="Seguridad y PIN"
               >
-                <Settings size={15} />
+                <Settings size={14} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* 4. NAVEGACIÓN */}
+        {/* 4. NAVEGACIÓN CON FUENTE E ÍCONOS MÁS GRANDES */}
         <nav style={s.nav}>
           {!esCaseta && (
             <Link 
               to="/solicitar" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <FilePlus size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+              <FilePlus size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
               <span style={s.navText}>Solicitar Pase</span>
             </Link>
           )}
@@ -257,9 +279,9 @@ export default function Sidebar({
             <Link 
               to="/mis-permisos" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <ClipboardList size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+              <ClipboardList size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
               <span style={s.navText}>Mis Permisos</span>
             </Link>
           )}
@@ -268,9 +290,9 @@ export default function Sidebar({
             <Link 
               to="/aprobaciones" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <PenLine size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+              <PenLine size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
               <span style={s.navText}>Aprobaciones</span>
             </Link>
           )}
@@ -280,17 +302,17 @@ export default function Sidebar({
               <Link 
                 to="/control-historial" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <FileBarChart size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+                <FileBarChart size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Control / Historial</span>
               </Link>
               <Link 
                 to="/directorio" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <Users size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+                <Users size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Directorio RH</span>
               </Link>
             </>
@@ -301,25 +323,25 @@ export default function Sidebar({
               <Link 
                 to="/caseta" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <DoorOpen size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+                <DoorOpen size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Pases de Puerta</span>
               </Link>
               <Link 
                 to="/caseta/asistencia" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <ClipboardList size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+                <ClipboardList size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Pase de Lista</span>
               </Link>
               <Link 
                 to="/caseta/retardo" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta/retardo' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/caseta/retardo' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <Clock size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+                <Clock size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Apoyo Retardo</span>
               </Link>
             </>
@@ -329,7 +351,7 @@ export default function Sidebar({
         {/* 5. BOTÓN CERRAR SESIÓN SIEMPRE VISIBLE ABAJO */}
         <div style={s.logoutContainer}>
           <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
-            <LogOut size={16} strokeWidth={2} style={{ flexShrink: 0 }} />
+            <LogOut size={18} strokeWidth={2.2} style={{ flexShrink: 0 }} />
             <span style={s.navText}>Cerrar Sesión</span>
           </button>
         </div>
@@ -409,49 +431,94 @@ const s = {
     WebkitBackdropFilter: 'blur(10px)'
   },
   sidebarWatermarkContainer: {
-    position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%, -50%)',
-    width: '88%', pointerEvents: 'none', zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+    position: 'absolute', top: '64%', left: '50%', transform: 'translate(-50%, -50%)',
+    width: '85%', pointerEvents: 'none', zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
   },
   sidebarWatermarkImg: {
-    width: '100%', maxHeight: '200px', objectFit: 'contain', userSelect: 'none', transition: 'opacity 0.3s ease'
+    width: '100%', maxHeight: '190px', objectFit: 'contain', userSelect: 'none', transition: 'opacity 0.3s ease'
   },
   brandHeader: {
     position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-    paddingBottom: '10px', marginBottom: '6px', flexShrink: 0
+    paddingBottom: '8px', marginBottom: '4px', flexShrink: 0
   },
   headerActions: {
     display: 'flex', alignItems: 'center', gap: '6px'
   },
   btnIcon: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', 
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', 
     borderRadius: '8px', background: 'transparent', cursor: 'pointer'
   },
   profileBox: {
-    position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '12px',
-    padding: '12px 10px', borderRadius: '12px', marginBottom: '16px', flexShrink: 0
+    position: 'relative',
+    zIndex: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '10px',
+    padding: '18px 12px 14px 12px',
+    borderRadius: '14px',
+    marginBottom: '18px',
+    flexShrink: 0
   },
   avatarWrapper: {
-    width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0
+    width: '86px',
+    height: '86px',
+    borderRadius: '50%',
+    overflow: 'hidden',
+    position: 'relative',
+    cursor: 'pointer',
+    flexShrink: 0,
+    border: '2.5px solid #16a34a',
+    boxShadow: '0 6px 16px rgba(22, 163, 74, 0.18)'
   },
   avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
   avatarEditBadge: {
-    position: 'absolute', bottom: 0, left: 0, width: '100%', height: '15px',
-    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+    position: 'absolute', bottom: 0, left: 0, width: '100%', height: '22px',
+    backgroundColor: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center'
   },
-  profileDetails: { display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 },
-  userName: { fontSize: '14px', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  inputEdit: { fontSize: '12.5px', padding: '4px 6px', borderRadius: '5px', outline: 'none' },
-  userRole: { fontSize: '12px', textTransform: 'capitalize', fontWeight: '500' },
+  profileDetails: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+    minWidth: 0
+  },
+  userName: {
+    fontSize: '15.5px',
+    fontWeight: '800',
+    lineHeight: '1.25',
+    textAlign: 'center',
+    wordBreak: 'break-word',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden'
+  },
+  inputEdit: {
+    width: '100%',
+    fontSize: '14px',
+    padding: '5px 8px',
+    borderRadius: '6px',
+    outline: 'none',
+    textAlign: 'center',
+    fontWeight: '700'
+  },
+  userRole: {
+    fontSize: '13px',
+    textTransform: 'capitalize',
+    fontWeight: '600'
+  },
   nav: { 
-    position: 'relative', zIndex: 1, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '5px' 
+    position: 'relative', zIndex: 1, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' 
   },
   navLink: {
-    display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 12px',
-    borderRadius: '9px', fontSize: '14px', fontWeight: '500', textDecoration: 'none', transition: 'all 0.15s ease'
+    display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 14px',
+    borderRadius: '10px', fontSize: '16px', fontWeight: '600', textDecoration: 'none', transition: 'all 0.15s ease'
   },
   navLinkActive: {
-    display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 12px',
-    borderRadius: '0 9px 9px 0', fontSize: '14px', fontWeight: '700', textDecoration: 'none', transition: 'all 0.15s ease'
+    display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 14px',
+    borderRadius: '0 10px 10px 0', fontSize: '16px', fontWeight: '800', textDecoration: 'none', transition: 'all 0.15s ease'
   },
   navText: {
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
@@ -461,8 +528,8 @@ const s = {
   },
   btnLogout: {
     width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    gap: '8px', padding: '11px 12px', borderRadius: '9px', border: 'none',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '13.5px', fontWeight: '700', cursor: 'pointer'
+    gap: '9px', padding: '13px 14px', borderRadius: '10px', border: 'none',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '15px', fontWeight: '800', cursor: 'pointer'
   },
   modalOverlay: {
     position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)',
