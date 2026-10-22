@@ -69,16 +69,22 @@ const acortarNombre = (nombreCompleto = '') => {
   return `${partes[0]} ${partes[partes.length - 2]}`;
 };
 
-const obtenerRangoSemana = (offset = 0) => {
+const obtenerRangoSemana = (offset = 0, fechaReferenciaStr = null) => {
   const numOffset = typeof offset === 'number' && !isNaN(offset) ? offset : 0;
-  const hoy = new Date();
-  hoy.setHours(12, 0, 0, 0);
+  let base = new Date();
+  if (fechaReferenciaStr) {
+    const partes = String(fechaReferenciaStr).slice(0, 10).split('-').map(Number);
+    if (partes.length === 3 && !partes.some(isNaN)) {
+      base = new Date(partes[0], partes[1] - 1, partes[2], 12, 0, 0);
+    }
+  }
+  base.setHours(12, 0, 0, 0);
 
-  const diaSemana = hoy.getDay(); // 0 = Domingo, 1 = Lunes
+  const diaSemana = base.getDay(); // 0 = Domingo, 1 = Lunes
   const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
 
-  const lunes = new Date(hoy);
-  lunes.setDate(hoy.getDate() + diffLunes + (numOffset * 7));
+  const lunes = new Date(base);
+  lunes.setDate(base.getDate() + diffLunes + (numOffset * 7));
 
   const domingo = new Date(lunes);
   domingo.setDate(lunes.getDate() + 6);
@@ -90,7 +96,6 @@ const obtenerRangoSemana = (offset = 0) => {
     return `${y}-${m}-${day}`;
   };
 
-  // Cálculo ISO 8601 del número de semana del año
   const temp = new Date(Date.UTC(lunes.getFullYear(), lunes.getMonth(), lunes.getDate()));
   const dayNum = temp.getUTCDay() || 7;
   temp.setUTCDate(temp.getUTCDate() + 4 - dayNum);
@@ -136,13 +141,28 @@ export default function TablaHistorial({
   const registrosPorPagina = 12;
   const textSecundario = modoOscuro ? '#cbd5e1' : '#475569';
 
-  const infoSemana = useMemo(() => obtenerRangoSemana(offsetSemana), [offsetSemana]);
+  const fechaAncla = useMemo(() => {
+    const hoyISO = new Date().toISOString().slice(0, 10);
+    const rHoy = obtenerRangoSemana(0, hoyISO);
+    const hayEnHoy = solicitudes.some(s => {
+      const f = String(s.fecha_permiso || '').slice(0, 10);
+      return f >= rHoy.inicio && f <= rHoy.fin;
+    });
+    if (hayEnHoy || solicitudes.length === 0) return hoyISO;
+    const fechasOrdenadas = solicitudes
+      .map(s => String(s.fecha_permiso || s.fecha_elaboracion || '').slice(0, 10))
+      .filter(Boolean)
+      .sort();
+    return fechasOrdenadas[fechasOrdenadas.length - 1] || hoyISO;
+  }, [solicitudes]);
+
+  const infoSemana = useMemo(() => obtenerRangoSemana(offsetSemana, fechaAncla), [offsetSemana, fechaAncla]);
 
   const solicitudesEnPeriodo = useMemo(() => {
     return solicitudes.filter(s => {
-      const f = s.fecha_permiso || (s.created_at ? s.created_at.slice(0, 10) : '');
+      const f = String(s.fecha_permiso || s.fecha_elaboracion || (s.created_at ? s.created_at.slice(0, 10) : '')).slice(0, 10);
       if (modoPeriodo === 'semana') {
-        const fFinPermiso = s.fecha_fin || f;
+        const fFinPermiso = String(s.fecha_fin || f).slice(0, 10);
         return f <= infoSemana.fin && fFinPermiso >= infoSemana.inicio;
       }
       return true;
