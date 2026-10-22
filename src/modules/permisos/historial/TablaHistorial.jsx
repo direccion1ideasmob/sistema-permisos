@@ -10,21 +10,33 @@ import {
 export const parsearDatosObservaciones = (obs = '') => {
   const texto = String(obs || '');
   const segmentos = texto.split('|').map(s => s.trim()).filter(Boolean);
-  const segHorario = segmentos.find(s => !/^\[.*\]$/.test(s) && !/llegada en puerta:/i.test(s) && !/VoBo /i.test(s) && !/^Nota /i.test(s) && !/RECHAZO:/i.test(s)) || segmentos[0] || '';
+
+  // El horario solicitado es el que pidió el empleado, ignorando sellos técnicos de caseta
+  const segHorario = segmentos.find(s =>
+    !/^\[.*\]$/.test(s) &&
+    !/llegada en puerta:/i.test(s) &&
+    !/VoBo /i.test(s) &&
+    !/^Nota /i.test(s) &&
+    !/^Res:/i.test(s) &&
+    !/RECHAZO:/i.test(s) &&
+    !/Rechazado por/i.test(s)
+  ) || '';
+
   const horarioSolicitado = segHorario
     .replace(/🕒|📅/g, '')
     .trim();
 
+  // Sellos exclusivos de Caseta (Si tiene hora aquí es porque Caseta ya lo validó físicamente)
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
-  const mEntradaReal = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
+  const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
   const mLlegadaPuerta = texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
   const mRegresado = texto.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
-  const mEntrada = mEntradaReal || (!mRegresado ? mLlegadaPuerta : null);
+
   const mSubarea = texto.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
   const mRechazo = texto.match(/RECHAZO:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
 
   const notasFlujo = [];
-  segmentos.slice(1).forEach(seg => {
+  segmentos.forEach(seg => {
     const mNota = seg.match(/^Nota\s+([^:]+):\s*(.+)$/i);
     if (mNota) {
       notasFlujo.push({ autor: mNota[1].trim(), texto: mNota[2].trim() });
@@ -40,8 +52,8 @@ export const parsearDatosObservaciones = (obs = '') => {
     horarioSolicitado: horarioSolicitado || 'Jornada completa',
     horaSalidaCaseta: mSalida ? mSalida[1].trim() : null,
     horaEntradaCaseta: mEntrada ? mEntrada[1].trim() : null,
-    horaRegresadoCaseta: mRegresado ? mRegresado[1].trim() : null,
     horaLlegadaPuerta: mLlegadaPuerta ? mLlegadaPuerta[1].trim() : null,
+    horaRegresadoCaseta: mRegresado ? mRegresado[1].trim() : null,
     requiereRegreso: texto.toLowerCase().includes('regresa:'),
     supervisorSubarea: mSubarea ? mSubarea[1].trim() : null,
     motivoRechazo: mRechazo ? mRechazo[1].trim() : null,
@@ -1056,47 +1068,25 @@ export default function TablaHistorial({
                     const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
                     const renderIconoCaseta = () => {
-                      if (seRegresoCasa || horaRegresadoCaseta) {
-                        return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                            background: 'rgba(245,158,11,0.14)', color: '#d97706'
-                          }}>
-                            <CornerUpLeft size={14} /> {horaRegresadoCaseta || 'Regresado'}
-                          </span>
-                        );
-                      }
-                      if (!esAut) {
-                        return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                            background: 'rgba(239,68,68,0.1)', color: '#ef4444'
-                          }}>
-                            <XCircle size={14} /> Cancelado
-                          </span>
-                        );
-                      }
-                      if (seRegresoCasa) {
-                        return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                            background: 'rgba(245,158,11,0.14)', color: '#d97706'
-                          }}>
-                            <CornerUpLeft size={14} /> {horaRegresadoCaseta || 'Regresado'}
-                          </span>
-                        );
-                      }
                       if (!aplicaCaseta) {
                         return (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '700',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
                             background: c.bg, color: textSecundario, border: `1px solid ${c.border}`
                           }}>
-                            <MinusCircle size={13} /> N/A
+                            N/A
+                          </span>
+                        );
+                      }
+                      if (horaRegresadoCaseta || seRegresoCasa) {
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800',
+                            background: 'rgba(245,158,11,0.14)', color: '#d97706'
+                          }}>
+                            <CornerUpLeft size={13} /> {horaRegresadoCaseta || 'Sin acceso'}
                           </span>
                         );
                       }
@@ -1107,20 +1097,31 @@ export default function TablaHistorial({
                         return (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                            background: c.bg, color: c.text, border: `1px solid ${c.border}`
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800',
+                            background: 'rgba(22,163,74,0.1)', color: '#16a34a', border: '1px solid rgba(22,163,74,0.28)'
                           }}>
-                            <DoorOpen size={14} color={textSecundario} /> {textoHora}
+                            <DoorOpen size={13} /> {textoHora}
+                          </span>
+                        );
+                      }
+                      if (!esAut) {
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
+                            background: 'rgba(239,68,68,0.1)', color: '#ef4444'
+                          }}>
+                            Sin acceso
                           </span>
                         );
                       }
                       return (
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '700',
+                          padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
                           background: c.bg, color: textSecundario, border: `1px dashed ${c.border}`
                         }}>
-                          <Clock size={13} /> Sin sello
+                          Sin sello
                         </span>
                       );
                     };

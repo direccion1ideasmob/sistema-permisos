@@ -374,15 +374,20 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     </div>
                   </div>
 
-                  {/* 3. CAJA INCIDENCIA */}
+                  {/* 3. CAJA INCIDENCIA (SEPARACIÓN LIMPIA ENTRE HORARIO SOLICITADO Y SELLO REAL DE CASETA) */}
                   <div className="papeleta-grid-4" style={{
                     alignItems: 'center',
                     padding: '12px 16px', background: '#ffffff', border: '1px solid #cbd5e1',
                     borderRadius: '8px', fontSize: '11.5px'
                   }}>
                     <div>
-                      <span style={{ fontSize: '9px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>TIPO DE PASE</span>
-                      <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '11.5px' }}>{p.tipo_permiso}</strong>
+                      <span style={{ fontSize: '9px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>TIPO Y HORARIO SOLICITADO</span>
+                      <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '11.5px', display: 'block' }}>{p.tipo_permiso}</strong>
+                      {(tipo === 'salida' || tipo === 'retardo') && horarioSolicitado && (
+                        <span style={{ fontSize: '10px', color: '#475569', fontWeight: '700', display: 'block', marginTop: '1px' }}>
+                          {horarioSolicitado}
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -395,22 +400,26 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                     <div>
                       <span style={{ fontSize: '9px', fontWeight: '900', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
                         <ShieldCheck size={11} strokeWidth={2.5} color="#0f172a" />
-                        CONTROL DE ACCESO
+                        SELLO CASETA
                       </span>
-                      {seRegresaTrabajador ? (
+                      {(tipo === 'falta' || tipo === 'vacaciones') ? (
+                        <strong style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>N/A</strong>
+                      ) : seRegresaTrabajador ? (
                         <strong style={{ color: '#b45309', fontSize: '11px', display: 'block' }}>
-                          Se regresa a casa {horaRegresadoCaseta ? `(Retiro: ${horaRegresadoCaseta})` : (horaLlegadaPuerta ? `(Puerta: ${horaLlegadaPuerta})` : '(Sin ingreso)')}
+                          {horaRegresadoCaseta ? `Retirado: ${horaRegresadoCaseta}` : 'Sin acceso'}
                         </strong>
-                      ) : tieneSelloCaseta ? (
-                        <strong style={{ color: '#0f172a', fontSize: '11px', display: 'block' }}>
-                          {horaSalidaCaseta ? `Salida: ${horaSalidaCaseta}` : ''}
-                          {horaSalidaCaseta && horaEntradaCaseta ? ' | ' : ''}
-                          {horaEntradaCaseta ? `Entrada: ${horaEntradaCaseta}` : ''}
+                      ) : (horaSalidaCaseta || horaEntradaCaseta) ? (
+                        <strong style={{ color: '#15803d', fontSize: '11px', display: 'block' }}>
+                          {horaSalidaCaseta && horaEntradaCaseta
+                            ? `${horaSalidaCaseta.replace(/\s*hrs/i, '')} → ${horaEntradaCaseta}`
+                            : (horaSalidaCaseta ? `Salida: ${horaSalidaCaseta}` : `Entrada: ${horaEntradaCaseta}`)}
                         </strong>
-                      ) : (tipo === 'falta' || tipo === 'vacaciones') ? (
-                        <strong style={{ color: '#0f172a', fontSize: '11px', display: 'block' }}>Jornada completa</strong>
+                      ) : horaLlegadaPuerta ? (
+                        <strong style={{ color: '#d97706', fontSize: '11px', display: 'block' }}>
+                          En puerta: {horaLlegadaPuerta}
+                        </strong>
                       ) : (
-                        <strong style={{ color: '#0f172a', fontSize: '11px', display: 'block' }}>{horarioSolicitado || 'Sin registro en puerta'}</strong>
+                        <strong style={{ color: '#94a3b8', fontSize: '11px', display: 'block' }}>Sin sello</strong>
                       )}
                     </div>
 
