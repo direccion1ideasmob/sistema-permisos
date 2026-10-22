@@ -3,7 +3,8 @@ import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
   Factory, Building2, HardHat, FileSpreadsheet, RotateCcw, Clock,
   CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronUp,
-  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText
+  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText,
+  User, Stethoscope, Briefcase, Calendar
 } from 'lucide-react';
 
 export const parsearDatosObservaciones = (obs = '') => {
@@ -14,19 +15,19 @@ export const parsearDatosObservaciones = (obs = '') => {
     .trim();
 
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
-  const mEntrada = texto.match(/\[(?:ENTRADA\vert{}REINGRESO) CASETA:\s*([^\]]+)\]/i) || texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+  const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i) || texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
   const mRegresado = texto.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
   const mSubarea = texto.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
   const mRechazo = texto.match(/RECHAZO:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
 
   const notasFlujo = [];
   segmentos.slice(1).forEach(seg => {
-    const mNota = seg.match(/^Nota\s+([^:]+):\s*(.+)\$/i);
+    const mNota = seg.match(/^Nota\s+([^:]+):\s*(.+)$/i);
     if (mNota) {
       notasFlujo.push({ autor: mNota[1].trim(), texto: mNota[2].trim() });
       return;
     }
-    const mRes = seg.match(/^Res:\s*(.+)\$/i);
+    const mRes = seg.match(/^Res:\s*(.+)$/i);
     if (mRes) {
       notasFlujo.push({ autor: 'Autorización', texto: mRes[1].trim() });
     }
@@ -62,33 +63,54 @@ export const limpiarMotivo = (asunto = '') => {
   return { categoria: catFormateada, texto: rawTxt };
 };
 
-const obtenerRangoSemana = (fechaStr) => {
-  if (!fechaStr) return { clave: 'sin-fecha', etiqueta: 'Sin fecha asignada', orden: 0 };
-  const partes = String(fechaStr).slice(0, 10).split('-').map(Number);
-  if (partes.length !== 3 || partes.some(isNaN)) {
-    return { clave: 'sin-fecha', etiqueta: 'Sin fecha asignada', orden: 0 };
-  }
-  const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
-  const diaSemana = fecha.getDay();
+const acortarNombre = (nombreCompleto = '') => {
+  const partes = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 2) return partes.join(' ');
+  return `${partes[0]} ${partes[partes.length - 2]}`;
+};
+
+const obtenerRangoSemana = (offset = 0) => {
+  const numOffset = typeof offset === 'number' && !isNaN(offset) ? offset : 0;
+  const hoy = new Date();
+  hoy.setHours(12, 0, 0, 0);
+
+  const diaSemana = hoy.getDay(); // 0 = Domingo, 1 = Lunes
   const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
 
-  const lunes = new Date(fecha);
-  lunes.setDate(fecha.getDate() + diffLunes);
-  lunes.setHours(0, 0, 0, 0);
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() + diffLunes + (numOffset * 7));
 
   const domingo = new Date(lunes);
   domingo.setDate(lunes.getDate() + 6);
 
+  const fmtISO = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // Cálculo ISO 8601 del número de semana del año
+  const temp = new Date(Date.UTC(lunes.getFullYear(), lunes.getMonth(), lunes.getDate()));
+  const dayNum = temp.getUTCDay() || 7;
+  temp.setUTCDate(temp.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
+  const numSemana = Math.ceil((((temp - yearStart) / 86400000) + 1) / 7);
+
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const fDia = (d) => String(d.getDate()).padStart(2, '0');
-  const fMes = (d) => meses[d.getMonth()];
+  const d1 = String(lunes.getDate()).padStart(2, '0');
+  const m1 = meses[lunes.getMonth()];
+  const d2 = String(domingo.getDate()).padStart(2, '0');
+  const m2 = meses[domingo.getMonth()];
 
-  const clave = `${lunes.getFullYear()}-${String(lunes.getMonth() + 1).padStart(2, '0')}-${fDia(lunes)}`;
-  const etiqueta = lunes.getMonth() === domingo.getMonth()
-    ? `Semana del ${fDia(lunes)} al ${fDia(domingo)} de ${fMes(domingo)} ${domingo.getFullYear()}`
-    : `Semana del ${fDia(lunes)} ${fMes(lunes)} al ${fDia(domingo)} ${fMes(domingo)} ${domingo.getFullYear()}`;
+  const etiquetaRango = m1 === m2 ? `${d1} al ${d2} ${m2}` : `${d1} ${m1} - ${d2} ${m2}`;
 
-  return { clave, etiqueta, orden: lunes.getTime() };
+  return {
+    inicio: fmtISO(lunes),
+    fin: fmtISO(domingo),
+    numSemana,
+    etiquetaRango
+  };
 };
 
 export default function TablaHistorial({
@@ -105,8 +127,6 @@ export default function TablaHistorial({
   const [deptoFiltro, setDeptoFiltro] = useState('todos');
   const [tipoFiltro, setTipoFiltro] = useState('todos');
   const [filtroEstado, setFiltroEstado] = useState('todos');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
   const [modoPeriodo, setModoPeriodo] = useState('semana');
   const [offsetSemana, setOffsetSemana] = useState(0);
   const [paginaActual, setPaginaActual] = useState(1);
@@ -117,23 +137,17 @@ export default function TablaHistorial({
   const textSecundario = modoOscuro ? '#cbd5e1' : '#475569';
 
   const infoSemana = useMemo(() => obtenerRangoSemana(offsetSemana), [offsetSemana]);
-  const usandoRangoManual = Boolean(fechaInicio || fechaFin);
 
   const solicitudesEnPeriodo = useMemo(() => {
     return solicitudes.filter(s => {
-      const f = s.fecha_permiso || '';
-      if (usandoRangoManual) {
-        if (fechaInicio && f < fechaInicio) return false;
-        if (fechaFin && f > fechaFin) return false;
-        return true;
-      }
+      const f = s.fecha_permiso || (s.created_at ? s.created_at.slice(0, 10) : '');
       if (modoPeriodo === 'semana') {
         const fFinPermiso = s.fecha_fin || f;
         return f <= infoSemana.fin && fFinPermiso >= infoSemana.inicio;
       }
       return true;
     });
-  }, [solicitudes, usandoRangoManual, fechaInicio, fechaFin, modoPeriodo, infoSemana]);
+  }, [solicitudes, modoPeriodo, infoSemana]);
 
   const pasesPorArea = useMemo(() => {
     if (!esControlRH) return { todos: solicitudesEnPeriodo };
@@ -166,6 +180,7 @@ export default function TablaHistorial({
     };
   }, [solicitudesEnPeriodo, esControlRH]);
 
+  // Si la pestaña actual tiene 0 registros en la semana pero otra área sí tiene, podemos cambiar o mostrar
   const solicitudesProcesadas = useMemo(() => {
     const base = esControlRH ? (pasesPorArea[areaActiva] || []) : solicitudesEnPeriodo;
     const term = busqueda.toLowerCase().trim();
@@ -218,8 +233,6 @@ export default function TablaHistorial({
     setDeptoFiltro('todos');
     setTipoFiltro('todos');
     setFiltroEstado('todos');
-    setFechaInicio('');
-    setFechaFin('');
     setModoPeriodo('semana');
     setOffsetSemana(0);
     setPaginaActual(1);
@@ -230,12 +243,34 @@ export default function TablaHistorial({
     deptoFiltro !== 'todos' ||
     tipoFiltro !== 'todos' ||
     filtroEstado !== 'todos' ||
-    fechaInicio ||
-    fechaFin ||
     modoPeriodo !== 'semana' ||
     offsetSemana !== 0;
 
-  // Chip elegante para el cajón desplegable de firmas
+  const getEstiloTipo = (tipoRaw = '') => {
+    const t = tipoRaw.toLowerCase();
+    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.09)', border: 'rgba(239, 68, 68, 0.28)', label: 'RETARDO' };
+    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.09)', border: 'rgba(139, 92, 246, 0.28)', label: 'FALTA' };
+    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.09)', border: 'rgba(16, 185, 129, 0.28)', label: 'VACACIONES' };
+    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', label: 'SALIDA' };
+    return { color: c.text, bg: c.bg, border: c.border, label: (tipoRaw || 'PERMISO').toUpperCase() };
+  };
+
+  const renderIconoNaturaleza = (cat = '') => {
+    if (!cat) return null;
+    const low = cat.toLowerCase();
+    let Icono = User;
+    if (low.includes('cita') || low.includes('médic')) Icono = Stethoscope;
+    else if (low.includes('trabajo')) Icono = Briefcase;
+    else if (low.includes('vacaciones')) Icono = Calendar;
+
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: textSecundario, fontWeight: '700' }}>
+        <Icono size={13} color={textSecundario} />
+        <span>{cat}</span>
+      </span>
+    );
+  };
+
   const ChipFirmaDetalle = ({ rolLabel, nombre, estado }) => {
     const est = (estado || 'pendiente').toLowerCase();
     if (est === 'omitido' || (!nombre && est !== 'rechazado')) return null;
@@ -258,20 +293,20 @@ export default function TablaHistorial({
     );
   };
 
-  const alturaControl = '38px';
+  const alturaControl = '40px';
   const totalColumnas = esControlRH ? 6 : 4;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
 
-      {/* 1. BARRA SUPERIOR UNIFICADA (42px) */}
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      {/* 1. BARRA SUPERIOR LIMPIA Y PROPORCIONADA (44px) */}
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         {esControlRH && (
-          <div className="tabs-aprobacion-bar" style={{ flex: '1 1 380px', margin: 0, height: '42px', boxSizing: 'border-box' }}>
+          <div className="tabs-aprobacion-bar" style={{ flex: '0 1 520px', margin: 0, height: '44px', boxSizing: 'border-box' }}>
             <button
               className={`tab-btn ${areaActiva === 'produccion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('produccion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
+              style={{ fontSize: '13.5px', height: '100%', padding: '0 16px' }}
             >
               <Factory size={15} />
               <span>Producción</span>
@@ -283,7 +318,7 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'administracion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('administracion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
+              style={{ fontSize: '13.5px', height: '100%', padding: '0 16px' }}
             >
               <Building2 size={15} />
               <span>Administración</span>
@@ -295,7 +330,7 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'obra' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('obra'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
+              style={{ fontSize: '13.5px', height: '100%', padding: '0 16px' }}
             >
               <HardHat size={15} />
               <span>Obra</span>
@@ -306,124 +341,124 @@ export default function TablaHistorial({
           </div>
         )}
 
-        {/* SELECTOR SEMANAL */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          background: c.surfaceCard, border: `1px solid ${c.border}`,
-          padding: '0 12px', height: '42px', boxSizing: 'border-box', borderRadius: '10px'
-        }}>
-          <CalendarDays size={15} color={c.accent} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+          {/* NAVEGADOR SEMANAL FUNCIONAL */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            background: c.surfaceCard, border: `1px solid ${c.border}`,
+            padding: '0 12px', height: '44px', boxSizing: 'border-box', borderRadius: '11px'
+          }}>
+            <CalendarDays size={16} color={textSecundario} />
 
-          {modoPeriodo === 'semana' && !usandoRangoManual ? (
-            <>
-              <button
-                onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
-                title="Semana anterior"
-                style={{
-                  width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                <ChevronLeft size={15} />
-              </button>
-
-              <div style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                <span style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>
-                  Semana {infoSemana.numSemana}
-                </span>
-                <span style={{ fontSize: '12.5px', fontWeight: '600', color: textSecundario, marginLeft: '6px' }}>
-                  ({infoSemana.etiquetaRango})
-                </span>
-              </div>
-
-              <button
-                onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); setSeleccionados([]); }}
-                title="Semana siguiente"
-                style={{
-                  width: '28px', height: '28px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                <ChevronRight size={15} />
-              </button>
-
-              {offsetSemana !== 0 && (
+            {modoPeriodo === 'semana' ? (
+              <>
                 <button
-                  onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
+                  onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
+                  title="Semana anterior"
                   style={{
-                    height: '28px', padding: '0 9px', borderRadius: '6px', border: 'none',
-                    background: c.accentSoft, color: c.accent, fontSize: '12px', fontWeight: '800', cursor: 'pointer'
+                    width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                    background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}
                 >
-                  Actual
+                  <ChevronLeft size={15} />
                 </button>
-              )}
 
-              <button
-                onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
-                style={{
-                  height: '28px', padding: '0 10px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                  background: c.bg, color: textSecundario, fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap'
-                }}
-              >
-                Ver Todo ({solicitudes.length})
-              </button>
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap' }}>
-                {usandoRangoManual ? 'Rango manual' : `Todo (${solicitudes.length})`}
-              </span>
-              <button
-                onClick={() => {
-                  setFechaInicio('');
-                  setFechaFin('');
-                  setModoPeriodo('semana');
-                  setOffsetSemana(0);
-                  setPaginaActual(1);
-                }}
-                style={{
-                  height: '28px', padding: '0 10px', borderRadius: '6px', border: 'none',
-                  background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
-                }}
-              >
-                Semana Actual
-              </button>
-            </div>
+                <div style={{ padding: '0 6px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>
+                    Semana {infoSemana.numSemana}
+                  </span>
+                  <span style={{ fontSize: '12.5px', fontWeight: '600', color: textSecundario, marginLeft: '6px' }}>
+                    ({infoSemana.etiquetaRango})
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); setSeleccionados([]); }}
+                  title="Semana siguiente"
+                  style={{
+                    width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                    background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  <ChevronRight size={15} />
+                </button>
+
+                {offsetSemana !== 0 && (
+                  <button
+                    onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
+                    style={{
+                      height: '28px', padding: '0 10px', borderRadius: '7px', border: 'none',
+                      background: c.accentSoft, color: c.accent, fontSize: '12px', fontWeight: '800', cursor: 'pointer'
+                    }}
+                  >
+                    Hoy
+                  </button>
+                )}
+
+                <button
+                  onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
+                  style={{
+                    height: '28px', padding: '0 10px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                    background: c.bg, color: textSecundario, fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap'
+                  }}
+                >
+                  Ver Todo ({solicitudes.length})
+                </button>
+              </>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap' }}>
+                  Mostrando Todo ({solicitudes.length})
+                </span>
+                <button
+                  onClick={() => {
+                    setModoPeriodo('semana');
+                    setOffsetSemana(0);
+                    setPaginaActual(1);
+                  }}
+                  style={{
+                    height: '28px', padding: '0 10px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                    background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
+                  }}
+                >
+                  Volver a Semana {infoSemana.numSemana}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {esControlRH && onAbrirExportar && (
+            <button
+              onClick={onAbrirExportar}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '7px',
+                padding: '0 18px', height: '44px', boxSizing: 'border-box', borderRadius: '11px', border: 'none',
+                background: c.accent, color: '#fff', fontSize: '13.5px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
+              }}
+            >
+              <FileSpreadsheet size={16} /> Exportar Excel
+            </button>
           )}
         </div>
-
-        {esControlRH && onAbrirExportar && (
-          <button
-            onClick={onAbrirExportar}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '0 16px', height: '42px', boxSizing: 'border-box', borderRadius: '10px', border: 'none',
-              background: c.accent, color: '#fff', fontSize: '13.5px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
-            }}
-          >
-            <FileSpreadsheet size={16} /> Exportar Excel
-          </button>
-        )}
       </div>
 
-      {/* 2. BARRA DE FILTROS SIMÉTRICA */}
+      {/* 2. BARRA DE BÚSQUEDA Y FILTROS DESPEJADA (SIN SELECTORES DE FECHA DUPLICADOS) */}
       <div style={{
-        background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px',
-        padding: '10px 12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap'
+        background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '11px',
+        padding: '10px 14px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px', background: c.bg,
-          border: `1px solid ${c.border}`, borderRadius: '8px', padding: '0 12px',
-          height: alturaControl, boxSizing: 'border-box', flex: '1 1 220px'
+          border: `1px solid ${c.border}`, borderRadius: '8px', padding: '0 14px',
+          height: alturaControl, boxSizing: 'border-box', flex: '1 1 260px'
         }}>
           <Search size={15} color={textSecundario} />
           <input
             type="text"
-            placeholder="Buscar por folio, nombre o #empleado..."
+            placeholder="Buscar por folio, colaborador o #empleado..."
             value={busqueda}
             onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
-            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13.5px', width: '100%' }}
+            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13.5px', width: '100%', fontWeight: '500' }}
           />
         </div>
 
@@ -433,7 +468,7 @@ export default function TablaHistorial({
             onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
             style={{
               background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-              padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
+              padding: '0 12px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
             }}
           >
             <option value="todos">Todos los Deptos</option>
@@ -446,7 +481,7 @@ export default function TablaHistorial({
           onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
           style={{
             background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
+            padding: '0 12px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
           }}
         >
           <option value="todos">Todos los Tipos</option>
@@ -461,7 +496,7 @@ export default function TablaHistorial({
           onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
           style={{
             background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
+            padding: '0 12px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
           }}
         >
           <option value="todos">Autorizados y Rechazados</option>
@@ -469,32 +504,10 @@ export default function TablaHistorial({
           <option value="rechazado">Solo Rechazados</option>
         </select>
 
-        <input
-          type="date"
-          value={fechaInicio}
-          onChange={(e) => { setFechaInicio(e.target.value); setPaginaActual(1); }}
-          title="Desde fecha específica"
-          style={{
-            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', outline: 'none'
-          }}
-        />
-
-        <input
-          type="date"
-          value={fechaFin}
-          onChange={(e) => { setFechaFin(e.target.value); setPaginaActual(1); }}
-          title="Hasta fecha específica"
-          style={{
-            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-            padding: '0 10px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', outline: 'none'
-          }}
-        />
-
         {hayFiltrosActivos && (
           <button
             onClick={limpiarFiltros}
-            title="Restablecer a semana actual"
+            title="Restablecer filtros"
             style={{
               padding: '0 12px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
               border: `1px solid ${c.border}`, background: c.bg, color: textSecundario,
@@ -519,13 +532,20 @@ export default function TablaHistorial({
         )}
       </div>
 
-      {/* 3. TABLA MAESTRO-DETALLE EXPANSIVA: LIMPIA, GRANDE Y CON ICONOS EN CASETA */}
+      {/* 3. TABLA MAESTRO-DETALLE */}
       {solicitudesPaginadas.length === 0 ? (
         <div style={{
           background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-          padding: '36px', textAlign: 'center', color: textSecundario, fontSize: '14.5px', fontWeight: '600'
+          padding: '42px 24px', textAlign: 'center', color: textSecundario, fontSize: '14.5px', fontWeight: '600'
         }}>
-          No hay permisos registrados en {modoPeriodo === 'semana' && !usandoRangoManual ? `la Semana ${infoSemana.numSemana} (${infoSemana.etiquetaRango})` : 'el periodo seleccionado'}.
+          <div>
+            No hay permisos de <strong>{areaActiva === 'produccion' ? 'Producción' : areaActiva === 'administracion' ? 'Administración' : 'Obra'}</strong> en {modoPeriodo === 'semana' ? `la Semana ${infoSemana.numSemana} (${infoSemana.etiquetaRango})` : 'el periodo seleccionado'}.
+          </div>
+          {esControlRH && solicitudesEnPeriodo.length > 0 && (
+            <div style={{ marginTop: '8px', fontSize: '13px', color: c.accent }}>
+              (Hay {solicitudesEnPeriodo.length} permiso(s) en las otras pestañas de área en esta misma semana).
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
@@ -570,13 +590,13 @@ export default function TablaHistorial({
                   const expandido = expandidos.includes(s.id);
                   const tipo = (s.tipo_permiso || '').toLowerCase();
                   const aplicaCaseta = tipo === 'salida' || tipo === 'retardo';
+                  const estiloTipo = getEstiloTipo(s.tipo_permiso);
 
                   const {
                     horarioSolicitado,
                     horaSalidaCaseta,
                     horaEntradaCaseta,
                     horaRegresadoCaseta,
-                    requiereRegreso,
                     supervisorSubarea,
                     motivoRechazo,
                     notasFlujo
@@ -584,7 +604,6 @@ export default function TablaHistorial({
 
                   const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
-                  // Renderizado de Píldora Visual con Icono para Caseta
                   const renderIconoCaseta = () => {
                     if (!esAut) {
                       return (
@@ -627,9 +646,9 @@ export default function TablaHistorial({
                         <span title="Sello registrado en vigilancia" style={{
                           display: 'inline-flex', alignItems: 'center', gap: '5px',
                           padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                          background: 'rgba(22,163,74,0.12)', color: '#16a34a', border: '1px solid rgba(22,163,74,0.28)'
+                          background: c.bg, color: c.text, border: `1px solid ${c.border}`
                         }}>
-                          <DoorOpen size={14} /> {textoHora}
+                          <DoorOpen size={14} color={textSecundario} /> {textoHora}
                         </span>
                       );
                     }
@@ -646,7 +665,6 @@ export default function TablaHistorial({
 
                   return (
                     <React.Fragment key={s.id}>
-                      {/* FILA PRINCIPAL LIMPIA (CLIC PARA EXPANDIR) */}
                       <tr
                         onClick={() => toggleExpandir(s.id)}
                         style={{
@@ -674,9 +692,10 @@ export default function TablaHistorial({
                         <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
                             <span style={{
-                              fontFamily: 'ui-monospace, monospace', fontSize: '12.5px', fontWeight: '900',
-                              color: esAut ? '#16a34a' : '#ef4444',
-                              background: esAut ? 'rgba(22,163,74,0.12)' : 'rgba(239,68,68,0.12)',
+                              fontFamily: 'ui-monospace, monospace', fontSize: '12.5px', fontWeight: '800',
+                              color: c.text,
+                              background: c.bg,
+                              border: `1px solid ${c.border}`,
                               padding: '2px 8px', borderRadius: '5px'
                             }}>
                               {s.folio}
@@ -696,35 +715,42 @@ export default function TablaHistorial({
                           </div>
                         </td>
 
-                        {/* 2. INCIDENCIA + FECHA + HORARIO */}
+                        {/* 2. INCIDENCIA CON PALETA SEMÁNTICA + FECHA + HORARIO + ICONO GRIS */}
                         <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                             <span style={{
-                              fontSize: '11.5px', fontWeight: '800', textTransform: 'uppercase',
-                              padding: '2px 8px', borderRadius: '5px', background: c.bg, border: `1px solid ${c.border}`, color: c.text
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              minWidth: '82px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase',
+                              padding: '2px 8px', borderRadius: '5px',
+                              background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
                             }}>
-                              {s.tipo_permiso}
+                              {estiloTipo.label}
                             </span>
                             <span style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
                               {s.fecha_permiso}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${s.fecha_fin}` : ''}
                             </span>
                           </div>
-                          <div style={{ fontSize: '13.5px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {horarioSolicitado}
-                            {categoria ? ` • ${categoria}` : ''}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span>{horarioSolicitado}</span>
+                            {categoria && (
+                              <>
+                                <span>•</span>
+                                {renderIconoNaturaleza(categoria)}
+                              </>
+                            )}
                           </div>
                         </td>
 
-                        {/* 3. CASETA CON ICONO LIMPIO */}
+                        {/* 3. CASETA */}
                         <td style={{ padding: '14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           {renderIconoCaseta()}
                         </td>
 
-                        {/* 4. DICTAMEN DE NÓMINA */}
+                        {/* 4. DICTAMEN */}
                         <td style={{ padding: '14px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                            fontSize: '13px', fontWeight: '800', padding: '5px 11px', borderRadius: '7px',
+                            minWidth: '108px', fontSize: '12.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
                             backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
                             color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
                             border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
@@ -734,7 +760,7 @@ export default function TablaHistorial({
                           </span>
                         </td>
 
-                        {/* 5. BOTÓN EXPANDIR DETALLES + BOTÓN PAPELETA */}
+                        {/* 5. ACCIONES */}
                         {esControlRH && (
                           <td style={{ padding: '14px 16px 14px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -743,9 +769,9 @@ export default function TablaHistorial({
                                 title="Ver motivo, comentarios y cadena de firmas"
                                 style={{
                                   padding: '7px 10px', borderRadius: '7px',
-                                  border: `1px solid ${expandido ? c.accent : c.border}`,
-                                  background: expandido ? c.accentSoft : c.bg,
-                                  color: expandido ? c.accent : textSecundario,
+                                  border: `1px solid ${expandido ? c.text : c.border}`,
+                                  background: expandido ? c.surface : c.bg,
+                                  color: expandido ? c.text : textSecundario,
                                   fontSize: '12.5px', fontWeight: '800', cursor: 'pointer',
                                   display: 'inline-flex', alignItems: 'center', gap: '4px'
                                 }}
@@ -762,14 +788,14 @@ export default function TablaHistorial({
                                   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                                 }}
                               >
-                                <Printer size={14} color="#16a34a" /> Papeleta
+                                <Printer size={14} color={textSecundario} /> Papeleta
                               </button>
                             </div>
                           </td>
                         )}
                       </tr>
 
-                      {/* CAJÓN DESPLEGABLE (MOTIVO COMPLETO + COMENTARIOS + CADENA DE FIRMAS) */}
+                      {/* CAJÓN DESPLEGABLE */}
                       {expandido && (
                         <tr style={{
                           borderBottom: `1px solid ${c.borderDivider}`,
@@ -785,10 +811,9 @@ export default function TablaHistorial({
                               background: c.bg,
                               border: `1px solid ${c.border}`
                             }}>
-                              {/* LADO IZQUIERDO: MOTIVO Y COMENTARIOS DE AUTORIZACIÓN */}
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '12px', borderRight: `1px solid ${c.border}` }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                  <FileText size={13} color={c.accent} />
+                                  <FileText size={13} color={textSecundario} />
                                   <span>Motivo {categoria ? `• ${categoria}` : ''}</span>
                                 </div>
                                 <div style={{ fontSize: '14px', fontWeight: '600', color: c.text, lineHeight: 1.45 }}>
@@ -798,12 +823,12 @@ export default function TablaHistorial({
                                 {notasFlujo && notasFlujo.length > 0 && (
                                   <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                      <MessageSquare size={12} color={c.accent} />
+                                      <MessageSquare size={12} color={textSecundario} />
                                       <span>Comentarios de Autorización</span>
                                     </div>
                                     {notasFlujo.map((n, idx) => (
                                       <div key={idx} style={{ fontSize: '13px', color: c.text }}>
-                                        <strong style={{ color: c.accent }}>{n.autor}:</strong> {n.texto}
+                                        <strong>{n.autor}:</strong> {n.texto}
                                       </div>
                                     ))}
                                   </div>
@@ -816,10 +841,9 @@ export default function TablaHistorial({
                                 )}
                               </div>
 
-                              {/* LADO DERECHO: CADENA DE FIRMAS */}
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                  <ShieldCheck size={14} color={c.accent} />
+                                  <ShieldCheck size={14} color={textSecundario} />
                                   <span>Cadena de Firmas y Aprobación</span>
                                 </div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
