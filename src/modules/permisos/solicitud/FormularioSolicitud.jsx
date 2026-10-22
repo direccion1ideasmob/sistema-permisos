@@ -189,8 +189,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             <div style={{ fontSize: '12.5px', color: t.textMuted, marginTop: '2px' }}>{sesionActual.nombre_completo || usuario?.nombre_completo}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '10px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Elaboración</div>
-            <div style={{ fontSize: '13px', fontWeight: '800', color: t.text }}>{fechaHoy}</div>
+            <div style={{ fontSize: '14px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Elaboración</div>
+            <div style={{ fontSize: '15px', fontWeight: '800', color: t.text }}>{fechaHoy}</div>
           </div>
         </div>
 
@@ -221,14 +221,14 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           </div>
 
           {alertaReincidencia && tipoPermiso === 'retardo' && (
-            <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.1)', border: `1px solid #f59e0b`, fontSize: '12px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.4' }}>
+            <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.1)', border: `1px solid #f59e0b`, fontSize: '14px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.4' }}>
               <Info size={18} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
               <span><strong>Atención:</strong> El sistema detecta incidencias previas de retardo en tu historial reciente. Esta información será anexada para la evaluación de tu Jefatura y Recursos Humanos.</span>
             </div>
           )}
 
           {esRetardoUrgente && (
-            <div style={{ padding: '12px 14px', borderRadius: '10px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '12px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.4' }}>
+            <div style={{ padding: '12px 14px', borderRadius: '10px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '14px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.4' }}>
               <ShieldAlert size={20} color={t.danger} style={{ flexShrink: 0, marginTop: '2px' }} />
               <span><strong>ALERTA DE ACCESO:</strong> Estás registrando un aviso de retardo de último momento. Al enviar, el Gerente recibirá una notificación urgente para dictaminar tu acceso o si debes regresar a casa.</span>
             </div>
@@ -246,7 +246,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
                       border: `1px solid ${naturaleza === nat ? t.accent : t.border}`,
                       background: naturaleza === nat ? t.accentSoft : t.surface,
                       color: naturaleza === nat ? t.accent : t.textMuted,
-                      fontSize: '12px', fontWeight: '700', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
+                      fontSize: '14px', fontWeight: '700', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                     }}
                   >
                     {nat}
@@ -288,7 +288,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             <div style={{ padding: '14px', borderRadius: '10px', background: t.surface, border: `1px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <input type="checkbox" id="checkRegresa" checked={regresaMismoDia} onChange={e => setRegresaMismoDia(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: t.accent, cursor: 'pointer' }} />
-                <label htmlFor="checkRegresa" style={{ fontSize: '13px', color: t.text, cursor: 'pointer', fontWeight: '700' }}>
+                <label htmlFor="checkRegresa" style={{ fontSize: '15px', color: t.text, cursor: 'pointer', fontWeight: '700' }}>
                   ¿Regresas a laborar en el mismo turno? (Salida y reingreso)
                 </label>
               </div>
