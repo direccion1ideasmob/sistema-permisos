@@ -155,11 +155,17 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     }
   };
 
-  const catálogoTipos = [
+  const catalogoTipos = [
     { key: 'salida', label: 'Salida Anticipada', icon: Clock, color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.1)' },
     { key: 'retardo', label: 'Llegada Tarde', icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
     { key: 'falta', label: 'Falta Programada', icon: Calendar, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
     { key: 'vacaciones', label: 'Vacaciones', icon: Calendar, color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
+  ];
+
+  const catalogoNaturaleza = [
+    { label: 'Personal / Familiar', icon: User },
+    { label: 'Cita Médica', icon: Stethoscope },
+    { label: 'Asunto de Trabajo', icon: Briefcase }
   ];
 
   return (
@@ -321,7 +327,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           <div>
             <label className="zinc-label">1. Tipo de Movimiento / Permiso</label>
             <div className="grid-responsivo-tipos">
-              {catálogoTipos.map(item => {
+              {catalogoTipos.map(item => {
                 const Icono = item.icon;
                 const activo = tipoPermiso === item.key;
                 return (
@@ -345,7 +351,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           </div>
 
           {alertaReincidencia && tipoPermiso === 'retardo' && (
-            <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: `1px solid #f59e0b`, fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
+            <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
               <Info size={19} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
               <span><strong>Atención:</strong> El sistema detecta incidencias previas de retardo en tu historial reciente. Esta información será anexada para la evaluación de tu Jefatura y Recursos Humanos.</span>
             </div>
@@ -362,11 +368,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             <div>
               <label className="zinc-label">2. Naturaleza del Asunto</label>
               <div className="grid-responsivo-naturaleza">
-                {[
-                  { label: 'Personal / Familiar', icon: User },
-                  { label: 'Cita Médica', icon: Stethoscope },
-                  { label: 'Asunto de Trabajo', icon: Briefcase }
-                ].map(item => {
+                {catalogoNaturaleza.map(item => {
                   const nat = item.label;
                   const IconoNat = item.icon;
                   const activa = naturaleza === nat;

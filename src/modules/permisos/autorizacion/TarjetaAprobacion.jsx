@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2, User, Stethoscope, Briefcase, Palmtree
+  Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2, User, Stethoscope, Briefcase
 } from 'lucide-react';
 import { contarReincidenciasRetardo } from '../services/permisosService';
 
@@ -258,7 +258,7 @@ export default function TarjetaAprobacion({
             }}>
               {etiqueta.toLowerCase().includes('cita') ? <Stethoscope size={14} color={c.textMuted} /> :
                etiqueta.toLowerCase().includes('trabajo') ? <Briefcase size={14} color={c.textMuted} /> :
-               etiqueta.toLowerCase().includes('vacaciones') ? <Palmtree size={14} color={c.textMuted} /> :
+               etiqueta.toLowerCase().includes('vacaciones') ? <Calendar size={14} color={c.textMuted} /> :
                <User size={14} color={c.textMuted} />}
               <span>{etiqueta}</span>
               <span style={{ opacity: 0.4 }}>—</span>

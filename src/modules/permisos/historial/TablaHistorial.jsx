@@ -3,7 +3,7 @@ import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
   Factory, Building2, HardHat, FileSpreadsheet, RotateCcw, Clock,
   CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronUp,
-  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText, User, Stethoscope, Briefcase, Palmtree
+  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText
 } from 'lucide-react';
 
 export const parsearDatosObservaciones = (obs = '') => {
@@ -60,50 +60,6 @@ export const limpiarMotivo = (asunto = '') => {
   else if (rawCat) catFormateada = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase();
 
   return { categoria: catFormateada, texto: rawTxt };
-};
-  return { categoria: '', texto: String(asunto || '').trim() };
-};
-
-const acortarNombre = (nombre = '') => {
-  const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
-  if (partes.length <= 2) return partes.join(' ');
-  return `${partes[0]} ${partes[partes.length - 2]}`;
-};
-
-const obtenerRangoSemana = (offsetSemanas = 0) => {
-  const hoy = new Date();
-  hoy.setHours(12, 0, 0, 0);
-  const diaSemana = hoy.getDay();
-  const diffLunes = (diaSemana === 0 ? -6 : 1 - diaSemana) + (offsetSemanas * 7);
-
-  const lunes = new Date(hoy);
-  lunes.setDate(hoy.getDate() + diffLunes);
-
-  const domingo = new Date(lunes);
-  domingo.setDate(lunes.getDate() + 6);
-
-  const aYMD = (d) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  const temp = new Date(Date.UTC(lunes.getFullYear(), lunes.getMonth(), lunes.getDate()));
-  const dayNum = temp.getUTCDay() || 7;
-  temp.setUTCDate(temp.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
-  const numSemana = Math.ceil((((temp - yearStart) / 86400000) + 1) / 7);
-
-  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const etiquetaRango = `${lunes.getDate()} ${meses[lunes.getMonth()]} – ${domingo.getDate()} ${meses[domingo.getMonth()]} ${domingo.getFullYear()}`;
-
-  return {
-    inicio: aYMD(lunes),
-    fin: aYMD(domingo),
-    numSemana,
-    etiquetaRango
-  };
 };
 
 export default function TablaHistorial({

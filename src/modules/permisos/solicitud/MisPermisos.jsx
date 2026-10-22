@@ -6,7 +6,7 @@ import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHist
 import {
   Clock, CheckCircle2, FileText, AlertTriangle, ShieldCheck,
   XCircle, FastForward, MessageSquare, DoorOpen, CornerUpLeft,
-  Calendar, ChevronDown, ChevronUp, User, Stethoscope, Briefcase, Palmtree
+  Calendar, ChevronDown, ChevronUp, User, Stethoscope, Briefcase
 } from 'lucide-react';
 
 export default function MisPermisos() {
@@ -111,7 +111,7 @@ export default function MisPermisos() {
     let Icono = User;
     if (low.includes('cita') || low.includes('médic')) Icono = Stethoscope;
     else if (low.includes('trabajo')) Icono = Briefcase;
-    else if (low.includes('vacaciones')) Icono = Palmtree;
+    else if (low.includes('vacaciones')) Icono = Calendar;
 
     return (
       <span style={{
