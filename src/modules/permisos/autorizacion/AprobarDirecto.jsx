@@ -192,6 +192,12 @@ export default function AprobarDirecto() {
                   <Clock size={16} /> Reposición de Tiempo
                 </button>
 
+                {permiso?.tipo_permiso === 'retardo' && (
+                  <button onClick={() => resolverAprobacion('Se regresa')} disabled={procesando} style={s.btnTiempo}>
+                    ↩️ Regresar a Casa (Sin Acceso)
+                  </button>
+                )}
+
                 <button onClick={() => resolverAprobacion('Pendiente')} disabled={procesando} style={s.btnSinGoce}>
                   <UserCog size={16} /> Delegar Dictamen a RH
                 </button>

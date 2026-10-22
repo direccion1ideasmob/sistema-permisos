@@ -12,6 +12,7 @@ export default function ModalDictamenAprobar({
   const tipo = solicitud?.tipo_permiso?.toLowerCase() || '';
   const esVacaciones = tipo === 'vacaciones';
   const esRetardo = tipo === 'retardo';
+  const yaFueRegresadoEnPuerta = esRetardo && ((solicitud?.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(solicitud?.observaciones || ''));
 
   useEffect(() => {
     setComentarios('');
@@ -146,6 +147,7 @@ export default function ModalDictamenAprobar({
                     key={op.key}
                     onClick={() => {
                       if (esVacaciones && op.key !== 'Con goce') return;
+                      if (yaFueRegresadoEnPuerta && op.key !== 'Se regresa') return;
                       setDictamenPago(op.key);
                     }}
                     style={{
@@ -155,8 +157,8 @@ export default function ModalDictamenAprobar({
                       textAlign: 'center',
                       border: seleccionada ? `2px solid ${colorActivo}` : `1.5px solid ${c.border}`,
                       backgroundColor: seleccionada ? bgActivo : c.surface,
-                      cursor: (esVacaciones && op.key !== 'Con goce') ? 'not-allowed' : 'pointer',
-                      opacity: (esVacaciones && op.key !== 'Con goce') ? 0.5 : 1,
+                      cursor: ((esVacaciones && op.key !== 'Con goce') || (yaFueRegresadoEnPuerta && op.key !== 'Se regresa')) ? 'not-allowed' : 'pointer',
+                      opacity: ((esVacaciones && op.key !== 'Con goce') || (yaFueRegresadoEnPuerta && op.key !== 'Se regresa')) ? 0.45 : 1,
                       transition: 'all 0.15s ease',
                       display: 'flex',
                       flexDirection: expandirUltima ? 'row' : 'column',
