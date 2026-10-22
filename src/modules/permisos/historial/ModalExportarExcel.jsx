@@ -188,7 +188,7 @@ export default function ModalExportarExcel({
       ];
 
       const filas = datosFiltrados.map(p => {
-        const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, supervisorSubarea } = parsearDatosObservaciones(p.observaciones);
+        const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, supervisorSubarea } = parsearDatosObservaciones(p.observaciones);
         const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
         const jefeTxt = [supervisorSubarea, p.firmante1?.nombre_completo].filter(Boolean).join(' / ');
 

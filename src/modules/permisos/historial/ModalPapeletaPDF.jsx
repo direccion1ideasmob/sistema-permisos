@@ -270,12 +270,13 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
           <div ref={contenedorRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {listaPermisos.map((p, index) => {
               const tipo = (p.tipo_permiso || '').toLowerCase();
-              const seRegresaTrabajador = (p.pago || '').toLowerCase().includes('regresa');
+              const seRegresaTrabajador = (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '');
               const {
                 horarioSolicitado,
                 horaSalidaCaseta,
                 horaEntradaCaseta,
                 horaRegresadoCaseta,
+                horaLlegadaPuerta,
                 supervisorSubarea,
                 notasFlujo
               } = parsearDatosObservaciones(p.observaciones);
@@ -398,7 +399,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                       </span>
                       {seRegresaTrabajador ? (
                         <strong style={{ color: '#b45309', fontSize: '11px', display: 'block' }}>
-                          Se regresa a casa {horaRegresadoCaseta ? `(${horaRegresadoCaseta})` : '(Sin ingreso)'}
+                          Se regresa a casa {horaRegresadoCaseta ? `(Retiro: ${horaRegresadoCaseta})` : (horaLlegadaPuerta ? `(Puerta: ${horaLlegadaPuerta})` : '(Sin ingreso)')}
                         </strong>
                       ) : tieneSelloCaseta ? (
                         <strong style={{ color: '#0f172a', fontSize: '11px', display: 'block' }}>

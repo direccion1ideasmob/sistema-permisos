@@ -10,13 +10,16 @@ import {
 export const parsearDatosObservaciones = (obs = '') => {
   const texto = String(obs || '');
   const segmentos = texto.split('|').map(s => s.trim()).filter(Boolean);
-  const horarioSolicitado = (segmentos[0] || '')
+  const segHorario = segmentos.find(s => !/^\[.*\]$/.test(s) && !/llegada en puerta:/i.test(s) && !/VoBo /i.test(s) && !/^Nota /i.test(s) && !/RECHAZO:/i.test(s)) || segmentos[0] || '';
+  const horarioSolicitado = segHorario
     .replace(/🕒|📅/g, '')
     .trim();
 
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
-  const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i) || texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+  const mEntradaReal = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
+  const mLlegadaPuerta = texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
   const mRegresado = texto.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
+  const mEntrada = mEntradaReal || (!mRegresado ? mLlegadaPuerta : null);
   const mSubarea = texto.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
   const mRechazo = texto.match(/RECHAZO:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
 
@@ -38,6 +41,7 @@ export const parsearDatosObservaciones = (obs = '') => {
     horaSalidaCaseta: mSalida ? mSalida[1].trim() : null,
     horaEntradaCaseta: mEntrada ? mEntrada[1].trim() : null,
     horaRegresadoCaseta: mRegresado ? mRegresado[1].trim() : null,
+    horaLlegadaPuerta: mLlegadaPuerta ? mLlegadaPuerta[1].trim() : null,
     requiereRegreso: texto.toLowerCase().includes('regresa:'),
     supervisorSubarea: mSubarea ? mSubarea[1].trim() : null,
     motivoRechazo: mRechazo ? mRechazo[1].trim() : null,
@@ -1052,6 +1056,17 @@ export default function TablaHistorial({
                     const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
                     const renderIconoCaseta = () => {
+                      if (seRegresoCasa || horaRegresadoCaseta) {
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
+                            background: 'rgba(245,158,11,0.14)', color: '#d97706'
+                          }}>
+                            <CornerUpLeft size={14} /> {horaRegresadoCaseta || 'Regresado'}
+                          </span>
+                        );
+                      }
                       if (!esAut) {
                         return (
                           <span style={{

@@ -104,10 +104,25 @@ export default function TarjetaAprobacion({
       if (mGer) nombreGerente = mGer[1].trim();
     }
 
-    return { horarioRaw, nombreSubarea, nombreJefe, nombreGerente, notasPrevias };
+    const mLlegadaP = obs.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+    const mEntradaC = obs.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
+    const mSalidaC = obs.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
+    const mRetiroC = obs.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
+    const selloCaseta = mRetiroC
+      ? `↩️ Retirado en caseta: ${mRetiroC[1].trim()}`
+      : mEntradaC
+      ? `🚪 Entrada caseta: ${mEntradaC[1].trim()}`
+      : mSalidaC
+      ? `🚪 Salida caseta: ${mSalidaC[1].trim()}`
+      : mLlegadaP
+      ? `📍 En puerta desde: ${mLlegadaP[1].trim()}`
+      : null;
+    return { horarioRaw, nombreSubarea, nombreJefe, nombreGerente, notasPrevias, selloCaseta };
   };
 
-  const { horarioRaw, nombreSubarea, nombreJefe, nombreGerente, notasPrevias } = analizarDatos(solicitud.observaciones);
+  const { horarioRaw, nombreSubarea, nombreJefe, nombreGerente, notasPrevias, selloCaseta } = analizarDatos(solicitud.observaciones);
+  const dictamenPreliminar = (solicitud.pago && !solicitud.pago.toLowerCase().includes('pendiente')) ? solicitud.pago : null;
+  const esDictamenRegreso = (dictamenPreliminar || '').toLowerCase().includes('regresa');
 
   const procesarMotivo = (textoCrudo = '') => {
     const txt = String(textoCrudo || '').trim();
@@ -402,6 +417,33 @@ export default function TarjetaAprobacion({
               </>
             )}
           </div>
+
+          {(selloCaseta || dictamenPreliminar) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {selloCaseta && (
+                <span style={{
+                  fontSize: '11.5px', fontWeight: '800',
+                  color: selloCaseta.includes('Retirado') ? '#dc2626' : c.text,
+                  background: selloCaseta.includes('Retirado') ? 'rgba(239,68,68,0.12)' : c.surfaceCard,
+                  border: `1px solid ${selloCaseta.includes('Retirado') ? 'rgba(239,68,68,0.3)' : c.border}`,
+                  padding: '2px 8px', borderRadius: '6px'
+                }}>
+                  {selloCaseta}
+                </span>
+              )}
+              {dictamenPreliminar && (
+                <span style={{
+                  fontSize: '11.5px', fontWeight: '800',
+                  color: esDictamenRegreso ? '#d97706' : c.accent,
+                  background: esDictamenRegreso ? 'rgba(245,158,11,0.14)' : c.accentSoft,
+                  border: `1px solid ${esDictamenRegreso ? 'rgba(245,158,11,0.35)' : c.border}`,
+                  padding: '2px 8px', borderRadius: '6px'
+                }}>
+                  {esDictamenRegreso ? '↩️ Jefatura dictaminó: SE REGRESA' : `Dictamen: ${dictamenPreliminar}`}
+                </span>
+              )}
+            </div>
+          )}
 
           {reincidencias > 0 && (
             <span style={{

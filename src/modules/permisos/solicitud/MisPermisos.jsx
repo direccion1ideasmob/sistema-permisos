@@ -565,7 +565,8 @@ export default function MisPermisos() {
               const expandida = Boolean(tarjetasExpandidas[p.id]);
               const horasTranscurridas = (horaActual - new Date(p.created_at)) / (1000 * 60 * 60);
               const puedeEscalar = p.firma_1_estado === 'pendiente' && horasTranscurridas >= 1;
-              const { horarioSolicitado, supervisorSubarea, notasFlujo } = parsearDatosObservaciones(p.observaciones);
+              const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, supervisorSubarea, notasFlujo } = parsearDatosObservaciones(p.observaciones);
+              const seRegresaProceso = (p.pago || '').toLowerCase().includes('regresa') || Boolean(horaRegresadoCaseta);
               const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
               const estilo = getEstiloTipo(p.tipo_permiso);
               const fechaTxt = p.fecha_fin && p.fecha_fin !== p.fecha_permiso
@@ -600,6 +601,14 @@ export default function MisPermisos() {
                       </div>
 
                       <div className="mp-right-group">
+                        {seRegresaProceso && (
+                          <span style={{
+                            fontSize: '10.5px', fontWeight: '800', padding: '2px 7px', borderRadius: '5px',
+                            background: 'rgba(245, 158, 11, 0.14)', color: '#d97706', border: '1px solid rgba(245, 158, 11, 0.32)'
+                          }}>
+                            ↩️ SE REGRESA
+                          </span>
+                        )}
                         {renderEtiquetaNaturaleza(categoria)}
                         {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
                       </div>
