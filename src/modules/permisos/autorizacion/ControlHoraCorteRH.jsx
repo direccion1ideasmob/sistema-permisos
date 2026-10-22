@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, X, Check } from 'lucide-react';
+import { Clock, X, Check } from 'lucide-react';
 import { obtenerHoraLimiteTolerancia, guardarHoraLimiteTolerancia } from '../../vigilancia/services/vigilanciaService.js';
 
 export default function ControlHoraCorteRH({ usuario, c }) {
   const rol = String(usuario?.rol || '').toLowerCase();
-  const esRHOSuper = rol === 'gerente_rh' || rol === 'rh_nominas' || rol === 'superadmin';
+  const esRHOSuper = rol.includes('rh') || rol.includes('super') || rol.includes('admin');
 
   const [horaCorte, setHoraCorte] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
   const [editando, setEditando] = useState(false);
@@ -20,11 +20,12 @@ export default function ControlHoraCorteRH({ usuario, c }) {
 
   if (!esRHOSuper) return null;
 
-  const guardar = async () => {
-    if (!inputHora) return;
+  const guardar = async (horaExplicita) => {
+    const valor = typeof horaExplicita === 'string' ? horaExplicita : inputHora;
+    if (!valor) return;
     setGuardando(true);
     try {
-      const nueva = await guardarHoraLimiteTolerancia(inputHora, usuario?.id || null);
+      const nueva = await guardarHoraLimiteTolerancia(valor, usuario?.id || null);
       setHoraCorte(nueva);
       setEditando(false);
     } catch (e) {
@@ -35,7 +36,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
   };
 
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
       {!editando ? (
         <button
           type="button"
@@ -43,84 +44,109 @@ export default function ControlHoraCorteRH({ usuario, c }) {
             setInputHora(horaCorte);
             setEditando(true);
           }}
-          title="Configurar hora límite de tolerancia para caseta"
+          title={`Límite tolerancia caseta: ${horaCorte} hrs (Clic para ajustar)`}
           style={{
-            height: '36px',
-            padding: '0 12px',
-            borderRadius: '9px',
-            border: `1.5px solid ${c?.accent || '#16a34a'}`,
-            background: c?.accentSoft || 'rgba(22,163,74,0.12)',
-            color: c?.accent || '#16a34a',
-            fontSize: '12px',
-            fontWeight: '800',
+            height: '28px',
+            padding: '0 8px',
+            borderRadius: '7px',
+            border: `1px solid ${c?.border || 'rgba(148,163,184,0.28)'}`,
+            background: 'transparent',
+            color: c?.textMuted || '#64748b',
+            fontSize: '11px',
+            fontWeight: '700',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
-            whiteSpace: 'nowrap'
+            gap: '5px',
+            opacity: 0.75,
+            transition: 'opacity 0.15s ease'
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.75')}
         >
-          <Sliders size={14} />
-          <span>Tolerancia Caseta: {horaCorte} hrs</span>
+          <Clock size={12.5} />
+          <span style={{ fontFamily: 'ui-monospace, monospace' }}>{horaCorte}</span>
         </button>
       ) : (
         <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '5px',
             background: c?.surfaceCard || '#fff',
-            border: `1.5px solid ${c?.accent || '#16a34a'}`,
-            borderRadius: '9px',
-            padding: '3px 8px',
-            height: '36px',
-            boxSizing: 'border-box'
+            border: `1px solid ${c?.border || '#cbd5e1'}`,
+            borderRadius: '8px',
+            padding: '3px 7px',
+            height: '30px',
+            boxSizing: 'border-box',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
           }}
         >
-          <span style={{ fontSize: '11.5px', fontWeight: '800', color: c?.text || '#111' }}>Límite:</span>
+          <Clock size={12} color={c?.accent || '#16a34a'} />
           <input
             type="time"
             value={inputHora}
             onChange={(e) => setInputHora(e.target.value)}
             style={{
-              border: `1px solid ${c?.border || '#ccc'}`,
-              borderRadius: '6px',
+              border: `1px solid ${c?.border || '#cbd5e1'}`,
+              borderRadius: '5px',
               background: c?.bg || '#f8fafc',
               color: c?.text || '#111',
-              fontSize: '12.5px',
-              fontWeight: '800',
-              padding: '2px 6px',
+              fontSize: '11.5px',
+              fontWeight: '700',
+              padding: '1px 5px',
               outline: 'none'
             }}
           />
           <button
             type="button"
-            onClick={guardar}
+            onClick={() => guardar(inputHora)}
             disabled={guardando}
+            title="Guardar hora límite"
             style={{
-              height: '26px',
-              padding: '0 9px',
-              borderRadius: '6px',
+              height: '22px',
+              padding: '0 7px',
+              borderRadius: '5px',
               border: 'none',
               background: c?.accent || '#16a34a',
               color: '#fff',
-              fontSize: '11px',
+              fontSize: '10.5px',
               fontWeight: '800',
               cursor: 'pointer',
               display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px'
+              alignItems: 'center'
             }}
           >
-            <Check size={12} /> {guardando ? '...' : 'OK'}
+            <Check size={12} />
           </button>
+          {horaCorte !== '07:15' && (
+            <button
+              type="button"
+              onClick={() => guardar('07:15')}
+              disabled={guardando}
+              title="Restaurar a 07:15"
+              style={{
+                height: '22px',
+                padding: '0 6px',
+                borderRadius: '5px',
+                border: `1px solid ${c?.border || '#cbd5e1'}`,
+                background: c?.bg || '#f1f5f9',
+                color: c?.textMuted || '#64748b',
+                fontSize: '10px',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              07:15
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setEditando(false)}
             style={{
-              height: '26px',
-              padding: '0 5px',
-              borderRadius: '6px',
+              height: '22px',
+              padding: '0 4px',
+              borderRadius: '5px',
               border: 'none',
               background: 'transparent',
               color: c?.textMuted || '#64748b',
@@ -129,7 +155,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
               alignItems: 'center'
             }}
           >
-            <X size={13} />
+            <X size={12} />
           </button>
         </div>
       )}
