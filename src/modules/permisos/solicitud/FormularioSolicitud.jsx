@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase } from 'lucide-react';
 import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
+import { obtenerHoraLimiteTolerancia } from '../../vigilancia/services/vigilanciaService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
 
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOscuro }) {
@@ -25,6 +26,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [horaSalida, setHoraSalida] = useState('14:00');
   const [regresaMismoDia, setRegresaMismoDia] = useState(false);
   const [horaRegreso, setHoraRegreso] = useState('16:00');
+  const [horaLimiteRH, setHoraLimiteRH] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
   const [horaLlegadaRetardo, setHoraLlegadaRetardo] = useState('07:30');
 
   const [motivo, setMotivo] = useState('');
@@ -44,6 +46,22 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       setNaturaleza('');
     }
 
+    if (tipoPermiso === 'retardo') {
+      obtenerHoraLimiteTolerancia().then((h) => {
+        if (!h) return;
+        setHoraLimiteRH(h);
+        const [hLim, mLim] = h.split(':').map(Number);
+        const minLim = hLim * 60 + mLim;
+        const [hAct, mAct] = (horaLlegadaRetardo || '07:30').split(':').map(Number);
+        const minAct = hAct * 60 + mAct;
+        if (minAct <= minLim) {
+          const sugeridaMin = minLim + 15;
+          const sH = String(Math.floor(sugeridaMin / 60) % 24).padStart(2, '0');
+          const sM = String(sugeridaMin % 60).padStart(2, '0');
+          setHoraLlegadaRetardo(`${sH}:${sM}`);
+        }
+      }).catch(() => {});
+    }
     if (tipoPermiso === 'retardo' && userId) {
       contarReincidenciasRetardo(userId).then(count => setAlertaReincidencia(count > 0)).catch(() => {});
     } else {
@@ -59,9 +77,12 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     if (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') return 8;
 
     if (tipoPermiso === 'retardo') {
-      const [h, m] = (horaLlegadaRetardo || '07:30').split(':');
-      const dInicio = new Date(2000, 0, 1, 7, 0);
-      const dLlegada = new Date(2000, 0, 1, parseInt(h, 10), parseInt(m, 10));
+      const [h, m] = (horaLlegadaRetardo || '07:30').split(':').map(Number);
+      const [hLim, mLim] = (horaLimiteRH || '07:15').split(':').map(Number);
+      const baseHora = hLim === 7 ? 7 : hLim;
+      const baseMin = hLim === 7 ? 0 : mLim;
+      const dInicio = new Date(2000, 0, 1, baseHora, baseMin);
+      const dLlegada = new Date(2000, 0, 1, h, m);
       const diff = (dLlegada - dInicio) / 3600000;
       return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
     }
@@ -108,8 +129,12 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
 
     if (tipoPermiso === 'retardo') {
       const [hLlegada, mLlegada] = horaLlegadaRetardo.split(':').map(Number);
-      if (hLlegada < 7 || (hLlegada === 7 && mLlegada === 0)) {
-        return alert("Incongruencia detectada: Un retardo implica llegar después de tu hora oficial de entrada (07:00 hrs).");
+      const [hLim, mLim] = (horaLimiteRH || '07:15').split(':').map(Number);
+      const minutosLlegada = hLlegada * 60 + mLlegada;
+      const minutosLimite = (isNaN(hLim) ? 7 : hLim) * 60 + (isNaN(mLim) ? 15 : mLim);
+
+      if (minutosLlegada <= minutosLimite) {
+        return alert(`Incongruencia detectada: La tolerancia de entrada es hasta las ${horaLimiteRH} hrs. Un pase de retardo solo aplica para llegadas posteriores a las ${horaLimiteRH} hrs.`);
       }
     }
 
@@ -443,7 +468,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             {tipoPermiso === 'retardo' && (
               <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Hora Estimada de Llegada *</label>
-                <input type="time" required className="zinc-input" value={horaLlegadaRetardo} onChange={e => setHoraLlegadaRetardo(e.target.value)} />
+                <input type="time" required min={horaLimiteRH} className="zinc-input" value={horaLlegadaRetardo} onChange={e => setHoraLlegadaRetardo(e.target.value)} />
               </div>
             )}
 
