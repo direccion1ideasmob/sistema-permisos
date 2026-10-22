@@ -282,8 +282,7 @@ export default function DirectorioGrid({
                       {user.nombre_completo}
                     </div>
                     <div style={{ fontSize: '11px', color: c.textMuted, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <span className="mono-id">#{user.numero_empleado}</span>
-                      <span>•</span>
+                      
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.puesto || user.area || 'Sin puesto'}</span>
                       <span>•</span>
                       <span style={{ flexShrink: 0 }}>{sedeObj?.nombre || 'Sin Sede'}</span>

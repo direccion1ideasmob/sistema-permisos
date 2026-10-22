@@ -103,7 +103,7 @@ export const generarEstilosCSS = (c, modoOscuro) => `
   .desktop-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12.5px;
+    font-size: 13.5px;
     text-align: left;
     white-space: nowrap;
   }
@@ -112,7 +112,7 @@ export const generarEstilosCSS = (c, modoOscuro) => `
     padding: 12px 14px;
     background: ${c.surface};
     color: ${c.textMuted};
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -221,5 +221,55 @@ export const generarEstilosCSS = (c, modoOscuro) => `
     text-transform: uppercase;
     letter-spacing: 0.03em;
     margin-bottom: 4px;
+  }
+
+  /* ================= VISTA MÓVIL: LISTA DE CONTACTOS LIMPIA ================= */
+  .mobile-contact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .mobile-contact-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 13px;
+    background: ${c.surfaceCard};
+    border: 1px solid ${c.border};
+    border-radius: 12px;
+    cursor: pointer;
+    box-sizing: border-box;
+    width: 100%;
+    transition: background 0.15s ease;
+  }
+
+  .mobile-contact-card:active {
+    background: ${c.rowHover};
+  }
+
+  @media (max-width: 640px) {
+    .pills-scroll-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      overflow-x: visible;
+      padding-bottom: 4px;
+    }
+    .filter-pill {
+      width: 100%;
+      box-sizing: border-box;
+      justify-content: space-between;
+      padding: 0 10px;
+      height: 34px;
+    }
+    .pill-select {
+      width: 100%;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
   }
 `;

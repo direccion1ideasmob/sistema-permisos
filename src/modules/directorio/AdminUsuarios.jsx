@@ -137,8 +137,11 @@ export default function AdminUsuarios() {
         }
         @media (max-width: 768px) {
           .admin-container {
-            padding-top: 40px;
+            padding-top: 6px;
             gap: 10px;
+          }
+          .admin-header > div:first-child {
+            padding-left: 48px;
           }
           .admin-title {
             font-size: 18px;
