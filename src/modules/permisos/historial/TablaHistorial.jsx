@@ -62,6 +62,35 @@ export const limpiarMotivo = (asunto = '') => {
   return { categoria: catFormateada, texto: rawTxt };
 };
 
+const obtenerRangoSemana = (fechaStr) => {
+  if (!fechaStr) return { clave: 'sin-fecha', etiqueta: 'Sin fecha asignada', orden: 0 };
+  const partes = String(fechaStr).slice(0, 10).split('-').map(Number);
+  if (partes.length !== 3 || partes.some(isNaN)) {
+    return { clave: 'sin-fecha', etiqueta: 'Sin fecha asignada', orden: 0 };
+  }
+  const fecha = new Date(partes[0], partes[1] - 1, partes[2]);
+  const diaSemana = fecha.getDay();
+  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+
+  const lunes = new Date(fecha);
+  lunes.setDate(fecha.getDate() + diffLunes);
+  lunes.setHours(0, 0, 0, 0);
+
+  const domingo = new Date(lunes);
+  domingo.setDate(lunes.getDate() + 6);
+
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const fDia = (d) => String(d.getDate()).padStart(2, '0');
+  const fMes = (d) => meses[d.getMonth()];
+
+  const clave = `${lunes.getFullYear()}-${String(lunes.getMonth() + 1).padStart(2, '0')}-${fDia(lunes)}`;
+  const etiqueta = lunes.getMonth() === domingo.getMonth()
+    ? `Semana del ${fDia(lunes)} al ${fDia(domingo)} de ${fMes(domingo)} ${domingo.getFullYear()}`
+    : `Semana del ${fDia(lunes)} ${fMes(lunes)} al ${fDia(domingo)} ${fMes(domingo)} ${domingo.getFullYear()}`;
+
+  return { clave, etiqueta, orden: lunes.getTime() };
+};
+
 export default function TablaHistorial({
   solicitudes = [],
   departamentos = [],
