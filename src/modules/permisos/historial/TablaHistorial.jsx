@@ -69,6 +69,14 @@ const acortarNombre = (nombreCompleto = '') => {
   return `${partes[0]} ${partes[partes.length - 2]}`;
 };
 
+const formatearFechaCorta = (fechaStr = '') => {
+  if (!fechaStr) return '';
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const partes = String(fechaStr).slice(0, 10).split('-');
+  if (partes.length !== 3) return fechaStr;
+  return `${String(parseInt(partes[2], 10)).padStart(2, '0')} ${meses[parseInt(partes[1], 10) - 1] || partes[1]} ${partes[0]}`;
+};
+
 const obtenerRangoSemana = (offset = 0, fechaReferenciaStr = null) => {
   const numOffset = typeof offset === 'number' && !isNaN(offset) ? offset : 0;
   let base = new Date();
@@ -419,55 +427,81 @@ export default function TablaHistorial({
            VISTA MÓVIL (< 768PX): TARJETAS LIMPIAS Y CONTROLES APILADOS
            ========================================================= */
         @media (max-width: 768px) {
+          .th-main-wrapper {
+            padding-top: 28px;
+            gap: 10px;
+          }
           .th-top-bar {
             flex-direction: column;
             align-items: stretch;
-            gap: 10px;
+            gap: 8px;
           }
           .th-tabs-area {
             flex: none;
             width: 100%;
-            height: 42px;
+            height: 40px;
+            padding: 3px !important;
             display: grid !important;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 4px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 3px;
           }
           .th-tabs-area .tab-btn {
-            padding: 0 6px !important;
+            padding: 0 4px !important;
             font-size: 12px !important;
-            gap: 4px !important;
+            gap: 5px !important;
+            min-width: 0 !important;
+            justify-content: center !important;
+          }
+          .th-tabs-area .tab-btn svg {
+            display: none !important;
+          }
+          .th-tabs-area .tab-badge {
+            padding: 1px 6px !important;
+            font-size: 11px !important;
           }
           .th-right-actions {
             width: 100%;
             margin-left: 0;
-            flex-direction: column;
-            align-items: stretch;
+            display: grid;
+            grid-template-columns: 1fr auto;
             gap: 8px;
           }
           .th-week-box {
             width: 100%;
             justify-content: space-between;
-            padding: 0 10px;
-            height: 44px;
+            padding: 0 8px;
+            height: 40px;
+            min-width: 0;
           }
           .th-btn-export {
-            width: 100%;
-            height: 42px;
+            height: 40px;
+            padding: 0 12px;
+            font-size: 12.5px;
+          }
+          .th-btn-export span {
+            display: none;
+          }
+          .th-btn-export::after {
+            content: 'Excel';
           }
           .th-filters-bar {
             padding: 10px;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 8px;
           }
           .th-search-box {
             grid-column: 1 / -1;
             width: 100%;
+            height: 38px;
           }
           .th-select-filter {
             width: 100%;
-            font-size: 12.5px;
-            padding: 0 8px;
+            min-width: 0;
+            height: 36px;
+            font-size: 12px;
+            padding: 0 6px;
+            text-overflow: ellipsis;
           }
           .th-select-full-mobile {
             grid-column: 1 / -1;
@@ -612,7 +646,7 @@ export default function TablaHistorial({
 
           {esControlRH && onAbrirExportar && (
             <button onClick={onAbrirExportar} className="th-btn-export">
-              <FileSpreadsheet size={16} /> Exportar Excel
+              <FileSpreadsheet size={16} /> <span>Exportar Excel</span>
             </button>
           )}
         </div>
@@ -751,7 +785,9 @@ export default function TablaHistorial({
                   {solicitudesPaginadas.map(s => {
                     const u = s.usuarios || {};
                     const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
-                    const seRegresoCasa = (s.pago || '').toLowerCase().includes('regresa');
+                    const pagoLow = (s.pago || '').toLowerCase();
+                    const seRegresoCasa = pagoLow.includes('regresa');
+                    const esAlertaPago = seRegresoCasa || pagoLow.includes('sin goce');
                     const seleccionado = seleccionados.includes(s.id);
                     const expandido = expandidos.includes(s.id);
                     const tipo = (s.tipo_permiso || '').toLowerCase();
@@ -911,9 +947,9 @@ export default function TablaHistorial({
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
                               minWidth: '108px', fontSize: '12.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
-                              backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
-                              color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
-                              border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
+                              backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : esAlertaPago ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
+                              color: !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
+                              border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : esAlertaPago ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
                             }}>
                               {esAut ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                               {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
@@ -1031,10 +1067,13 @@ export default function TablaHistorial({
             {solicitudesPaginadas.map(s => {
               const u = s.usuarios || {};
               const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
-              const seRegresoCasa = (s.pago || '').toLowerCase().includes('regresa');
+              const pagoLow = (s.pago || '').toLowerCase();
+              const seRegresoCasa = pagoLow.includes('regresa');
+              const esAlertaPago = seRegresoCasa || pagoLow.includes('sin goce');
               const seleccionado = seleccionados.includes(s.id);
               const expandido = expandidos.includes(s.id);
               const estiloTipo = getEstiloTipo(s.tipo_permiso);
+              const tipoLow = (s.tipo_permiso || '').toLowerCase();
 
               const {
                 horarioSolicitado,
@@ -1047,9 +1086,18 @@ export default function TablaHistorial({
               } = parsearDatosObservaciones(s.observaciones);
               const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
-              const horarioCorto = String(horarioSolicitado || '')
+              const fechaBonita = (s.fecha_fin && s.fecha_fin !== s.fecha_permiso)
+                ? `${formatearFechaCorta(s.fecha_permiso)} al ${formatearFechaCorta(s.fecha_fin)}`
+                : formatearFechaCorta(s.fecha_permiso);
+
+              let horarioLimpio = String(horarioSolicitado || '')
                 .replace(/^Llegada estimada:\s*/i, 'Llegada: ')
-                .replace(/^Salida definitiva:\s*/i, 'Salida: ');
+                .replace(/^Salida definitiva:\s*/i, 'Salida: ')
+                .replace(/^Para el:\s*.*$/i, 'Día completo');
+
+              if (tipoLow === 'vacaciones' || horarioLimpio.toLowerCase().startsWith('del ')) {
+                horarioLimpio = 'Periodo vacacional';
+              }
 
               return (
                 <div
@@ -1062,16 +1110,16 @@ export default function TablaHistorial({
                     padding: '13px 14px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '10px',
+                    gap: '8px',
                     boxSizing: 'border-box'
                   }}
                 >
-                  {/* RENGLÓN 1: CHECKBOX + FOLIO + TIPO <---> DICTAMEN + FLECHA */}
+                  {/* RENGLÓN 1: CHECKBOX + FOLIO + TIPO <---> DICTAMEN + FLECHA (TODO EN 1 LÍNEA SIN PARTIRSE) */}
                   <div
                     onClick={() => toggleExpandir(s.id)}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', cursor: 'pointer' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                       {esControlRH && (
                         <div onClick={(e) => toggleSeleccion(s.id, e)} style={{ display: 'flex', alignItems: 'center', paddingRight: '2px' }}>
                           {seleccionado
@@ -1080,27 +1128,28 @@ export default function TablaHistorial({
                         </div>
                       )}
                       <span style={{
-                        fontFamily: 'ui-monospace, monospace', fontSize: '11px', fontWeight: '800',
+                        fontFamily: 'ui-monospace, monospace', fontSize: '11.5px', fontWeight: '800',
                         color: c.text, background: c.bg, border: `1px solid ${c.border}`,
-                        padding: '2px 7px', borderRadius: '5px'
+                        padding: '2px 7px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0
                       }}>
                         {s.folio}
                       </span>
                       <span style={{
                         fontSize: '10.5px', fontWeight: '800', textTransform: 'uppercase',
-                        padding: '2px 8px', borderRadius: '5px',
+                        padding: '2px 8px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
                         background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
                       }}>
                         {estiloTipo.label}
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                       <span style={{
-                        fontSize: '10.5px', fontWeight: '800', padding: '3px 8px', borderRadius: '5px', textTransform: 'uppercase',
-                        backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
-                        color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
-                        border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
+                        fontSize: '10.5px', fontWeight: '800', padding: '2px 8px', borderRadius: '5px',
+                        textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0,
+                        backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : esAlertaPago ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
+                        color: !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
+                        border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : esAlertaPago ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
                       }}>
                         {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
                       </span>
@@ -1108,51 +1157,39 @@ export default function TablaHistorial({
                     </div>
                   </div>
 
-                  {/* RENGLÓN 2: NOMBRE DEL COLABORADOR + BOTÓN PAPELETA */}
+                  {/* RENGLÓN 2: NOMBRE COMPLETO DEL COLABORADOR DE LADO A LADO SIN CORTARSE */}
                   <div
                     onClick={() => toggleExpandir(s.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer' }}
+                    style={{ cursor: 'pointer' }}
                   >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {u.nombre_completo || 'Colaborador'}
-                      </div>
-                      <div style={{ fontSize: '12px', color: textSecundario, fontWeight: '600', marginTop: '2px' }}>
-                        #{u.numero_empleado} • {u.departamentos?.nombre || 'General'}
-                      </div>
+                    <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, lineHeight: 1.25 }}>
+                      {u.nombre_completo || 'Colaborador'}
                     </div>
-
-                    {esControlRH && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onSeleccionarPapeleta && onSeleccionarPapeleta([s]); }}
-                        style={{
-                          padding: '6px 11px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                          background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800',
-                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0
-                        }}
-                      >
-                        <Printer size={13.5} color={textSecundario} /> Papeleta
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '3px', fontSize: '12px', color: textSecundario, fontWeight: '600' }}>
+                      <span>#{u.numero_empleado} • {u.departamentos?.nombre || 'General'}</span>
+                      {renderIconoNaturaleza(categoria)}
+                    </div>
                   </div>
 
-                  {/* RENGLÓN 3: FECHA Y HORARIO */}
+                  {/* RENGLÓN 3: FECHA FORMATEADA Y HORARIO LIMPIO EN 1 SOLA LÍNEA */}
                   <div
                     onClick={() => toggleExpandir(s.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px', color: c.text, fontWeight: '700', cursor: 'pointer' }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      fontSize: '12.5px', color: c.text, fontWeight: '700', cursor: 'pointer',
+                      paddingTop: '4px', borderTop: `1px solid ${c.border}`
+                    }}
                   >
-                    <span>
-                      {s.fecha_permiso} <span style={{ color: textSecundario, fontWeight: '600' }}>• {horarioCorto}</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {fechaBonita} <span style={{ color: textSecundario, fontWeight: '600' }}>• {horarioLimpio}</span>
                     </span>
-                    {renderIconoNaturaleza(categoria)}
                   </div>
 
-                  {/* CAJÓN DESPLEGABLE MÓVIL */}
+                  {/* CAJÓN DESPLEGABLE MÓVIL CON MOTIVO, FIRMAS Y BOTÓN DE PAPELETA */}
                   {expandido && (
                     <div style={{
                       paddingTop: '10px', borderTop: `1px dashed ${c.border}`,
-                      display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px'
+                      display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px'
                     }}>
                       <div style={{ background: c.bg, padding: '9px 12px', borderRadius: '8px', border: `1px solid ${c.border}`, color: c.text }}>
                         <strong style={{ display: 'block', fontSize: '11px', color: textSecundario, textTransform: 'uppercase', marginBottom: '2px' }}>
@@ -1177,12 +1214,26 @@ export default function TablaHistorial({
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                         {supervisorSubarea && <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />}
                         <ChipFirmaDetalle rolLabel="Jefe" nombre={s.firmante1?.nombre_completo} estado={s.firma_1_estado} />
                         <ChipFirmaDetalle rolLabel="Gerente" nombre={s.firmante2?.nombre_completo} estado={s.firma_2_estado} />
                         <ChipFirmaDetalle rolLabel="RH" nombre={s.firmante3?.nombre_completo} estado={s.firma_3_estado} />
                       </div>
+
+                      {esControlRH && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onSeleccionarPapeleta && onSeleccionarPapeleta([s]); }}
+                          style={{
+                            width: '100%', height: '38px', borderRadius: '8px', border: `1px solid ${c.border}`,
+                            background: c.bg, color: c.text, fontSize: '13px', fontWeight: '800',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                          }}
+                        >
+                          <Printer size={15} color={c.accent} /> Ver / Imprimir Papeleta Oficial
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
