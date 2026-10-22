@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthContext';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../permisos/aprobacionesStyles';
@@ -20,6 +20,7 @@ import {
 export default function Caseta() {
   const { usuario } = useAuth();
   const location = useLocation();
+  const inputBusquedaRef = useRef(null);
 
   const rutaActual = location.pathname;
   const vista = rutaActual.includes('/asistencia') || rutaActual.includes('/retardo')
@@ -50,11 +51,19 @@ export default function Caseta() {
   const [mapaAsistencias, setMapaAsistencias] = useState({});
   const [mapaIncidenciasHoy, setMapaIncidenciasHoy] = useState({});
 
-  const [marcasRecientes, setMarcasRecientes] = useState({});
+  // Ventana de 60s para deshacer tanto entradas como salidas
+  const [marcasEntradaRecientes, setMarcasEntradaRecientes] = useState({});
+  const [marcasSalidaRecientes, setMarcasSalidaRecientes] = useState({});
   const [ahoraMs, setAhoraMs] = useState(Date.now());
 
+  // Confirmación en 2 pasos para salidas (evita que piquen todas de corrido)
+  const [confirmandoSalidaId, setConfirmandoSalidaId] = useState(null);
+
+  // Aviso breve de último registro (bloqueo anti-metralleta)
+  const [ultimoRegistradoTexto, setUltimoRegistradoTexto] = useState('');
+
   useEffect(() => {
-    const t = setInterval(() => setAhoraMs(Date.now()), 5000);
+    const t = setInterval(() => setAhoraMs(Date.now()), 3000);
     return () => clearInterval(t);
   }, []);
 
@@ -114,19 +123,34 @@ export default function Caseta() {
     }
   };
 
-  const handleMarcarAsistencia = async (empleadoId, tipoMarca, nombreEmp = '') => {
-    if (tipoMarca === 'salida') {
-      const horaActualNum = new Date().getHours();
-      if (horaActualNum < 16) {
-        if (!window.confirm(`¿Confirmas registrar la SALIDA de fin de turno de ${nombreEmp || 'este colaborador'}?`)) return;
-      }
-    }
+  const handleMarcarAsistencia = async (empleadoId, tipoMarca, nombreColaborador = '') => {
+    if (procesandoId) return; // Evita doble clic o metralleta
     setProcesandoId(`${empleadoId}-${tipoMarca}`);
     try {
       const res = await registrarAsistenciaLista(empleadoId, tipoMarca, usuario?.id || null, false);
-      if (tipoMarca === 'entrada' && (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada')) {
-        setMarcasRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
+
+      if (tipoMarca === 'entrada') {
+        if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
+          setMarcasEntradaRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
+          setUltimoRegistradoTexto(`✓ Entrada registrada: ${nombreColaborador}`);
+        } else if (res?.resultado === 'en_espera_rh') {
+          setUltimoRegistradoTexto(`⏳ En espera de veredicto de RH: ${nombreColaborador}`);
+        }
+        // Limpiar buscador tras marcar para obligar a buscar al siguiente colaborador que cruza la puerta
+        setBusquedaTexto('');
+        setTimeout(() => {
+          setUltimoRegistradoTexto('');
+          if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
+        }, 1600);
       }
+
+      if (tipoMarca === 'salida') {
+        setMarcasSalidaRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
+        setConfirmandoSalidaId(null);
+        setUltimoRegistradoTexto(`✓ Salida registrada: ${nombreColaborador}`);
+        setTimeout(() => setUltimoRegistradoTexto(''), 1600);
+      }
+
       await cargarDatos();
     } catch (err) {
       alert('Error al procesar registro: ' + err.message);
@@ -139,14 +163,31 @@ export default function Caseta() {
     setProcesandoId(`${empleadoId}-deshacer`);
     try {
       await deshacerEntradaReciente(empleadoId);
-      setMarcasRecientes(prev => {
+      setMarcasEntradaRecientes(prev => {
         const copia = { ...prev };
         delete copia[empleadoId];
         return copia;
       });
       await cargarDatos();
     } catch (err) {
-      alert('No se pudo deshacer el registro: ' + err.message);
+      alert('No se pudo deshacer la entrada: ' + err.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const handleDeshacerSalida = async (empleadoId) => {
+    setProcesandoId(`${empleadoId}-deshacer-salida`);
+    try {
+      await deshacerSalidaReciente(empleadoId);
+      setMarcasSalidaRecientes(prev => {
+        const copia = { ...prev };
+        delete copia[empleadoId];
+        return copia;
+      });
+      await cargarDatos();
+    } catch (err) {
+      alert('No se pudo deshacer la salida: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -590,21 +631,33 @@ export default function Caseta() {
   }
 
   // ====================================================================
-  // PASE DE LISTA AUTODEPURABLE (/caseta/asistencia)
+  // PASE DE LISTA CON BLINDAJE ANTI-METRALLETA (/caseta/asistencia)
   // ====================================================================
   const termino = (busquedaTexto || '').toLowerCase().trim();
-  const personalFiltrado = empleadosSede.filter(emp => {
-    if (!termino) return true;
-    return (
-      (emp.nombre_completo || '').toLowerCase().includes(termino) ||
-      String(emp.numero_empleado || '').toLowerCase().includes(termino)
-    );
-  });
 
-  const listaEnPlanta = personalFiltrado.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
+  // Todos los que aún no tienen entrada vs los que ya están en planta
+  const todosSinEntrada = empleadosSede.filter(emp => !mapaAsistencias[emp.id]?.hora_entrada);
+  const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
 
-  const listaPorLlegar = personalFiltrado
-    .filter(emp => !mapaAsistencias[emp.id]?.hora_entrada)
+  // En "Por Llegar":
+  // Siempre mostrar arriba los que están activamente en puerta esperando veredicto de RH o con orden de retiro.
+  // El resto del personal SOLO aparece cuando el guardia escribe al menos 1 dígito de nómina o 2 letras del nombre.
+  const tieneFiltroActivo = termino.length >= 2 || (termino.length >= 1 && /^\d+$/.test(termino));
+
+  const listaPorLlegarVisible = todosSinEntrada
+    .filter((emp) => {
+      const tipoInc = mapaIncidenciasHoy[emp.id]?.tipo || 'normal';
+      const esActivoEnPuerta = tipoInc === 'retardo_en_espera' || tipoInc === 'retardo_regresa' || tipoInc === 'retardo_autorizado';
+
+      if (!tieneFiltroActivo) {
+        return esActivoEnPuerta;
+      }
+
+      return (
+        (emp.nombre_completo || '').toLowerCase().includes(termino) ||
+        String(emp.numero_empleado || '').toLowerCase().includes(termino)
+      );
+    })
     .sort((a, b) => {
       const incA = mapaIncidenciasHoy[a.id]?.tipo || 'normal';
       const incB = mapaIncidenciasHoy[b.id]?.tipo || 'normal';
@@ -616,6 +669,23 @@ export default function Caseta() {
       return peso(incA) - peso(incB);
     });
 
+  // En "En Planta / Salidas":
+  // Mostrar siempre los que acaban de ser marcados (últimos 60s para poder Deshacer) o los que coincidan con la búsqueda.
+  const listaEnPlantaVisible = todosEnPlanta.filter((emp) => {
+    const recEntrada = marcasEntradaRecientes[emp.id] && (ahoraMs - marcasEntradaRecientes[emp.id] < 60000);
+    const recSalida = marcasSalidaRecientes[emp.id] && (ahoraMs - marcasSalidaRecientes[emp.id] < 60000);
+    const salidaPendienteReingreso = mapaIncidenciasHoy[emp.id]?.tipo === 'salida_fuera';
+
+    if (!tieneFiltroActivo) {
+      return Boolean(recEntrada || recSalida || salidaPendienteReingreso);
+    }
+
+    return (
+      (emp.nombre_completo || '').toLowerCase().includes(termino) ||
+      String(emp.numero_empleado || '').toLowerCase().includes(termino)
+    );
+  });
+
   return (
     <div className="caseta-wrap">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
@@ -624,78 +694,113 @@ export default function Caseta() {
       <div className="tabs-aprobacion-bar caseta-tabs-bar-2">
         <button
           className={`tab-btn ${subTabAsistencia === 'por_llegar' ? 'active' : ''}`}
-          onClick={() => setSubTabAsistencia('por_llegar')}
+          onClick={() => {
+            setSubTabAsistencia('por_llegar');
+            setConfirmandoSalidaId(null);
+          }}
         >
           <Users size={15} />
-          <span>Por Llegar</span>
+          <span>Entrada</span>
           <span className="tab-badge" style={{ background: c.accent, color: '#fff', fontSize: '11px', padding: '1px 6px' }}>
-            {listaPorLlegar.length}
+            {todosSinEntrada.length}
           </span>
         </button>
 
         <button
           className={`tab-btn ${subTabAsistencia === 'en_planta' ? 'active' : ''}`}
-          onClick={() => setSubTabAsistencia('en_planta')}
+          onClick={() => {
+            setSubTabAsistencia('en_planta');
+            setConfirmandoSalidaId(null);
+          }}
         >
           <UserCheck size={15} />
           <span>En Planta / Salidas</span>
           <span className="tab-badge" style={{ background: '#0284c7', color: '#fff', fontSize: '11px', padding: '1px 6px' }}>
-            {listaEnPlanta.length}
+            {todosEnPlanta.length}
           </span>
         </button>
       </div>
 
+      {/* BUSCADOR OBLIGATORIO POR NÓMINA O INICIALES */}
       <div style={{
-        background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-        padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px'
+        background: c.surfaceCard, border: `1.5px solid ${tieneFiltroActivo ? c.accent : c.border}`, borderRadius: '12px',
+        padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px'
       }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o # de nómina..."
-            value={busquedaTexto}
-            onChange={(e) => setBusquedaTexto(e.target.value)}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: tieneFiltroActivo ? c.accent : c.textMuted }} />
+            <input
+              ref={inputBusquedaRef}
+              type="text"
+              placeholder="Escribe # de nómina o primeras 2 letras del nombre..."
+              value={busquedaTexto}
+              onChange={(e) => {
+                setBusquedaTexto(e.target.value);
+                setConfirmandoSalidaId(null);
+              }}
+              style={{
+                width: '100%', height: '38px', padding: '0 32px 0 36px', borderRadius: '9px',
+                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                fontSize: '13.5px', fontWeight: '700', boxSizing: 'border-box', outline: 'none'
+              }}
+            />
+            {busquedaTexto && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBusquedaTexto('');
+                  setConfirmandoSalidaId(null);
+                  if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
+                }}
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={cargarDatos}
+            title="Actualizar"
             style={{
-              width: '100%', height: '34px', padding: '0 28px 0 32px', borderRadius: '8px',
-              border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-              fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
+              width: '38px', height: '38px', borderRadius: '9px', border: `1px solid ${c.border}`,
+              background: c.bg, color: c.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
             }}
-          />
-          {busquedaTexto && (
-            <button
-              type="button"
-              onClick={() => setBusquedaTexto('')}
-              style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
-            >
-              <X size={14} />
-            </button>
-          )}
+          >
+            <RefreshCw size={15} />
+          </button>
         </div>
 
-        <button
-          onClick={cargarDatos}
-          title="Actualizar lista"
-          style={{
-            width: '34px', height: '34px', borderRadius: '8px', border: `1px solid ${c.border}`,
-            background: c.bg, color: c.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-          }}
-        >
-          <RefreshCw size={14} />
-        </button>
+        {ultimoRegistradoTexto && (
+          <div style={{
+            background: c.accentSoft, border: `1px solid ${c.accent}`, color: c.accent,
+            borderRadius: '8px', padding: '6px 10px', fontSize: '12px', fontWeight: '800',
+            textAlign: 'center'
+          }}>
+            {ultimoRegistradoTexto}
+          </div>
+        )}
       </div>
 
+      {/* PESTAÑA 1: ENTRADA */}
       {subTabAsistencia === 'por_llegar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', width: '100%' }}>
-          {listaPorLlegar.length === 0 ? (
+          {!tieneFiltroActivo && listaPorLlegarVisible.length === 0 ? (
+            <div style={{
+              background: c.surfaceCard, border: `1px dashed ${c.border}`, borderRadius: '12px',
+              padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13px', fontWeight: '600'
+            }}>
+              Ingresa el <strong style={{ color: c.text }}># de nómina</strong> o las <strong style={{ color: c.text }}>primeras 2 letras</strong> del colaborador que está cruzando la puerta.
+            </div>
+          ) : listaPorLlegarVisible.length === 0 ? (
             <div style={{
               background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-              padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
+              padding: '28px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13px', fontWeight: '600'
             }}>
-              Todo el personal esperado ya fue registrado.
+              No se encontró ningún colaborador pendiente de entrada con "{busquedaTexto}".
             </div>
           ) : (
-            listaPorLlegar.map((emp) => {
+            listaPorLlegarVisible.map((emp) => {
               const inc = mapaIncidenciasHoy[emp.id];
               const tipoInc = inc?.tipo || 'normal';
 
@@ -710,22 +815,22 @@ export default function Caseta() {
                       tipoInc === 'retardo_regresa' ? '#ef4444' : c.border
                     }`,
                     borderRadius: '11px',
-                    padding: '9px 12px',
+                    padding: '10px 13px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '10px',
-                    opacity: tipoInc === 'ausencia_autorizada' ? 0.78 : 1
+                    opacity: tipoInc === 'ausencia_autorizada' ? 0.8 : 1
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 200px', minWidth: 0 }}>
-                    <AvatarColaborador u={emp} size={36} />
+                    <AvatarColaborador u={emp} size={38} />
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {emp.nombre_completo}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
-                        <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>#{emp.numero_empleado}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
+                        <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
                         {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
                         {inc && (
                           <span style={{
@@ -759,9 +864,9 @@ export default function Caseta() {
                       ) : (
                         <button
                           onClick={() => handleSellarPase(inc.paseId, 'retiro')}
-                          disabled={procesandoId === inc.paseId}
+                          disabled={Boolean(procesandoId)}
                           style={{
-                            height: '34px', padding: '0 12px', borderRadius: '8px', border: 'none',
+                            height: '36px', padding: '0 12px', borderRadius: '8px', border: 'none',
                             background: '#ef4444', color: '#fff', fontSize: '11.5px', fontWeight: '800',
                             cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                           }}
@@ -771,13 +876,14 @@ export default function Caseta() {
                       )
                     ) : (
                       <button
-                        onClick={() => handleMarcarAsistencia(emp.id, 'entrada')}
-                        disabled={procesandoId === `${emp.id}-entrada`}
-                        title="Registrar en puerta"
+                        onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
+                        disabled={Boolean(procesandoId)}
+                        title="Registrar entrada"
                         style={{
-                          minWidth: '42px', height: '36px', padding: '0 14px', borderRadius: '9px', border: 'none',
+                          minWidth: '46px', height: '38px', padding: '0 16px', borderRadius: '9px', border: 'none',
                           background: c.accent, color: '#fff', fontSize: '13px',
-                          fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                         }}
                       >
                         <Check size={18} strokeWidth={3} />
@@ -791,31 +897,45 @@ export default function Caseta() {
         </div>
       )}
 
+      {/* PESTAÑA 2: EN PLANTA / SALIDAS (CON CONFIRMACIÓN EN 2 PASOS Y BOTÓN DESHACER) */}
       {subTabAsistencia === 'en_planta' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', width: '100%' }}>
-          {listaEnPlanta.length === 0 ? (
+          {!tieneFiltroActivo && listaEnPlantaVisible.length === 0 ? (
+            <div style={{
+              background: c.surfaceCard, border: `1px dashed ${c.border}`, borderRadius: '12px',
+              padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13px', fontWeight: '600'
+            }}>
+              Escribe el <strong style={{ color: c.text }}># de nómina</strong> o <strong style={{ color: c.text }}>primeras 2 letras</strong> del colaborador que se retira para marcar su salida.
+            </div>
+          ) : listaEnPlantaVisible.length === 0 ? (
             <div style={{
               background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-              padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
+              padding: '28px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13px', fontWeight: '600'
             }}>
-              Aún no hay personal registrado en planta hoy.
+              No se encontró personal en planta con "{busquedaTexto}".
             </div>
           ) : (
-            listaEnPlanta.map((emp) => {
+            listaEnPlantaVisible.map((emp) => {
               const reg = mapaAsistencias[emp.id];
               const inc = mapaIncidenciasHoy[emp.id];
               const tieneSalida = Boolean(reg?.hora_salida);
-              const tsMarca = marcasRecientes[emp.id];
-              const puedeDeshacer = Boolean(tsMarca && !tieneSalida && (ahoraMs - tsMarca < 60000));
+
+              const tsEntrada = marcasEntradaRecientes[emp.id];
+              const puedeDeshacerEntrada = Boolean(tsEntrada && !tieneSalida && (ahoraMs - tsEntrada < 60000));
+
+              const tsSalida = marcasSalidaRecientes[emp.id];
+              const puedeDeshacerSalida = Boolean(tsSalida && tieneSalida && (ahoraMs - tsSalida < 60000));
+
+              const pidiendoConfirmarSalida = confirmandoSalidaId === emp.id;
 
               return (
                 <div
                   key={emp.id}
                   style={{
                     background: c.surfaceCard,
-                    border: `1px solid ${c.border}`,
+                    border: `1.5px solid ${pidiendoConfirmarSalida ? '#0284c7' : c.border}`,
                     borderRadius: '11px',
-                    padding: '9px 12px',
+                    padding: '10px 13px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -824,13 +944,13 @@ export default function Caseta() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 200px', minWidth: 0 }}>
-                    <AvatarColaborador u={emp} size={36} />
+                    <AvatarColaborador u={emp} size={38} />
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {emp.nombre_completo}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
-                        <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>#{emp.numero_empleado}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
+                        <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
                         {inc && (
                           <span style={{
                             fontSize: '10px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px',
@@ -844,28 +964,28 @@ export default function Caseta() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
-                    {puedeDeshacer && (
+                    {puedeDeshacerEntrada && (
                       <button
                         onClick={() => handleDeshacerEntrada(emp.id)}
-                        disabled={procesandoId === `${emp.id}-deshacer`}
-                        title="Deshacer si te equivocaste de renglón (disponible 60s)"
+                        disabled={Boolean(procesandoId)}
+                        title="Deshacer entrada recién marcada (60s)"
                         style={{
                           height: '34px', padding: '0 10px', borderRadius: '8px',
-                          border: '1px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.1)',
+                          border: '1px solid rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.12)',
                           color: '#d97706', fontSize: '11px', fontWeight: '800', cursor: 'pointer',
                           display: 'inline-flex', alignItems: 'center', gap: '4px'
                         }}
                       >
-                        <Undo2 size={13} /> Deshacer
+                        <Undo2 size={13} /> Deshacer Entrada
                       </button>
                     )}
 
                     {inc?.tipo === 'salida_fuera' ? (
                       <button
                         onClick={() => handleSellarPase(inc.paseId, 'reingreso')}
-                        disabled={procesandoId === inc.paseId}
+                        disabled={Boolean(procesandoId)}
                         style={{
-                          height: '34px', padding: '0 12px', borderRadius: '8px', border: 'none',
+                          height: '36px', padding: '0 12px', borderRadius: '8px', border: 'none',
                           background: '#2563eb', color: '#fff', fontSize: '11.5px',
                           fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                         }}
@@ -873,19 +993,60 @@ export default function Caseta() {
                         <Check size={15} strokeWidth={3} /> Reingreso
                       </button>
                     ) : tieneSalida ? (
-                      <span style={{
-                        fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
-                        background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
-                        padding: '5px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                      }}>
-                        <CheckCircle2 size={12.5} /> Salida registrada
-                      </span>
+                      <>
+                        <span style={{
+                          fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
+                          background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
+                          padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                        }}>
+                          <CheckCircle2 size={13} /> Salida registrada
+                        </span>
+                        {puedeDeshacerSalida && (
+                          <button
+                            onClick={() => handleDeshacerSalida(emp.id)}
+                            disabled={Boolean(procesandoId)}
+                            title="Deshacer salida recién marcada (60s)"
+                            style={{
+                              height: '34px', padding: '0 10px', borderRadius: '8px',
+                              border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)',
+                              color: '#ef4444', fontSize: '11px', fontWeight: '800', cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: '4px'
+                            }}
+                          >
+                            <Undo2 size={13} /> Deshacer
+                          </button>
+                        )}
+                      </>
+                    ) : pidiendoConfirmarSalida ? (
+                      <>
+                        <button
+                          onClick={() => handleMarcarAsistencia(emp.id, 'salida', emp.nombre_completo)}
+                          disabled={Boolean(procesandoId)}
+                          style={{
+                            height: '36px', padding: '0 12px', borderRadius: '8px', border: 'none',
+                            background: '#0284c7', color: '#fff', fontSize: '11.5px',
+                            fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                          }}
+                        >
+                          <Check size={14} strokeWidth={3} /> Confirmar Salida
+                        </button>
+                        <button
+                          onClick={() => setConfirmandoSalidaId(null)}
+                          style={{
+                            height: '36px', padding: '0 8px', borderRadius: '8px',
+                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center'
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
                     ) : (
                       <button
-                        onClick={() => handleMarcarAsistencia(emp.id, 'salida', emp.nombre_completo)}
-                        disabled={procesandoId === `${emp.id}-salida`}
+                        onClick={() => setConfirmandoSalidaId(emp.id)}
+                        disabled={Boolean(procesandoId)}
                         style={{
-                          height: '34px', padding: '0 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
+                          height: '36px', padding: '0 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
                           background: c.bg, color: c.text, fontSize: '11.5px',
                           fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                         }}
