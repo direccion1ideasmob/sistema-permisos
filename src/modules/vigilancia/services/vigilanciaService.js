@@ -344,186 +344,227 @@ const registrarAsistenciaListaConHora = async (usuarioId, tipoMarca, horaEspecif
 };
 
 // 3. REGISTRAR ENTRADA O SALIDA EN EL PASE DE LISTA DIARIO
-export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada', guardiaId = null) => {
-  const hoy = obtenerFechaLocalHoy();
-  const horaActual = new Date().toTimeString().slice(0, 5);
-
-  const { data: existente } = await supabase
-    .from('asistencias_caseta')
-    .select('id, hora_entrada, hora_salida')
-    .eq('usuario_id', usuarioId)
-    .eq('fecha', hoy)
-    .maybeSingle();
-
-  if (!existente) {
-    const payload = {
-      usuario_id: usuarioId,
-      fecha: hoy,
-      hora_entrada: tipoMarca === 'entrada' ? horaActual : null,
-      hora_salida: tipoMarca === 'salida' ? horaActual : null,
-      registrado_por: guardiaId
-    };
-    const { error } = await supabase.from('asistencias_caseta').insert([payload]);
-    if (error) throw error;
-  } else {
-    const updates = tipoMarca === 'salida'
-      ? { hora_salida: horaActual }
-      : { hora_entrada: existente.hora_entrada || horaActual };
-    const { error } = await supabase
-      .from('asistencias_caseta')
-      .update(updates)
-      .eq('id', existente.id);
-    if (error) throw error;
-  }
-};
-
-// 4. APOYO EN CASETA: CONGELA HORA DE LLEGADA EN PUERTA Y LO DEJA RETENIDO EN ESPERA DE AUTORIZACIÓN
-export const registrarRetardoEnPuerta = async (usuarioId) => {
+export const registrarRetardoEnPuerta = async (empleadoId) => {
+  const hoyStr = obtenerFechaLocalHoy();
   const ahora = new Date();
-  const fechaHoy = obtenerFechaLocalHoy();
-  const horaActual = ahora.toTimeString().slice(0, 5);
+  const horaCongelada = ahora.toTimeString().slice(0, 5);
 
-  // Evitar duplicar un retardo si el trabajador ya tiene uno activo hoy en puerta
-  const { data: retardoExistente } = await supabase
+  const { data: existentes } = await supabase
     .from('permisos')
-    .select('id, folio')
-    .eq('usuario_id', usuarioId)
-    .eq('fecha_permiso', fechaHoy)
+    .select('id, estado_general, observaciones')
+    .eq('usuario_id', empleadoId)
     .eq('tipo_permiso', 'retardo')
-    .in('estado_general', ['en_firmas', 'autorizado', 'aprobado'])
-    .limit(1);
+    .gte('fecha_inicio', `${hoyStr}T00:00:00`)
+    .lte('fecha_inicio', `${hoyStr}T23:59:59`)
+    .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
 
-  if (retardoExistente && retardoExistente.length > 0) {
-    throw new Error(`Este colaborador ya tiene un pase de retardo activo hoy (${retardoExistente[0].folio}). Revísalo en la pestaña de Pases de Puerta.`);
-  }
-
-  const { data: user, error: errU } = await supabase
-    .from('usuarios')
-    .select('id, nombre_completo, foto_url, rol, area, reporta_a_id, departamento_id, tipo_personal')
-    .eq('id', usuarioId)
-    .single();
-
-  if (errU || !user) throw new Error("No se encontró al colaborador seleccionado.");
-
-  const [{ data: depto }, { data: todosEmpDepto }] = await Promise.all([
-    user.departamento_id
-      ? supabase.from('departamentos').select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id').eq('id', user.departamento_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    user.departamento_id
-      ? supabase.from('usuarios').select('id, area, rol, activo').eq('departamento_id', user.departamento_id).eq('activo', true)
-      : Promise.resolve({ data: [] })
-  ]);
-
-  const areaSolicitante = (user.area || '').trim().toUpperCase();
-  const listaDepto = todosEmpDepto || [];
-  const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== user.id);
-
-  let firma1Id = null;
-
-  if (user.reporta_a_id) {
-    const { data: supDirecto } = await supabase
-      .from('usuarios')
-      .select('id, rol, activo')
-      .eq('id', user.reporta_a_id)
-      .maybeSingle();
-
-    if (supDirecto && supDirecto.activo && ['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
-      firma1Id = supDirecto.id;
+  if (existentes && existentes.length > 0) {
+    const existente = existentes[0];
+    if (existente.estado_general === 'en_firmas') {
+      await registrarCheckCaseta(existente.id, 'congelar_llegada');
+      return { modo: 'en_espera_rh', id: existente.id };
+    }
+    if (existente.estado_general === 'autorizado' || existente.estado_general === 'aprobado') {
+      const seRegresa = String(existente.observaciones || '').toLowerCase().includes('se regresa');
+      if (seRegresa) {
+        return { modo: 'se_regresa', id: existente.id };
+      }
+      await registrarCheckCaseta(existente.id, 'entrada');
+      return { modo: 'entrada_registrada', id: existente.id };
     }
   }
 
-  if (!firma1Id) {
-    const mandoMismaSubarea =
-      mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
-      mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
+  const { data: emp, error: errEmp } = await supabase
+    .from('usuarios')
+    .select('id, nombre_completo, rol, sede_id, departamento_id, area_id, subarea_id, sin_celular')
+    .eq('id', empleadoId)
+    .single();
 
-    if (mandoMismaSubarea) {
-      firma1Id = mandoMismaSubarea.id;
-    } else if (depto?.jefe_id && depto.jefe_id !== user.id) {
-      const { data: jefeDeptoData } = await supabase
-        .from('usuarios')
-        .select('id, rol, activo')
-        .eq('id', depto.jefe_id)
-        .maybeSingle();
-      if (jefeDeptoData && jefeDeptoData.activo && ['encargado', 'jefe_area', 'rh_nominas'].includes(jefeDeptoData.rol)) {
-        firma1Id = jefeDeptoData.id;
+  if (errEmp || !emp) throw new Error('No se encontró la información del colaborador.');
+
+  const { data: candidatos } = await supabase
+    .from('usuarios')
+    .select('id, rol, sede_id, departamento_id, area_id, subarea_id')
+    .eq('activo', true);
+
+  const todos = candidatos || [];
+  let firma1 = null;
+  let firma2 = null;
+  let firmaRH = null;
+
+  if (emp.subarea_id) {
+    const sup = todos.find(u => u.rol === 'supervisor_subarea' && String(u.subarea_id) === String(emp.subarea_id));
+    if (sup && sup.id !== emp.id) firma1 = sup.id;
+  }
+  if (!firma1 && emp.area_id) {
+    const jefe = todos.find(u => u.rol === 'jefe_area' && String(u.area_id) === String(emp.area_id));
+    if (jefe && jefe.id !== emp.id) firma1 = jefe.id;
+  }
+  if (emp.departamento_id) {
+    const ger = todos.find(u => u.rol === 'gerente_division' && String(u.departamento_id) === String(emp.departamento_id));
+    if (ger && ger.id !== emp.id) {
+      if (!firma1) firma1 = ger.id;
+      else if (ger.id !== firma1) firma2 = ger.id;
+    }
+  }
+
+  const rhSede = todos.find(u => (u.rol === 'gerente_rh' || u.rol === 'rh_nominas') && String(u.sede_id) === String(emp.sede_id));
+  const rhGlobal = todos.find(u => u.rol === 'gerente_rh' || u.rol === 'rh_nominas');
+  firmaRH = rhSede?.id || rhGlobal?.id || null;
+
+  if (!firma1 && firmaRH) {
+    firma1 = firmaRH;
+  }
+
+  const folio = `RET-${Math.floor(100000 + Math.random() * 900000)}`;
+  const observaciones = `🕒 Llegada en puerta: ${horaCongelada} hrs | [LLEGADA EN PUERTA: ${horaCongelada} hrs] | Registro automático en caseta`;
+
+  const payload = {
+    folio,
+    usuario_id: emp.id,
+    tipo_permiso: 'retardo',
+    naturaleza: 'Solicitado en Caseta',
+    motivo: 'Llegada posterior al cierre de entrada. En espera de veredicto de RH / Jefatura.',
+    observaciones,
+    fecha_inicio: `${hoyStr}T${horaCongelada}:00`,
+    fecha_fin: `${hoyStr}T${horaCongelada}:00`,
+    dias_solicitados: 0,
+    con_goce: false,
+    estado_general: 'en_firmas',
+    firma_1_id: firma1,
+    firma_1_estado: firma1 ? 'pendiente' : 'no_requerida',
+    firma_2_id: firma2,
+    firma_2_estado: firma2 ? 'pendiente' : 'no_requerida',
+    firma_rh_id: firmaRH,
+    firma_rh_estado: 'pendiente'
+  };
+
+  const { data: creado, error: errInsert } = await supabase
+    .from('permisos')
+    .insert([payload])
+    .select()
+    .single();
+
+  if (errInsert) throw errInsert;
+
+  const destinatariosSet = new Set();
+  if (firma1) destinatariosSet.add(firma1);
+  if (firma2) destinatariosSet.add(firma2);
+  if (firmaRH) destinatariosSet.add(firmaRH);
+  todos
+    .filter(u => (u.rol === 'gerente_rh' || u.rol === 'rh_nominas') && (!emp.sede_id || String(u.sede_id) === String(emp.sede_id)))
+    .forEach(u => destinatariosSet.add(u.id));
+
+  for (const destId of destinatariosSet) {
+    await enviarNotificacion({
+      usuario_id: destId,
+      titulo: '⏳ En puerta esperando veredicto',
+      mensaje: `${emp.nombre_completo} se encuentra en caseta (${horaCongelada} hrs). Autoriza su entrada o indica si se regresa.`,
+      tipo: 'solicitud',
+      permiso_id: creado.id
+    });
+  }
+
+  return { modo: 'en_espera_rh', permiso: creado };
+};
+
+export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada', guardiaId = null) => {
+  const hoyStr = obtenerFechaLocalHoy();
+  const ahora = new Date();
+  const horaActual = ahora.toTimeString().slice(0, 5);
+  const minutosDelDia = ahora.getHours() * 60 + ahora.getMinutes();
+
+  // Corte de entrada libre: 07:15 hrs (7 * 60 + 15 = 435 minutos)
+  const LIMITE_TOLERANCIA_MINUTOS = 7 * 60 + 15;
+
+  if (tipoMarca === 'entrada') {
+    const { data: pasesHoy } = await supabase
+      .from('permisos')
+      .select('id, tipo_permiso, estado_general, observaciones')
+      .eq('usuario_id', usuarioId)
+      .gte('fecha_inicio', `${hoyStr}T00:00:00`)
+      .lte('fecha_inicio', `${hoyStr}T23:59:59`)
+      .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
+
+    const retardoHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+
+    if (retardoHoy) {
+      const obsLow = String(retardoHoy.observaciones || '').toLowerCase();
+      if (obsLow.includes('se regresa')) {
+        return { resultado: 'se_regresa', id: retardoHoy.id };
+      }
+      if (retardoHoy.estado_general === 'autorizado' || retardoHoy.estado_general === 'aprobado') {
+        await registrarCheckCaseta(retardoHoy.id, 'entrada');
+        return { resultado: 'entrada_registrada' };
+      }
+      if (retardoHoy.estado_general === 'en_firmas' && minutosDelDia > LIMITE_TOLERANCIA_MINUTOS) {
+        await registrarCheckCaseta(retardoHoy.id, 'congelar_llegada');
+        return { resultado: 'en_espera_rh', id: retardoHoy.id };
+      }
+    }
+
+    if (minutosDelDia > LIMITE_TOLERANCIA_MINUTOS) {
+      const resp = await registrarRetardoEnPuerta(usuarioId);
+      return { resultado: resp.modo || 'en_espera_rh' };
+    }
+  }
+
+  if (tipoMarca === 'salida') {
+    const { data: pasesSalida } = await supabase
+      .from('permisos')
+      .select('id, observaciones')
+      .eq('usuario_id', usuarioId)
+      .eq('tipo_permiso', 'salida')
+      .in('estado_general', ['autorizado', 'aprobado'])
+      .gte('fecha_inicio', `${hoyStr}T00:00:00`)
+      .lte('fecha_inicio', `${hoyStr}T23:59:59`);
+
+    if (pasesSalida && pasesSalida.length > 0) {
+      const paseDef = pasesSalida.find(ps => !String(ps.observaciones || '').toLowerCase().includes('regresa:'));
+      if (paseDef && !/\[SALIDA CASETA:/i.test(paseDef.observaciones || '')) {
+        await registrarCheckCaseta(paseDef.id, 'salida');
+        return { resultado: 'salida_registrada' };
       }
     }
   }
 
-  const nomDeptoUpper = (depto?.nombre || '').toUpperCase();
-  const clasifLower = (depto?.clasificacion || user.tipo_personal || 'produccion').toLowerCase();
-  const esDeptoRH = clasifLower.includes('rh') || nomDeptoUpper.includes('RECURSOS HUMANOS') || nomDeptoUpper.includes('VIGILANCIA') || nomDeptoUpper === 'RH';
-  const rolGerenteFallback = clasifLower.includes('admin') ? 'gerente_admin' : (clasifLower.includes('rh') ? 'gerente_rh' : 'gerente_produccion');
+  const { data: existente } = await supabase
+    .from('asistencias_caseta')
+    .select('*')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha', hoyStr)
+    .maybeSingle();
 
-  const [{ data: gerenteDeptoData }, { data: gerenteFallbackData }, { data: rhUsersData }] = await Promise.all([
-    depto?.gerente_id ? supabase.from('usuarios').select('id, rol').eq('id', depto.gerente_id).maybeSingle() : Promise.resolve({ data: null }),
-    supabase.from('usuarios').select('id, rol').eq('rol', rolGerenteFallback).eq('activo', true).limit(1).maybeSingle(),
-    supabase.from('usuarios').select('id, rol').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true)
-  ]);
+  if (existente) {
+    const cambios = {};
+    if (tipoMarca === 'entrada' && !existente.hora_entrada) cambios.hora_entrada = horaActual;
+    if (tipoMarca === 'salida') cambios.hora_salida = horaActual;
 
-  const listaRH = rhUsersData || [];
-  const gerenteRH = listaRH.find(u => u.rol === 'gerente_rh') || listaRH[0];
-  const rhId = gerenteRH?.id || depto?.rh_id || null;
+    const { data, error } = await supabase
+      .from('asistencias_caseta')
+      .update(cambios)
+      .eq('id', existente.id)
+      .select()
+      .single();
 
-  let gerenteId = gerenteDeptoData?.id || (esDeptoRH ? rhId : gerenteFallbackData?.id) || null;
-  const rolDelGerenteDepto = gerenteDeptoData?.rol || (esDeptoRH ? 'gerente_rh' : gerenteFallbackData?.rol);
+    if (error) throw error;
+    return { resultado: 'ok', data };
+  } else {
+    const nuevo = {
+      usuario_id: usuarioId,
+      fecha: hoyStr,
+      hora_entrada: tipoMarca === 'entrada' ? horaActual : null,
+      hora_salida: tipoMarca === 'salida' ? horaActual : null,
+      registrado_por: guardiaId
+    };
 
-  let f1Estado = firma1Id ? (firma1Id === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
-  let f2Estado = gerenteId ? (gerenteId === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
-  let f3Estado = rhId ? (rhId === user.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+    const { data, error } = await supabase
+      .from('asistencias_caseta')
+      .insert([nuevo])
+      .select()
+      .single();
 
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteId === rhId) {
-    f2Estado = 'omitido';
-  }
-
-  if (['gerente_produccion', 'gerente_admin', 'gerente_rh', 'superadmin'].includes(user.rol)) {
-    f1Estado = 'auto_aprobado';
-    f2Estado = 'auto_aprobado';
-  }
-
-  const folioTemporal = `CAS-${Math.floor(100000 + Math.random() * 900000)}`;
-
-  const { error: errInsert } = await supabase
-    .from('permisos')
-    .insert([{
-      folio: folioTemporal,
-      usuario_id: user.id,
-      fecha_elaboracion: fechaHoy,
-      fecha_permiso: fechaHoy,
-      tipo_permiso: 'retardo',
-      pago: 'Pendiente de dictamen',
-      asunto_motivo: `[APOYO CASETA] Pase de retardo tramitado con apoyo de caseta de vigilancia.`,
-      total_horas: 1,
-      observaciones: `🕒 Llegada en puerta: ${horaActual} hrs | [LLEGADA EN PUERTA: ${horaActual} hrs]`,
-      firma_empleado: true,
-      firma_1_id: firma1Id,
-      firma_1_estado: f1Estado,
-      firma_2_id: gerenteId,
-      firma_2_estado: f2Estado,
-      firma_3_id: rhId,
-      firma_3_estado: f3Estado,
-      requiere_caseta: true,
-      estado_general: 'en_firmas'
-    }]);
-
-  if (errInsert) throw errInsert;
-
-  let destinatarios = [];
-  if (f1Estado === 'pendiente' && firma1Id) {
-    destinatarios = [firma1Id];
-  } else if (f2Estado === 'pendiente' && gerenteId) {
-    destinatarios = [gerenteId];
-  } else if (f3Estado === 'pendiente') {
-    destinatarios = listaRH.length > 0 ? listaRH.map(u => u.id) : [rhId];
-  }
-
-  if (destinatarios.length > 0) {
-    await enviarNotificacionPushUsuarios([...new Set(destinatarios.filter(Boolean))], {
-      titulo: '⏳ TRABAJADOR EN CASETA (RETARDO)',
-      mensaje: `👤 ${user.nombre_completo}\n🕒 Llegada congelada en puerta: ${horaActual} hrs\nEsperando tu instrucción para dar acceso o regresar a casa.`,
-      fotoUrl: user.foto_url,
-      urlDestino: '/aprobaciones'
-    });
+    if (error) throw error;
+    return { resultado: 'ok', data };
   }
 };
