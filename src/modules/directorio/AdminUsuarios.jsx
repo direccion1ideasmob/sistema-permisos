@@ -164,9 +164,13 @@ export default function AdminUsuarios() {
             padding: 0 8px;
           }
           .btn-nuevo-main {
+            width: 38px;
             height: 38px;
-            padding: 0 12px;
-            font-size: 12px;
+            padding: 0;
+            border-radius: 10px;
+          }
+          .btn-nuevo-main span {
+            display: none;
           }
         }
       `}</style>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Lock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw } from 'lucide-react';
+import { Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { obtenerTemaGrid, generarEstilosCSS } from './utils/gridStyles';
 import { obtenerClaveOrdenApellido, desglosarNombreExistente } from './utils/directorioHelpers';
 import { tramitarBajaColaborador, reactivarColaborador } from './services/directorioService';
@@ -22,6 +22,7 @@ export default function DirectorioGrid({
   }, []);
 
   const [busqueda, setBusqueda] = useState('');
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [filtroSede, setFiltroSede] = useState('ALL');
   const [filtroNomina, setFiltroNomina] = useState('ALL');
   const [filtroDepto, setFiltroDepto] = useState('ALL');
@@ -185,83 +186,178 @@ export default function DirectorioGrid({
     <div className="grid-wrapper">
       <style>{generarEstilosCSS(c, modoOscuro)}</style>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <div style={{ fontSize: '13px', fontWeight: '500', color: c.textMuted }}>
-          <strong style={{ color: c.text, fontWeight: '700' }}>{usuariosFiltrados.length}</strong> de {usuarios.length} registros
+      {/* BARRA SUPERIOR MINIMALISTA: CONTADOR A LA IZQ <---> BOTONES DISCRETOS A LA DER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
+        <div style={{ fontSize: '13px', fontWeight: '600', color: c.textMuted }}>
+          <strong style={{ color: c.text, fontWeight: '800' }}>{usuariosFiltrados.length}</strong> de {usuarios.length} colaboradores
         </div>
 
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* BOTÓN DISCRETO DE BÚSQUEDA Y FILTROS */}
+          <button
+            type="button"
+            onClick={() => setMostrarFiltros(prev => !prev)}
+            title="Buscar y filtrar colaboradores"
+            style={{
+              height: '32px',
+              padding: esMobile ? '0 9px' : '0 11px',
+              borderRadius: '8px',
+              border: `1px solid ${(mostrarFiltros || hayFiltros) ? c.accent : c.border}`,
+              background: (mostrarFiltros || hayFiltros) ? c.accentSoft : c.surfaceCard,
+              color: (mostrarFiltros || hayFiltros) ? c.accent : c.text,
+              fontSize: '11.5px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              position: 'relative'
+            }}
+          >
+            <Search size={13.5} />
+            <SlidersHorizontal size={13} />
+            {!esMobile && <span>Filtrar</span>}
+            {hayFiltros && (
+              <span style={{
+                width: '6px', height: '6px', borderRadius: '50%', background: c.accent
+              }} />
+            )}
+          </button>
+
+          {/* BOTÓN DISCRETO DE BLOQUEO / EDICIÓN */}
           {seguridadDesbloqueada ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11.5px', fontWeight: '700', color: c.accent, background: c.accentSoft, padding: '3px 8px', borderRadius: '6px' }}>
-                Edición Habilitada
-              </span>
-              <button onClick={() => setSeguridadDesbloqueada(false)} style={{ background: 'transparent', border: `1px solid ${c.border}`, color: c.textMuted, padding: '4px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>
-                Bloquear
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSeguridadDesbloqueada(false)}
+              title="Bloquear edición"
+              style={{
+                height: '32px',
+                padding: '0 10px',
+                borderRadius: '8px',
+                border: `1px solid ${c.accent}`,
+                background: c.accentSoft,
+                color: c.accent,
+                fontSize: '11.5px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <Unlock size={13} />
+              <span>{esMobile ? 'Activo' : 'Edición Habilitada'}</span>
+            </button>
           ) : (
-            <button onClick={() => setModalPinAbierto(true)} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, color: c.text, padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Lock size={12} color="#f59e0b" />
-              <span>Desbloquear Edición</span>
+            <button
+              type="button"
+              onClick={() => setModalPinAbierto(true)}
+              title="Desbloquear edición (PIN)"
+              style={{
+                height: '32px',
+                width: esMobile ? '32px' : 'auto',
+                padding: esMobile ? '0' : '0 11px',
+                borderRadius: '8px',
+                border: `1px solid ${c.border}`,
+                background: c.surfaceCard,
+                color: c.textMuted,
+                fontSize: '11.5px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+              <Lock size={13} color="#f59e0b" />
+              {!esMobile && <span>Desbloquear Edición</span>}
             </button>
           )}
         </div>
       </div>
 
-      <div style={{ position: 'relative', marginBottom: '10px' }}>
-        <input 
-          type="text" 
-          placeholder="Buscar por nombre, apellidos, # empleado, puesto, área..." 
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          style={{ width: '100%', height: '38px', padding: '0 12px 0 34px', borderRadius: '10px', border: `1px solid ${c.border}`, background: c.surfaceCard, color: c.text, fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-        />
-        <Search size={15} color={c.textMuted} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-      </div>
+      {/* PANEL DESPLEGABLE DE BÚSQUEDA Y FILTROS (OCULTO POR DEFECTO) */}
+      {mostrarFiltros && (
+        <div style={{
+          background: c.surfaceCard,
+          border: `1px solid ${c.border}`,
+          borderRadius: '12px',
+          padding: '10px',
+          marginBottom: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          boxSizing: 'border-box'
+        }}>
+          <div style={{ position: 'relative' }}>
+            <input 
+              type="text" 
+              placeholder="Buscar por nombre, apellidos, # empleado, puesto..." 
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              style={{
+                width: '100%', height: '36px', padding: '0 30px 0 32px',
+                borderRadius: '8px', border: `1px solid ${c.border}`,
+                background: c.bg, color: c.text, fontSize: '13px', outline: 'none', boxSizing: 'border-box'
+              }}
+            />
+            <Search size={14} color={c.textMuted} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            {busqueda && (
+              <button
+                type="button"
+                onClick={() => setBusqueda('')}
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex', padding: '2px' }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-      <div className="pills-scroll-container">
-        <div className={`filter-pill ${filtroSede !== 'ALL' ? 'active' : ''}`}>
-          <span>📍</span>
-          <select className="pill-select" value={filtroSede} onChange={e => setFiltroSede(e.target.value)}>
-            <option value="ALL">Todas las Sedes</option>
-            {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
+          <div className="pills-scroll-container" style={{ marginBottom: 0, paddingBottom: 0 }}>
+            <div className={`filter-pill ${filtroSede !== 'ALL' ? 'active' : ''}`}>
+              <span>📍</span>
+              <select className="pill-select" value={filtroSede} onChange={e => setFiltroSede(e.target.value)}>
+                <option value="ALL">Sede: Todas</option>
+                {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+
+            <div className={`filter-pill ${filtroNomina !== 'ALL' ? 'active' : ''}`}>
+              <span>💼</span>
+              <select className="pill-select" value={filtroNomina} onChange={e => setFiltroNomina(e.target.value)}>
+                <option value="ALL">Nómina: Todas</option>
+                <option value="produccion">Producción</option>
+                <option value="administrativo">Administrativo</option>
+                <option value="obra">Obra</option>
+              </select>
+            </div>
+
+            <div className={`filter-pill ${filtroDepto !== 'ALL' ? 'active' : ''}`}>
+              <span>🏢</span>
+              <select className="pill-select" value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
+                <option value="ALL">Depto: Todos</option>
+                {departamentosConPersonal.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              </select>
+            </div>
+
+            <div className={`filter-pill ${filtroEstatus !== 'ALL' ? 'active' : ''}`}>
+              <span>●</span>
+              <select className="pill-select" value={filtroEstatus} onChange={e => setFiltroEstatus(e.target.value)}>
+                <option value="ALL">Estatus: Todos</option>
+                <option value="activos">Solo Activos</option>
+                <option value="bajas">Solo Bajas</option>
+              </select>
+            </div>
+
+            {hayFiltros && (
+              <button onClick={limpiarFiltros} className="filter-pill" style={{ color: c.danger, borderColor: c.dangerSoft, gridColumn: esMobile ? '1 / -1' : 'auto', justifyContent: 'center' }}>
+                <RotateCcw size={11} /> Restablecer filtros
+              </button>
+            )}
+          </div>
         </div>
-
-        <div className={`filter-pill ${filtroNomina !== 'ALL' ? 'active' : ''}`}>
-          <span>💼</span>
-          <select className="pill-select" value={filtroNomina} onChange={e => setFiltroNomina(e.target.value)}>
-            <option value="ALL">Todas las Nóminas</option>
-            <option value="produccion">Producción</option>
-            <option value="administrativo">Administrativo</option>
-            <option value="obra">Obra</option>
-          </select>
-        </div>
-
-        <div className={`filter-pill ${filtroDepto !== 'ALL' ? 'active' : ''}`}>
-          <span>🏢</span>
-          <select className="pill-select" value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
-            <option value="ALL">Todos los Deptos</option>
-            {departamentosConPersonal.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-          </select>
-        </div>
-
-        <div className={`filter-pill ${filtroEstatus !== 'ALL' ? 'active' : ''}`}>
-          <span>●</span>
-          <select className="pill-select" value={filtroEstatus} onChange={e => setFiltroEstatus(e.target.value)}>
-            <option value="ALL">Todos los Estatus</option>
-            <option value="activos">Solo Activos</option>
-            <option value="bajas">Solo Bajas</option>
-          </select>
-        </div>
-
-        {hayFiltros && (
-          <button onClick={limpiarFiltros} className="filter-pill" style={{ color: c.danger, borderColor: c.dangerSoft }}>
-            <RotateCcw size={11} /> Limpiar
-          </button>
-        )}
-      </div>
+      )}
 
       {esMobile ? (
         <div className="mobile-contact-list">
