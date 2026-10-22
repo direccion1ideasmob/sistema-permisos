@@ -7,12 +7,13 @@ import {
   registrarCheckCaseta,
   registrarRetardoEnPuerta,
   registrarAsistenciaLista,
+  deshacerEntradaReciente,
   obtenerFechaLocalHoy
 } from './services/vigilanciaService';
 import {
   DoorOpen, RotateCcw, CheckCircle2, LogOut,
   Search, Calendar, RefreshCw, UserCheck, Users,
-  Hourglass, CornerUpLeft, X, Send, Check
+  Hourglass, CornerUpLeft, X, Send, Check, Undo2, ShieldCheck
 } from 'lucide-react';
 import BuscadorPersonal from './BuscadorPersonal';
 
@@ -25,7 +26,7 @@ export default function Caseta() {
   const vista = rutaActual.includes('/asistencia')
     ? 'asistencia'
     : rutaActual.includes('/retardo')
-    ? 'retardo'
+    ? 'asistencia'
     : 'pases';
 
   const [modoOscuro, setModoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
@@ -52,6 +53,15 @@ export default function Caseta() {
   const [mapaAsistencias, setMapaAsistencias] = useState({});
   const [mapaIncidenciasHoy, setMapaIncidenciasHoy] = useState({});
 
+  // Mapa local de marcas recientes { [empleadoId]: timestampMs } para permitir deshacer error de dedo durante 60s
+  const [marcasRecientes, setMarcasRecientes] = useState({});
+  const [ahoraMs, setAhoraMs] = useState(Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setAhoraMs(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
+
   const [busquedaTexto, setBusquedaTexto] = useState('');
   const [fechaAsistencia, setFechaAsistencia] = useState(obtenerFechaLocalHoy());
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState('');
@@ -61,6 +71,7 @@ export default function Caseta() {
 
   const sedeGuardia = usuario?.sede_id || null;
   const esSoloGuardia = usuario?.rol === 'caseta';
+  const esRHOSuper = usuario?.rol === 'gerente_rh' || usuario?.rol === 'rh_nominas' || usuario?.rol === 'superadmin';
   const hoyStr = obtenerFechaLocalHoy();
 
   const cargarDatos = useCallback(async () => {
@@ -100,10 +111,13 @@ export default function Caseta() {
     }
   };
 
-  const handleMarcarAsistencia = async (empleadoId, tipoMarca) => {
+  const handleMarcarAsistencia = async (empleadoId, tipoMarca, forzarDirectoRH = false) => {
     setProcesandoId(`${empleadoId}-${tipoMarca}`);
     try {
-      await registrarAsistenciaLista(empleadoId, tipoMarca, usuario?.id || null);
+      const res = await registrarAsistenciaLista(empleadoId, tipoMarca, usuario?.id || null, forzarDirectoRH);
+      if (tipoMarca === 'entrada' && (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada')) {
+        setMarcasRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
+      }
       await cargarDatos();
     } catch (err) {
       alert('Error al procesar registro: ' + err.message);
@@ -112,17 +126,18 @@ export default function Caseta() {
     }
   };
 
-  const handleGenerarRetardo = async () => {
-    if (!empleadoSeleccionado) return;
-    setProcesandoId('nuevo-retardo');
+  const handleDeshacerEntrada = async (empleadoId) => {
+    setProcesandoId(`${empleadoId}-deshacer`);
     try {
-      await registrarRetardoEnPuerta(empleadoSeleccionado);
-      setEmpleadoSeleccionado('');
+      await deshacerEntradaReciente(empleadoId);
+      setMarcasRecientes(prev => {
+        const copia = { ...prev };
+        delete copia[empleadoId];
+        return copia;
+      });
       await cargarDatos();
-      navigate('/caseta/asistencia');
-      setSubTabAsistencia('por_llegar');
     } catch (err) {
-      alert(err.message);
+      alert('No se pudo deshacer el registro: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -549,54 +564,7 @@ export default function Caseta() {
   }
 
   // ====================================================================
-  // MÓDULO 2: APOYO EN PUERTA (/caseta/retardo)
-  // ====================================================================
-  if (vista === 'retardo') {
-    return (
-      <div className="caseta-wrap">
-        <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
-        <style>{estilosComunesCaseta}</style>
-
-        <div style={{
-          background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '14px',
-          padding: '18px', width: '100%', boxSizing: 'border-box'
-        }}>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ fontSize: '16px', fontWeight: '800', color: c.text }}>
-              Notificar Presencia en Puerta a RH
-            </div>
-            <div style={{ fontSize: '12.5px', color: c.textMuted, marginTop: '3px', lineHeight: 1.4 }}>
-              Selecciona al colaborador para notificar a RH y Jefatura y quedar en espera de su veredicto.
-            </div>
-          </div>
-
-          <BuscadorPersonal
-            empleados={empleadosSede}
-            seleccionado={empleadoSeleccionado}
-            setSeleccionado={setEmpleadoSeleccionado}
-          />
-
-          <button
-            onClick={handleGenerarRetardo}
-            disabled={!empleadoSeleccionado || procesandoId === 'nuevo-retardo'}
-            style={{
-              width: '100%', height: '42px', borderRadius: '10px', border: 'none',
-              background: c.accent, color: '#fff', fontSize: '13.5px', fontWeight: '800',
-              cursor: (!empleadoSeleccionado || procesandoId === 'nuevo-retardo') ? 'not-allowed' : 'pointer',
-              opacity: (!empleadoSeleccionado || procesandoId === 'nuevo-retardo') ? 0.5 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-            }}
-          >
-            <Send size={15} />
-            {procesandoId === 'nuevo-retardo' ? 'Notificando a RH...' : 'Notificar a RH'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ====================================================================
-  // MÓDULO 3: PASE DE LISTA AUTODEPURABLE (/caseta/asistencia)
+  // MÓDULO 2: PASE DE LISTA AUTODEPURABLE (/caseta/asistencia)
   // ====================================================================
   const termino = (busquedaTexto || '').toLowerCase().trim();
   const personalFiltrado = empleadosSede.filter(emp => {
@@ -799,18 +767,35 @@ export default function Caseta() {
                         </button>
                       )
                     ) : (
-                      <button
-                        onClick={() => handleMarcarAsistencia(emp.id, 'entrada')}
-                        disabled={procesandoId === `${emp.id}-entrada`}
-                        title="Registrar en puerta"
-                        style={{
-                          minWidth: '42px', height: '36px', padding: '0 14px', borderRadius: '9px', border: 'none',
-                          background: c.accent, color: '#fff', fontSize: '13px',
-                          fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                        }}
-                      >
-                        <Check size={18} strokeWidth={3} />
-                      </button>
+                      <>
+                        {esRHOSuper && (
+                          <button
+                            onClick={() => handleMarcarAsistencia(emp.id, 'entrada', true)}
+                            disabled={procesandoId === `${emp.id}-entrada`}
+                            title="Validar asistencia directa en planta (RH)"
+                            style={{
+                              height: '36px', padding: '0 10px', borderRadius: '9px',
+                              border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
+                              fontSize: '11px', fontWeight: '800', cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: '4px'
+                            }}
+                          >
+                            <ShieldCheck size={14} /> En Planta (RH)
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleMarcarAsistencia(emp.id, 'entrada', false)}
+                          disabled={procesandoId === `${emp.id}-entrada`}
+                          title="Registrar en puerta"
+                          style={{
+                            minWidth: '42px', height: '36px', padding: '0 14px', borderRadius: '9px', border: 'none',
+                            background: c.accent, color: '#fff', fontSize: '13px',
+                            fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          }}
+                        >
+                          <Check size={18} strokeWidth={3} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -834,6 +819,8 @@ export default function Caseta() {
               const reg = mapaAsistencias[emp.id];
               const inc = mapaIncidenciasHoy[emp.id];
               const tieneSalida = Boolean(reg?.hora_salida);
+              const tsMarca = marcasRecientes[emp.id];
+              const puedeDeshacer = Boolean(tsMarca && !tieneSalida && (ahoraMs - tsMarca < 60000));
 
               return (
                 <div
@@ -874,6 +861,22 @@ export default function Caseta() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                    {puedeDeshacer && (
+                      <button
+                        onClick={() => handleDeshacerEntrada(emp.id)}
+                        disabled={procesandoId === `${emp.id}-deshacer`}
+                        title="Deshacer si te equivocaste de renglón (disponible 60s)"
+                        style={{
+                          height: '34px', padding: '0 10px', borderRadius: '8px',
+                          border: '1px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.1)',
+                          color: '#d97706', fontSize: '11px', fontWeight: '800', cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: '4px'
+                        }}
+                      >
+                        <Undo2 size={13} /> Deshacer
+                      </button>
+                    )}
+
                     {inc?.tipo === 'salida_fuera' ? (
                       <button
                         onClick={() => handleSellarPase(inc.paseId, 'reingreso')}

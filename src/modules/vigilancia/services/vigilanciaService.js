@@ -468,7 +468,22 @@ export const registrarRetardoEnPuerta = async (empleadoId) => {
   return { modo: 'en_espera_rh', permiso: creado };
 };
 
-export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada', guardiaId = null) => {
+export const deshacerEntradaReciente = async (usuarioId) => {
+  const hoyStr = obtenerFechaLocalHoy();
+  const { data: reg } = await supabase
+    .from('asistencias_caseta')
+    .select('id, hora_salida')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha', hoyStr)
+    .maybeSingle();
+
+  if (reg && !reg.hora_salida) {
+    await supabase.from('asistencias_caseta').delete().eq('id', reg.id);
+  }
+  return { ok: true };
+};
+
+export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada', guardiaId = null, forzarDirectoRH = false) => {
   const hoyStr = obtenerFechaLocalHoy();
   const ahora = new Date();
   const horaActual = ahora.toTimeString().slice(0, 5);
@@ -503,7 +518,7 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
       }
     }
 
-    if (minutosDelDia > LIMITE_TOLERANCIA_MINUTOS) {
+    if (minutosDelDia > LIMITE_TOLERANCIA_MINUTOS && !forzarDirectoRH) {
       const resp = await registrarRetardoEnPuerta(usuarioId);
       return { resultado: resp.modo || 'en_espera_rh' };
     }
