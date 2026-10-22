@@ -4,7 +4,7 @@ import {
   Factory, Building2, HardHat, FileSpreadsheet, RotateCcw, Clock,
   CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronUp,
   DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText,
-  User, Stethoscope, Briefcase, Calendar
+  User, Stethoscope, Briefcase, Calendar, SlidersHorizontal
 } from 'lucide-react';
 
 export const parsearDatosObservaciones = (obs = '') => {
@@ -145,6 +145,7 @@ export default function TablaHistorial({
   const [paginaActual, setPaginaActual] = useState(1);
   const [seleccionados, setSeleccionados] = useState([]);
   const [expandidos, setExpandidos] = useState([]);
+  const [mostrarFiltrosMovil, setMostrarFiltrosMovil] = useState(false);
 
   const registrosPorPagina = 12;
   const textSecundario = modoOscuro ? '#cbd5e1' : '#475569';
@@ -356,15 +357,16 @@ export default function TablaHistorial({
         .th-week-box {
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 8px;
           background: ${c.surfaceCard};
-          border: 1px solid ${c.border};
+          border: 1.5px solid ${c.border};
           padding: 0 12px;
           height: 44px;
           box-sizing: border-box;
           border-radius: 11px;
         }
-        .th-btn-export {
+        .th-btn-export-desktop {
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -381,14 +383,21 @@ export default function TablaHistorial({
           cursor: pointer;
           white-space: nowrap;
         }
-        .th-filters-bar {
+        .th-filters-container {
           background: ${c.surfaceCard};
-          border: 1px solid ${c.border};
-          border-radius: 11px;
+          border: 1.5px solid ${c.border};
+          border-radius: 12px;
           padding: 10px 14px;
           display: flex;
+          flex-direction: column;
           gap: 10px;
+          box-sizing: border-box;
+        }
+        .th-search-row {
+          display: flex;
           align-items: center;
+          gap: 10px;
+          width: 100%;
           flex-wrap: wrap;
         }
         .th-search-box {
@@ -397,18 +406,30 @@ export default function TablaHistorial({
           gap: 8px;
           background: ${c.bg};
           border: 1px solid ${c.border};
-          border-radius: 8px;
-          padding: 0 14px;
+          border-radius: 9px;
+          padding: 0 12px;
           height: ${alturaControl};
           box-sizing: border-box;
-          flex: 1 1 260px;
+          flex: 1 1 240px;
           min-width: 0;
+        }
+        .th-desktop-selects {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .th-mobile-actions-btns {
+          display: none;
+        }
+        .th-mobile-selects-drawer {
+          display: none;
         }
         .th-select-filter {
           background: ${c.bg};
           color: ${c.text};
           border: 1px solid ${c.border};
-          border-radius: 8px;
+          border-radius: 9px;
           padding: 0 12px;
           height: ${alturaControl};
           box-sizing: border-box;
@@ -424,30 +445,31 @@ export default function TablaHistorial({
         }
 
         /* =========================================================
-           VISTA MÓVIL (< 768PX): TARJETAS LIMPIAS Y CONTROLES APILADOS
+           DISEÑO MÓVIL (< 768PX): DESPEJADO, CUADRADO Y SIN DESBORDES
            ========================================================= */
         @media (max-width: 768px) {
           .th-main-wrapper {
-            padding-top: 28px;
+            padding-top: 44px;
             gap: 10px;
           }
           .th-top-bar {
             flex-direction: column;
             align-items: stretch;
-            gap: 8px;
+            gap: 10px;
           }
           .th-tabs-area {
             flex: none;
             width: 100%;
-            height: 40px;
-            padding: 3px !important;
+            height: 42px;
+            padding: 4px !important;
             display: grid !important;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 3px;
+            gap: 4px;
+            box-sizing: border-box;
           }
           .th-tabs-area .tab-btn {
-            padding: 0 4px !important;
-            font-size: 12px !important;
+            padding: 0 6px !important;
+            font-size: 12.5px !important;
             gap: 5px !important;
             min-width: 0 !important;
             justify-content: center !important;
@@ -462,46 +484,52 @@ export default function TablaHistorial({
           .th-right-actions {
             width: 100%;
             margin-left: 0;
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 8px;
+            display: block;
           }
           .th-week-box {
             width: 100%;
-            justify-content: space-between;
-            padding: 0 8px;
-            height: 40px;
-            min-width: 0;
+            height: 44px;
+            padding: 0 10px;
+            box-sizing: border-box;
           }
-          .th-btn-export {
-            height: 40px;
-            padding: 0 12px;
-            font-size: 12.5px;
+          .th-btn-export-desktop {
+            display: none !important;
           }
-          .th-btn-export span {
-            display: none;
-          }
-          .th-btn-export::after {
-            content: 'Excel';
-          }
-          .th-filters-bar {
+          .th-filters-container {
             padding: 10px;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 8px;
+            gap: 10px;
+          }
+          .th-search-row {
+            flex-wrap: nowrap;
+            gap: 6px;
           }
           .th-search-box {
-            grid-column: 1 / -1;
-            width: 100%;
             height: 38px;
+            padding: 0 10px;
+            flex: 1;
+          }
+          .th-desktop-selects {
+            display: none !important;
+          }
+          .th-mobile-actions-btns {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+          }
+          .th-mobile-selects-drawer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed ${c.border};
           }
           .th-select-filter {
             width: 100%;
             min-width: 0;
-            height: 36px;
-            font-size: 12px;
-            padding: 0 6px;
-            text-overflow: ellipsis;
+            height: 38px;
+            font-size: 12.5px;
+            padding: 0 8px;
           }
           .th-select-full-mobile {
             grid-column: 1 / -1;
@@ -518,7 +546,7 @@ export default function TablaHistorial({
         }
       `}</style>
 
-      {/* 1. BARRA SUPERIOR */}
+      {/* 1. BARRA SUPERIOR: PESTAÑAS DE ÁREA Y NAVEGADOR DE SEMANA */}
       <div className="th-top-bar">
         {esControlRH && (
           <div className="tabs-aprobacion-bar th-tabs-area">
@@ -561,11 +589,10 @@ export default function TablaHistorial({
         )}
 
         <div className="th-right-actions">
-          {/* NAVEGADOR SEMANAL */}
           <div className="th-week-box">
             {modoPeriodo === 'semana' ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                   <button
                     onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
                     title="Semana anterior"
@@ -577,7 +604,7 @@ export default function TablaHistorial({
                     <ChevronLeft size={15} />
                   </button>
 
-                  <div style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  <div style={{ padding: '0 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
                       Sem {infoSemana.numSemana}
                     </span>
@@ -598,7 +625,7 @@ export default function TablaHistorial({
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                   {offsetSemana !== 0 && (
                     <button
                       onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
@@ -625,7 +652,7 @@ export default function TablaHistorial({
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '8px' }}>
                 <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap' }}>
-                  Todo el historial ({solicitudes.length})
+                  Mostrando Todo ({solicitudes.length})
                 </span>
                 <button
                   onClick={() => {
@@ -638,100 +665,203 @@ export default function TablaHistorial({
                     background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
                   }}
                 >
-                  Sem {infoSemana.numSemana}
+                  Volver a Sem {infoSemana.numSemana}
                 </button>
               </div>
             )}
           </div>
 
           {esControlRH && onAbrirExportar && (
-            <button onClick={onAbrirExportar} className="th-btn-export">
-              <FileSpreadsheet size={16} /> <span>Exportar Excel</span>
+            <button onClick={onAbrirExportar} className="th-btn-export-desktop">
+              <FileSpreadsheet size={16} /> Exportar Excel
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. BARRA DE FILTROS */}
-      <div className="th-filters-bar">
-        <div className="th-search-box">
-          <Search size={15} color={textSecundario} style={{ flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Buscar por folio, colaborador o #empleado..."
-            value={busqueda}
-            onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
-            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13.5px', width: '100%', fontWeight: '500' }}
-          />
+      {/* 2. BARRA DE BÚSQUEDA + FILTROS COLAPSABLES EN MÓVIL */}
+      <div className="th-filters-container">
+        <div className="th-search-row">
+          <div className="th-search-box">
+            <Search size={15} color={textSecundario} style={{ flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Buscar folio, nombre o #..."
+              value={busqueda}
+              onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
+              style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13.5px', width: '100%', fontWeight: '500', minWidth: 0 }}
+            />
+          </div>
+
+          {/* BOTONES COMPACTOS EN MÓVIL: FILTROS Y EXCEL */}
+          <div className="th-mobile-actions-btns">
+            <button
+              type="button"
+              onClick={() => setMostrarFiltrosMovil(prev => !prev)}
+              style={{
+                height: '38px', padding: '0 11px', borderRadius: '9px',
+                border: `1px solid ${(mostrarFiltrosMovil || deptoFiltro !== 'todos' || tipoFiltro !== 'todos' || filtroEstado !== 'todos') ? c.accent : c.border}`,
+                background: (mostrarFiltrosMovil || deptoFiltro !== 'todos' || tipoFiltro !== 'todos' || filtroEstado !== 'todos') ? c.accentSoft : c.bg,
+                color: (mostrarFiltrosMovil || deptoFiltro !== 'todos' || tipoFiltro !== 'todos' || filtroEstado !== 'todos') ? c.accent : c.text,
+                fontSize: '12.5px', fontWeight: '800', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: '5px'
+              }}
+            >
+              <SlidersHorizontal size={14} />
+              <span>Filtros</span>
+            </button>
+
+            {esControlRH && onAbrirExportar && (
+              <button
+                type="button"
+                onClick={onAbrirExportar}
+                style={{
+                  height: '38px', padding: '0 12px', borderRadius: '9px', border: 'none',
+                  background: c.accent, color: '#fff', fontSize: '12.5px', fontWeight: '800',
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                }}
+              >
+                <FileSpreadsheet size={14} />
+                <span>Excel</span>
+              </button>
+            )}
+          </div>
+
+          {/* SELECTORES VISIBLES EN ESCRITORIO */}
+          <div className="th-desktop-selects">
+            {esControlRH && departamentos.length > 0 && (
+              <select
+                value={deptoFiltro}
+                onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
+                className="th-select-filter"
+              >
+                <option value="todos">Todos los Deptos</option>
+                {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              </select>
+            )}
+
+            <select
+              value={tipoFiltro}
+              onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
+              className="th-select-filter"
+            >
+              <option value="todos">Todos los Tipos</option>
+              <option value="salida">Salida</option>
+              <option value="retardo">Retardo</option>
+              <option value="falta">Falta</option>
+              <option value="vacaciones">Vacaciones</option>
+            </select>
+
+            <select
+              value={filtroEstado}
+              onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
+              className="th-select-filter"
+            >
+              <option value="todos">Autorizados y Rechazados</option>
+              <option value="autorizado">Solo Autorizados</option>
+              <option value="rechazado">Solo Rechazados</option>
+            </select>
+
+            {hayFiltrosActivos && (
+              <button
+                onClick={limpiarFiltros}
+                style={{
+                  padding: '0 12px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
+                  border: `1px solid ${c.border}`, background: c.bg, color: textSecundario,
+                  fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                }}
+              >
+                <RotateCcw size={13} /> Limpiar
+              </button>
+            )}
+
+            {esControlRH && seleccionados.length > 0 && (
+              <button
+                onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
+                style={{
+                  padding: '0 14px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
+                  border: 'none', background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800',
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
+                }}
+              >
+                <Printer size={14} /> Imprimir ({seleccionados.length})
+              </button>
+            )}
+          </div>
         </div>
 
-        {esControlRH && departamentos.length > 0 && (
-          <select
-            value={deptoFiltro}
-            onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-            className="th-select-filter"
-          >
-            <option value="todos">Todos los Deptos</option>
-            {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-          </select>
-        )}
+        {/* CAJÓN PLEGABLE DE FILTROS EN CELULAR */}
+        {mostrarFiltrosMovil && (
+          <div className="th-mobile-selects-drawer">
+            {esControlRH && departamentos.length > 0 && (
+              <select
+                value={deptoFiltro}
+                onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
+                className="th-select-filter"
+              >
+                <option value="todos">Depto: Todos</option>
+                {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              </select>
+            )}
 
-        <select
-          value={tipoFiltro}
-          onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
-          className="th-select-filter"
-        >
-          <option value="todos">Todos los Tipos</option>
-          <option value="salida">Salida</option>
-          <option value="retardo">Retardo</option>
-          <option value="falta">Falta</option>
-          <option value="vacaciones">Vacaciones</option>
-        </select>
+            <select
+              value={tipoFiltro}
+              onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
+              className="th-select-filter"
+            >
+              <option value="todos">Tipo: Todos</option>
+              <option value="salida">Salida</option>
+              <option value="retardo">Retardo</option>
+              <option value="falta">Falta</option>
+              <option value="vacaciones">Vacaciones</option>
+            </select>
 
-        <select
-          value={filtroEstado}
-          onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-          className="th-select-filter th-select-full-mobile"
-        >
-          <option value="todos">Autorizados y Rechazados</option>
-          <option value="autorizado">Solo Autorizados</option>
-          <option value="rechazado">Solo Rechazados</option>
-        </select>
+            <select
+              value={filtroEstado}
+              onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
+              className="th-select-filter th-select-full-mobile"
+            >
+              <option value="todos">Dictamen: Autorizados y Rechazados</option>
+              <option value="autorizado">Solo Autorizados</option>
+              <option value="rechazado">Solo Rechazados</option>
+            </select>
 
-        {hayFiltrosActivos && (
-          <button
-            onClick={limpiarFiltros}
-            title="Restablecer filtros"
-            className="th-select-full-mobile"
-            style={{
-              padding: '0 12px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
-              border: `1px solid ${c.border}`, background: c.bg, color: textSecundario,
-              fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-            }}
-          >
-            <RotateCcw size={13} /> Limpiar
-          </button>
+            {hayFiltrosActivos && (
+              <button
+                onClick={limpiarFiltros}
+                className="th-select-full-mobile"
+                style={{
+                  height: '36px', borderRadius: '8px', border: `1px solid ${c.border}`,
+                  background: c.bg, color: textSecundario, fontSize: '12.5px', fontWeight: '700',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                }}
+              >
+                <RotateCcw size={13} /> Restablecer filtros
+              </button>
+            )}
+          </div>
         )}
 
         {esControlRH && seleccionados.length > 0 && (
-          <button
-            onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
-            className="th-select-full-mobile"
-            style={{
-              padding: '0 14px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
-              border: 'none', background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800',
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-            }}
-          >
-            <Printer size={14} /> Imprimir ({seleccionados.length})
-          </button>
+          <div className="th-mobile-actions-btns" style={{ width: '100%' }}>
+            <button
+              onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
+              style={{
+                width: '100%', height: '38px', borderRadius: '9px', border: 'none',
+                background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+              }}
+            >
+              <Printer size={14} /> Imprimir seleccionadas ({seleccionados.length})
+            </button>
+          </div>
         )}
       </div>
 
-      {/* 3. LISTADO (TABLA EN LAPTOP / TARJETAS EN CELULAR) */}
+      {/* 3. LISTADO */}
       {solicitudesPaginadas.length === 0 ? (
         <div style={{
-          background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
+          background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '12px',
           padding: '42px 20px', textAlign: 'center', color: textSecundario, fontSize: '14px', fontWeight: '600'
         }}>
           <div>
@@ -745,9 +875,7 @@ export default function TablaHistorial({
         </div>
       ) : (
         <>
-          {/* =========================================================
-              A) VISTA DE ESCRITORIO / LAPTOP 14" (TABLA EJECUTIVA)
-              ========================================================= */}
+          {/* A) TABLA DE ESCRITORIO / LAPTOP 14" */}
           <div className="th-desktop-table-view" style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
@@ -1060,9 +1188,7 @@ export default function TablaHistorial({
             </div>
           </div>
 
-          {/* =========================================================
-              B) VISTA MÓVIL (< 768PX): TARJETAS COMPACTAS Y PLEGABLES
-              ========================================================= */}
+          {/* B) TARJETAS MÓVILES PERFECTAMENTE ENCUADRADAS (SIN DESBORDE DERECHO) */}
           <div className="th-mobile-cards-view">
             {solicitudesPaginadas.map(s => {
               const u = s.usuarios || {};
@@ -1110,58 +1236,49 @@ export default function TablaHistorial({
                     padding: '13px 14px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '8px',
-                    boxSizing: 'border-box'
+                    gap: '9px',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden'
                   }}
                 >
-                  {/* RENGLÓN 1: CHECKBOX + FOLIO + TIPO <---> DICTAMEN + FLECHA (TODO EN 1 LÍNEA SIN PARTIRSE) */}
+                  {/* FILA 1: CHECKBOX + FOLIO A LA IZQ <---> DICTAMEN + FLECHA A LA DER (JAMÁS SE DESBORDA) */}
                   <div
                     onClick={() => toggleExpandir(s.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', width: '100%' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {esControlRH && (
-                        <div onClick={(e) => toggleSeleccion(s.id, e)} style={{ display: 'flex', alignItems: 'center', paddingRight: '2px' }}>
+                        <div onClick={(e) => toggleSeleccion(s.id, e)} style={{ display: 'flex', alignItems: 'center' }}>
                           {seleccionado
-                            ? <CheckSquare size={17} color={c.accent} />
-                            : <Square size={17} color={textSecundario} />}
+                            ? <CheckSquare size={18} color={c.accent} />
+                            : <Square size={18} color={textSecundario} />}
                         </div>
                       )}
                       <span style={{
-                        fontFamily: 'ui-monospace, monospace', fontSize: '11.5px', fontWeight: '800',
+                        fontFamily: 'ui-monospace, monospace', fontSize: '12px', fontWeight: '800',
                         color: c.text, background: c.bg, border: `1px solid ${c.border}`,
-                        padding: '2px 7px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0
+                        padding: '2px 8px', borderRadius: '6px', whiteSpace: 'nowrap'
                       }}>
                         {s.folio}
                       </span>
-                      <span style={{
-                        fontSize: '10.5px', fontWeight: '800', textTransform: 'uppercase',
-                        padding: '2px 8px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
-                        background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
-                      }}>
-                        {estiloTipo.label}
-                      </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{
-                        fontSize: '10.5px', fontWeight: '800', padding: '2px 8px', borderRadius: '5px',
-                        textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0,
+                        fontSize: '11px', fontWeight: '800', padding: '3px 9px', borderRadius: '6px',
+                        textTransform: 'uppercase', whiteSpace: 'nowrap',
                         backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : esAlertaPago ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
                         color: !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
                         border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : esAlertaPago ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
                       }}>
                         {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
                       </span>
-                      {expandido ? <ChevronUp size={17} color={textSecundario} /> : <ChevronDown size={17} color={textSecundario} />}
+                      {expandido ? <ChevronUp size={18} color={textSecundario} /> : <ChevronDown size={18} color={textSecundario} />}
                     </div>
                   </div>
 
-                  {/* RENGLÓN 2: NOMBRE COMPLETO DEL COLABORADOR DE LADO A LADO SIN CORTARSE */}
-                  <div
-                    onClick={() => toggleExpandir(s.id)}
-                    style={{ cursor: 'pointer' }}
-                  >
+                  {/* FILA 2: NOMBRE DEL COLABORADOR Y DEPARTAMENTO */}
+                  <div onClick={() => toggleExpandir(s.id)} style={{ cursor: 'pointer' }}>
                     <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, lineHeight: 1.25 }}>
                       {u.nombre_completo || 'Colaborador'}
                     </div>
@@ -1171,21 +1288,28 @@ export default function TablaHistorial({
                     </div>
                   </div>
 
-                  {/* RENGLÓN 3: FECHA FORMATEADA Y HORARIO LIMPIO EN 1 SOLA LÍNEA */}
+                  {/* FILA 3: PÍLDORA DEL TIPO DE PERMISO + FECHA + HORARIO */}
                   <div
                     onClick={() => toggleExpandir(s.id)}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      display: 'flex', alignItems: 'center', gap: '8px',
                       fontSize: '12.5px', color: c.text, fontWeight: '700', cursor: 'pointer',
-                      paddingTop: '4px', borderTop: `1px solid ${c.border}`
+                      paddingTop: '7px', borderTop: `1px solid ${c.border}`
                     }}
                   >
+                    <span style={{
+                      fontSize: '10.5px', fontWeight: '800', textTransform: 'uppercase',
+                      padding: '2px 8px', borderRadius: '5px', whiteSpace: 'nowrap', flexShrink: 0,
+                      background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
+                    }}>
+                      {estiloTipo.label}
+                    </span>
                     <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {fechaBonita} <span style={{ color: textSecundario, fontWeight: '600' }}>• {horarioLimpio}</span>
                     </span>
                   </div>
 
-                  {/* CAJÓN DESPLEGABLE MÓVIL CON MOTIVO, FIRMAS Y BOTÓN DE PAPELETA */}
+                  {/* CAJÓN DESPLEGABLE */}
                   {expandido && (
                     <div style={{
                       paddingTop: '10px', borderTop: `1px dashed ${c.border}`,
