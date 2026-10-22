@@ -50,11 +50,11 @@ export default function ControlHistorial() {
   }, [usuario?.id, cargarTodasSolicitudes]);
 
   return (
-    <div className="aprobaciones-container">
+    <div className="aprobaciones-container" style={{ padding: '18px 22px', boxSizing: 'border-box' }}>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
 
       {cargando ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '12.5px' }}>
+        <div style={{ textAlign: 'center', padding: '44px', color: c.textMuted, fontSize: '15px', fontWeight: '600' }}>
           Cargando historial...
         </div>
       ) : (
@@ -79,7 +79,10 @@ export default function ControlHistorial() {
 
       {mostrarModalExportar && (
         <ModalExportarExcel
+          solicitudesPrecargadas={solicitudes}
           departamentos={departamentos}
+          c={c}
+          modoOscuro={modoOscuro}
           onClose={() => setMostrarModalExportar(false)}
         />
       )}
