@@ -344,6 +344,92 @@ const registrarAsistenciaListaConHora = async (usuarioId, tipoMarca, horaEspecif
 };
 
 // 3. REGISTRAR ENTRADA O SALIDA EN EL PASE DE LISTA DIARIO
+
+// =========================================================================
+// CONFIGURACIÓN DINÁMICA DE HORA LÍMITE DE TOLERANCIA (CONTROL EXCLUSIVO RH)
+// Se sincroniza usando la tabla sedes (o fallback en localStorage) para que
+// cualquier cambio hecho por RH aplique en todos los dispositivos de caseta.
+// =========================================================================
+export const obtenerHoraLimiteTolerancia = async () => {
+  try {
+    const { data } = await supabase
+      .from('notificaciones')
+      .select('mensaje')
+      .eq('titulo', '__CONFIG_TOLERANCIA_CASETA__')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data?.mensaje && /^\d{2}:\d{2}$/.test(data.mensaje.trim())) {
+      const h = data.mensaje.trim();
+      localStorage.setItem('hora_limite_retardo_rh', h);
+      return h;
+    }
+  } catch (_) {}
+
+  const local = localStorage.getItem('hora_limite_retardo_rh');
+  if (local && /^\d{2}:\d{2}$/.test(local)) return local;
+  return '07:15';
+};
+
+export const guardarHoraLimiteTolerancia = async (nuevaHora, usuarioId) => {
+  const limpia = (nuevaHora || '07:15').trim();
+  localStorage.setItem('hora_limite_retardo_rh', limpia);
+
+  try {
+    // Limpiar configuraciones previas y guardar la nueva para todos los dispositivos
+    await supabase
+      .from('notificaciones')
+      .delete()
+      .eq('titulo', '__CONFIG_TOLERANCIA_CASETA__');
+
+    if (usuarioId) {
+      await supabase
+        .from('notificaciones')
+        .insert([{
+          usuario_id: usuarioId,
+          titulo: '__CONFIG_TOLERANCIA_CASETA__',
+          mensaje: limpia,
+          tipo: 'sistema',
+          leida: true
+        }]);
+    }
+  } catch (e) {
+    console.warn('Guardado en modo local:', e.message);
+  }
+  return limpia;
+};
+
+export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancelacion = 'El colaborador no utilizó el pase o nunca se presentó en caseta') => {
+  const ahora = new Date();
+  const horaStr = ahora.toTimeString().slice(0, 5);
+
+  const { data: perm, error: errFetch } = await supabase
+    .from('permisos')
+    .select('*')
+    .eq('id', permisoId)
+    .single();
+
+  if (errFetch || !perm) throw new Error('No se encontró el pase.');
+
+  const obsActuales = perm.observaciones ? perm.observaciones.trim() : '';
+  const selloCancel = `[PASE CANCELADO (${horaStr} hrs): ${motivoCancelacion}]`;
+  const nuevasObs = obsActuales ? `${obsActuales} | ${selloCancel}` : selloCancel;
+
+  const { data, error } = await supabase
+    .from('permisos')
+    .update({
+      estado_general: 'cancelado',
+      observaciones: nuevasObs
+    })
+    .eq('id', permisoId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 export const registrarRetardoEnPuerta = async (empleadoId) => {
   const hoyStr = obtenerFechaLocalHoy();
   const ahora = new Date();
@@ -489,8 +575,10 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
   const horaActual = ahora.toTimeString().slice(0, 5);
   const minutosDelDia = ahora.getHours() * 60 + ahora.getMinutes();
 
-  // Corte de entrada libre: 07:15 hrs (7 * 60 + 15 = 435 minutos)
-  const LIMITE_TOLERANCIA_MINUTOS = 7 * 60 + 15;
+  // Obtener la hora límite configurada por RH (por defecto 07:15)
+  const horaLimiteStr = await obtenerHoraLimiteTolerancia();
+  const [hLim, mLim] = horaLimiteStr.split(':').map(Number);
+  const LIMITE_TOLERANCIA_MINUTOS = (isNaN(hLim) ? 7 : hLim) * 60 + (isNaN(mLim) ? 15 : mLim);
 
   if (tipoMarca === 'entrada') {
     const { data: pasesHoy } = await supabase
@@ -502,23 +590,47 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
       .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
 
     const retardoHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+    const faltaHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'falta');
 
-    if (retardoHoy) {
-      const obsLow = String(retardoHoy.observaciones || '').toLowerCase();
-      if (obsLow.includes('se regresa')) {
-        return { resultado: 'se_regresa', id: retardoHoy.id };
+    // CASO ESPECIAL 1: El colaborador había pedido permiso de Retardo (o Falta), pero SÍ llegó temprano (<= hora límite) o RH forzó su entrada puntual
+    if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {
+      if (retardoHoy && retardoHoy.estado_general !== 'completado_caseta') {
+        await cancelarPasePorInasistenciaOCambio(
+          retardoHoy.id,
+          `Asistió en horario normal (${horaActual} hrs) — Retardo sin efecto`
+        );
       }
-      if (retardoHoy.estado_general === 'autorizado' || retardoHoy.estado_general === 'aprobado') {
-        await registrarCheckCaseta(retardoHoy.id, 'entrada');
-        return { resultado: 'entrada_registrada' };
+      if (faltaHoy) {
+        await cancelarPasePorInasistenciaOCambio(
+          faltaHoy.id,
+          `El colaborador sí se presentó a laborar (${horaActual} hrs)`
+        );
       }
-      if (retardoHoy.estado_general === 'en_firmas' && minutosDelDia > LIMITE_TOLERANCIA_MINUTOS) {
-        await registrarCheckCaseta(retardoHoy.id, 'congelar_llegada');
-        return { resultado: 'en_espera_rh', id: retardoHoy.id };
+    } else {
+      // CASO 2: Llegó después de la hora límite (> 07:15 o la hora fijada por RH)
+      if (faltaHoy) {
+        await cancelarPasePorInasistenciaOCambio(
+          faltaHoy.id,
+          `El colaborador se presentó en planta (${horaActual} hrs)`
+        );
       }
-    }
 
-    if (minutosDelDia > LIMITE_TOLERANCIA_MINUTOS && !forzarDirectoRH) {
+      if (retardoHoy) {
+        const obsLow = String(retardoHoy.observaciones || '').toLowerCase();
+        if (obsLow.includes('se regresa')) {
+          return { resultado: 'se_regresa', id: retardoHoy.id };
+        }
+        if (retardoHoy.estado_general === 'autorizado' || retardoHoy.estado_general === 'aprobado') {
+          await registrarCheckCaseta(retardoHoy.id, 'entrada');
+          return { resultado: 'entrada_registrada' };
+        }
+        if (retardoHoy.estado_general === 'en_firmas') {
+          await registrarCheckCaseta(retardoHoy.id, 'congelar_llegada');
+          return { resultado: 'en_espera_rh', id: retardoHoy.id };
+        }
+      }
+
+      // No tenía pase previo autorizado -> Poner automáticamente en espera de veredicto de RH
       const resp = await registrarRetardoEnPuerta(usuarioId);
       return { resultado: resp.modo || 'en_espera_rh' };
     }

@@ -1,31 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthContext';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../permisos/aprobacionesStyles';
 import {
   obtenerDatosCaseta,
   registrarCheckCaseta,
-  registrarRetardoEnPuerta,
   registrarAsistenciaLista,
   deshacerEntradaReciente,
+  obtenerHoraLimiteTolerancia,
+  guardarHoraLimiteTolerancia,
+  cancelarPasePorInasistenciaOCambio,
   obtenerFechaLocalHoy
 } from './services/vigilanciaService';
 import {
   DoorOpen, RotateCcw, CheckCircle2, LogOut,
   Search, Calendar, RefreshCw, UserCheck, Users,
-  Hourglass, CornerUpLeft, X, Send, Check, Undo2, ShieldCheck
+  Hourglass, CornerUpLeft, X, Check, Undo2, ShieldCheck, Sliders, Ban
 } from 'lucide-react';
-import BuscadorPersonal from './BuscadorPersonal';
 
 export default function Caseta() {
   const { usuario } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
 
   const rutaActual = location.pathname;
-  const vista = rutaActual.includes('/asistencia')
-    ? 'asistencia'
-    : rutaActual.includes('/retardo')
+  const vista = rutaActual.includes('/asistencia') || rutaActual.includes('/retardo')
     ? 'asistencia'
     : 'pases';
 
@@ -53,7 +51,12 @@ export default function Caseta() {
   const [mapaAsistencias, setMapaAsistencias] = useState({});
   const [mapaIncidenciasHoy, setMapaIncidenciasHoy] = useState({});
 
-  // Mapa local de marcas recientes { [empleadoId]: timestampMs } para permitir deshacer error de dedo durante 60s
+  // Hora de corte de retardos administrable por RH
+  const [horaCorteRH, setHoraCorteRH] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
+  const [editandoCorteRH, setEditandoCorteRH] = useState(false);
+  const [nuevaHoraInput, setNuevaHoraInput] = useState('07:15');
+  const [guardandoCorte, setGuardandoCorte] = useState(false);
+
   const [marcasRecientes, setMarcasRecientes] = useState({});
   const [ahoraMs, setAhoraMs] = useState(Date.now());
 
@@ -64,7 +67,6 @@ export default function Caseta() {
 
   const [busquedaTexto, setBusquedaTexto] = useState('');
   const [fechaAsistencia, setFechaAsistencia] = useState(obtenerFechaLocalHoy());
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState('');
 
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState(null);
@@ -78,7 +80,10 @@ export default function Caseta() {
     setCargando(true);
     try {
       const fechaTarget = esSoloGuardia ? hoyStr : fechaAsistencia;
-      const data = await obtenerDatosCaseta(sedeGuardia, fechaTarget);
+      const [data, horaConfig] = await Promise.all([
+        obtenerDatosCaseta(sedeGuardia, fechaTarget),
+        obtenerHoraLimiteTolerancia()
+      ]);
       setRetenidosEnEspera(data.retenidosEnEspera || []);
       setPasesPorCruzar(data.pasesPorCruzar || []);
       setPersonalFuera(data.personalFuera || []);
@@ -86,6 +91,9 @@ export default function Caseta() {
       setEmpleadosSede(data.empleadosSede || []);
       setMapaAsistencias(data.mapaAsistencias || {});
       setMapaIncidenciasHoy(data.mapaIncidenciasHoy || {});
+      if (horaConfig) {
+        setHoraCorteRH(horaConfig);
+      }
     } catch (err) {
       console.error('Error cargando datos de vigilancia:', err);
     } finally {
@@ -99,6 +107,20 @@ export default function Caseta() {
     return () => clearInterval(intervalo);
   }, [cargarDatos]);
 
+  const handleGuardarHoraCorte = async () => {
+    if (!nuevaHoraInput) return;
+    setGuardandoCorte(true);
+    try {
+      const guardada = await guardarHoraLimiteTolerancia(nuevaHoraInput, usuario?.id || null);
+      setHoraCorteRH(guardada);
+      setEditandoCorteRH(false);
+    } catch (err) {
+      alert('Error al guardar hora de corte: ' + err.message);
+    } finally {
+      setGuardandoCorte(false);
+    }
+  };
+
   const handleSellarPase = async (id, tipoMovimiento) => {
     setProcesandoId(id);
     try {
@@ -106,6 +128,19 @@ export default function Caseta() {
       await cargarDatos();
     } catch (err) {
       alert('Error al sellar movimiento: ' + err.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const handleCancelarPaseSinUso = async (paseId, nombre) => {
+    if (!window.confirm(`¿Confirmas cancelar el pase de ${nombre || 'este colaborador'} (porque ya no se presentó o ya no ocupó el permiso)?`)) return;
+    setProcesandoId(paseId);
+    try {
+      await cancelarPasePorInasistenciaOCambio(paseId, 'Cancelado en puerta (No se presentó / Sin uso)');
+      await cargarDatos();
+    } catch (err) {
+      alert('Error al cancelar pase: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -154,6 +189,75 @@ export default function Caseta() {
           objectFit: 'cover', border: `1px solid ${c.border}`, flexShrink: 0
         }}
       />
+    );
+  };
+
+  // Barra de control exclusiva para RH donde ajusta el minuto exacto de corte de retardos
+  const PanelAjusteCorteRH = () => {
+    if (!esRHOSuper) return null;
+    return (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap'
+      }}>
+        {!editandoCorteRH ? (
+          <button
+            type="button"
+            onClick={() => {
+              setNuevaHoraInput(horaCorteRH);
+              setEditandoCorteRH(true);
+            }}
+            title="Ajustar hora límite en la que el sistema activa retardos automáticos"
+            style={{
+              height: '34px', padding: '0 11px', borderRadius: '8px',
+              border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
+              fontSize: '12px', fontWeight: '800', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: '6px'
+            }}
+          >
+            <Sliders size={13} />
+            <span>Corte Retardo: {horaCorteRH} hrs</span>
+          </button>
+        ) : (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            background: c.bg, border: `1.5px solid ${c.accent}`, borderRadius: '8px',
+            padding: '3px 8px'
+          }}>
+            <span style={{ fontSize: '11.5px', fontWeight: '800', color: c.text }}>Corte:</span>
+            <input
+              type="time"
+              value={nuevaHoraInput}
+              onChange={(e) => setNuevaHoraInput(e.target.value)}
+              style={{
+                border: `1px solid ${c.border}`, borderRadius: '6px',
+                background: c.surfaceCard, color: c.text,
+                fontSize: '12.5px', fontWeight: '800', padding: '2px 6px', outline: 'none'
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleGuardarHoraCorte}
+              disabled={guardandoCorte}
+              style={{
+                height: '26px', padding: '0 9px', borderRadius: '6px', border: 'none',
+                background: c.accent, color: '#fff', fontSize: '11px', fontWeight: '800', cursor: 'pointer'
+              }}
+            >
+              {guardandoCorte ? '...' : 'Guardar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditandoCorteRH(false)}
+              style={{
+                height: '26px', padding: '0 6px', borderRadius: '6px', border: 'none',
+                background: 'transparent', color: c.textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center'
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -369,11 +473,25 @@ export default function Caseta() {
                         <span style={{
                           fontSize: '11.5px', fontWeight: '800', color: '#d97706',
                           background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)',
-                          padding: '6px 10px', borderRadius: '8px', width: '100%', textAlign: 'center',
+                          padding: '6px 10px', borderRadius: '8px', textAlign: 'center',
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                         }}>
                           <Hourglass size={13} /> Esperando respuesta...
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCancelarPaseSinUso(p.id, p.usuarios?.nombre_completo)}
+                          disabled={procesandoId === p.id}
+                          title="Cancelar si el colaborador se retiró o nunca llegó"
+                          style={{
+                            height: '34px', padding: '0 10px', borderRadius: '8px',
+                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                            fontSize: '11px', fontWeight: '700', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: '4px'
+                          }}
+                        >
+                          <Ban size={13} /> No se presentó
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -436,6 +554,22 @@ export default function Caseta() {
                     </div>
 
                     <div className="caseta-card-actions">
+                      {!esRegresoCasa && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelarPaseSinUso(p.id, p.usuarios?.nombre_completo)}
+                          disabled={procesandoId === p.id}
+                          title="Cancelar si el colaborador ya no ocupó el pase o nunca llegó"
+                          style={{
+                            height: '38px', padding: '0 10px', borderRadius: '9px',
+                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                            fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: '4px'
+                          }}
+                        >
+                          <Ban size={13} /> Sin uso
+                        </button>
+                      )}
                       <button
                         onClick={() => handleSellarPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'))}
                         disabled={procesandoId === p.id}
@@ -624,7 +758,7 @@ export default function Caseta() {
         padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '180px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '180px', flexWrap: 'wrap' }}>
             {!esSoloGuardia && (
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -644,7 +778,9 @@ export default function Caseta() {
               </div>
             )}
 
-            <div style={{ position: 'relative', flex: 1 }}>
+            <PanelAjusteCorteRH />
+
+            <div style={{ position: 'relative', flex: 1, minWidth: '160px' }}>
               <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
               <input
                 type="text"
@@ -738,13 +874,31 @@ export default function Caseta() {
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                     {tipoInc === 'retardo_en_espera' ? (
-                      <span style={{
-                        fontSize: '11.5px', fontWeight: '800', color: '#d97706',
-                        background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.32)',
-                        padding: '6px 11px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                      }}>
-                        <Hourglass size={13} /> En espera de RH
-                      </span>
+                      <>
+                        <span style={{
+                          fontSize: '11.5px', fontWeight: '800', color: '#d97706',
+                          background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.32)',
+                          padding: '6px 11px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                        }}>
+                          <Hourglass size={13} /> En espera de RH
+                        </span>
+                        {esRHOSuper && inc?.paseId && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelarPaseSinUso(inc.paseId, emp.nombre_completo)}
+                            disabled={procesandoId === inc.paseId}
+                            title="Cancelar si nunca se presentó"
+                            style={{
+                              height: '34px', padding: '0 8px', borderRadius: '8px',
+                              border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                              fontSize: '11px', fontWeight: '700', cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center'
+                            }}
+                          >
+                            <Ban size={13} />
+                          </button>
+                        )}
+                      </>
                     ) : tipoInc === 'retardo_regresa' ? (
                       inc.yaSeRetiroACasa ? (
                         <span style={{
@@ -772,7 +926,7 @@ export default function Caseta() {
                           <button
                             onClick={() => handleMarcarAsistencia(emp.id, 'entrada', true)}
                             disabled={procesandoId === `${emp.id}-entrada`}
-                            title="Validar asistencia directa en planta (RH)"
+                            title="Validar asistencia puntual directa en planta (RH)"
                             style={{
                               height: '36px', padding: '0 10px', borderRadius: '9px',
                               border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
@@ -780,7 +934,7 @@ export default function Caseta() {
                               display: 'inline-flex', alignItems: 'center', gap: '4px'
                             }}
                           >
-                            <ShieldCheck size={14} /> En Planta (RH)
+                            <ShieldCheck size={14} /> Puntual (RH)
                           </button>
                         )}
                         <button
