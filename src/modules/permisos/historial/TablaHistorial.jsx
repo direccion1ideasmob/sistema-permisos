@@ -3,7 +3,7 @@ import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
   Factory, Building2, HardHat, FileSpreadsheet, RotateCcw, Clock,
   CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronUp,
-  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText
+  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText, User, Stethoscope, Briefcase, Palmtree
 } from 'lucide-react';
 
 export const parsearDatosObservaciones = (obs = '') => {
@@ -45,8 +45,22 @@ export const parsearDatosObservaciones = (obs = '') => {
 };
 
 export const limpiarMotivo = (asunto = '') => {
-  const m = String(asunto || '').match(/^\[(.*?)\]\s*(.*)\$/);
-  if (m) return { categoria: m[1].trim(), texto: m[2].trim() };
+  const limpio = String(asunto || '').trim();
+  const m = limpio.match(/^\[(.*?)\]\s*(.*)$/);
+  const rawCat = m ? m[1].replace(/[\[\]]/g, '').trim() : '';
+  const rawTxt = m ? m[2].replace(/^\[(.*?)\]\s*/, '').trim() : limpio.replace(/[\[\]]/g, '').trim();
+
+  let catFormateada = '';
+  const up = rawCat.toUpperCase();
+  if (up.includes('PERSONAL') || up.includes('FAMILIAR')) catFormateada = 'Personal';
+  else if (up.includes('CITA') || up.includes('MEDIC') || up.includes('MÉDIC')) catFormateada = 'Cita Médica';
+  else if (up.includes('TRABAJO') || up.includes('LABORAL')) catFormateada = 'Trabajo';
+  else if (up.includes('VACACIONES')) catFormateada = 'Vacaciones';
+  else if (up.includes('CASETA')) catFormateada = 'Apoyo Caseta';
+  else if (rawCat) catFormateada = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase();
+
+  return { categoria: catFormateada, texto: rawTxt };
+};
   return { categoria: '', texto: String(asunto || '').trim() };
 };
 

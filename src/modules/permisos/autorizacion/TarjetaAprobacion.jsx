@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2
+  Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2, User, Stethoscope, Briefcase, Palmtree
 } from 'lucide-react';
 import { contarReincidenciasRetardo } from '../services/permisosService';
 
@@ -250,13 +250,21 @@ export default function TarjetaAprobacion({
           )}
         </div>
 
-        <div style={{ fontSize: '15px', color: c.textSubtle, lineHeight: 1.45 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '15px', color: c.textSubtle, lineHeight: 1.45 }}>
           {etiqueta && (
-            <span style={{ fontWeight: '800', color: c.textMuted }}>
-              {etiqueta}:{' '}
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              fontSize: '13px', fontWeight: '700', color: c.textMuted
+            }}>
+              {etiqueta.toLowerCase().includes('cita') ? <Stethoscope size={14} color={c.textMuted} /> :
+               etiqueta.toLowerCase().includes('trabajo') ? <Briefcase size={14} color={c.textMuted} /> :
+               etiqueta.toLowerCase().includes('vacaciones') ? <Palmtree size={14} color={c.textMuted} /> :
+               <User size={14} color={c.textMuted} />}
+              <span>{etiqueta}</span>
+              <span style={{ opacity: 0.4 }}>—</span>
             </span>
           )}
-          <span style={{ fontWeight: '600', color: c.text }}>"{redaccion}"</span>
+          <span style={{ fontWeight: '600', color: c.text }}>{redaccion}</span>
         </div>
 
         {notasPrevias && notasPrevias.length > 0 && (

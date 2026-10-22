@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info } from 'lucide-react';
+import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase } from 'lucide-react';
 import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
 
@@ -362,7 +362,13 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             <div>
               <label className="zinc-label">2. Naturaleza del Asunto</label>
               <div className="grid-responsivo-naturaleza">
-                {['Personal / Familiar', 'Cita Médica', 'Asunto de Trabajo'].map(nat => {
+                {[
+                  { label: 'Personal / Familiar', icon: User },
+                  { label: 'Cita Médica', icon: Stethoscope },
+                  { label: 'Asunto de Trabajo', icon: Briefcase }
+                ].map(item => {
+                  const nat = item.label;
+                  const IconoNat = item.icon;
                   const activa = naturaleza === nat;
                   return (
                     <button
@@ -370,7 +376,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
                       type="button"
                       onClick={() => setNaturaleza(nat)}
                       style={{
-                        padding: '12px 14px',
+                        padding: '13px 14px',
                         borderRadius: '11px',
                         border: `1.5px solid ${activa ? t.text : t.border}`,
                         background: activa ? (modoOscuro ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)') : t.surface,
@@ -378,11 +384,15 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
                         fontSize: '14px',
                         fontWeight: activa ? '800' : '700',
                         cursor: 'pointer',
-                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
                         transition: 'all 0.2s'
                       }}
                     >
-                      {nat}
+                      <IconoNat size={17} color={activa ? t.text : t.textMuted} strokeWidth={2} />
+                      <span>{nat}</span>
                     </button>
                   );
                 })}

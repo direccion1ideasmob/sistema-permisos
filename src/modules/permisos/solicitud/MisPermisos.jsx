@@ -6,7 +6,7 @@ import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHist
 import {
   Clock, CheckCircle2, FileText, AlertTriangle, ShieldCheck,
   XCircle, FastForward, MessageSquare, DoorOpen, CornerUpLeft,
-  Calendar, ChevronDown, ChevronUp
+  Calendar, ChevronDown, ChevronUp, User, Stethoscope, Briefcase, Palmtree
 } from 'lucide-react';
 
 export default function MisPermisos() {
@@ -103,6 +103,25 @@ export default function MisPermisos() {
 
   const toggleMes = (clave) => {
     setMesesContraidos(prev => ({ ...prev, [clave]: !prev[clave] }));
+  };
+
+  const renderEtiquetaNaturaleza = (cat = '') => {
+    if (!cat) return null;
+    const low = cat.toLowerCase();
+    let Icono = User;
+    if (low.includes('cita') || low.includes('médic')) Icono = Stethoscope;
+    else if (low.includes('trabajo')) Icono = Briefcase;
+    else if (low.includes('vacaciones')) Icono = Palmtree;
+
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '5px',
+        fontSize: '13px', fontWeight: '700', color: c.textMuted
+      }}>
+        <Icono size={14} color={c.textMuted} strokeWidth={2} />
+        <span>{cat}</span>
+      </span>
+    );
   };
 
   const renderSelloArea = (nombreArea, estado) => {
@@ -280,18 +299,11 @@ export default function MisPermisos() {
                       </span>
                     </div>
 
-                    {categoria && (
-                      <span style={{
-                        background: c.surface, color: c.textMuted, border: `1px solid ${c.border}`,
-                        padding: '4px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: '700'
-                      }}>
-                        {categoria}
-                      </span>
-                    )}
+                    {renderEtiquetaNaturaleza(categoria)}
                   </div>
 
                   <div style={{ fontSize: '15px', color: c.text, lineHeight: '1.5', background: c.bg, padding: '12px 16px', borderRadius: '11px', border: `1px solid ${c.border}` }}>
-                    "{motivoLimpio}"
+                    {motivoLimpio}
                     {supervisorSubarea && (
                       <div style={{ fontSize: '13.5px', color: c.textMuted, fontWeight: '700', marginTop: '8px' }}>
                         ✓ VoBo Subárea: <strong style={{ color: c.text }}>{supervisorSubarea}</strong>
@@ -468,14 +480,7 @@ export default function MisPermisos() {
                               </div>
 
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                {categoria && (
-                                  <span style={{
-                                    background: c.bg, color: c.textMuted, border: `1px solid ${c.border}`,
-                                    padding: '4px 11px', borderRadius: '999px', fontSize: '12px', fontWeight: '700'
-                                  }}>
-                                    {categoria}
-                                  </span>
-                                )}
+                                {renderEtiquetaNaturaleza(categoria)}
                                 <span style={{
                                   fontSize: '12px', fontWeight: '800',
                                   color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}`,
@@ -487,7 +492,7 @@ export default function MisPermisos() {
                             </div>
 
                             <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.45' }}>
-                              "{motivoLimpio}"
+                              {motivoLimpio}
                             </div>
 
                             {notasFlujo && notasFlujo.length > 0 && (
