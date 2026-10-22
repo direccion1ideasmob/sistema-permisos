@@ -11,8 +11,8 @@ import {
 } from './services/vigilanciaService';
 import {
   DoorOpen, RotateCcw, CheckCircle2, LogOut, LogIn,
-  Clock, Search, Calendar, RefreshCw, UserCheck,
-  Hourglass, MapPin, CornerUpLeft, X, ShieldCheck
+  Search, Calendar, RefreshCw, UserCheck,
+  Hourglass, MapPin, CornerUpLeft, X, ShieldCheck, Send
 } from 'lucide-react';
 import BuscadorPersonal from './BuscadorPersonal';
 
@@ -60,13 +60,15 @@ export default function Caseta() {
   const [procesandoId, setProcesandoId] = useState(null);
 
   const sedeGuardia = usuario?.sede_id || null;
+  const esSoloGuardia = usuario?.rol === 'caseta';
   const hoyStr = obtenerFechaLocalHoy();
   const esFechaHoy = fechaAsistencia === hoyStr;
 
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
-      const data = await obtenerDatosCaseta(sedeGuardia, fechaAsistencia);
+      const fechaTarget = esSoloGuardia ? hoyStr : fechaAsistencia;
+      const data = await obtenerDatosCaseta(sedeGuardia, fechaTarget);
       setRetenidosEnEspera(data.retenidosEnEspera || []);
       setPasesPorCruzar(data.pasesPorCruzar || []);
       setPersonalFuera(data.personalFuera || []);
@@ -79,7 +81,7 @@ export default function Caseta() {
     } finally {
       setCargando(false);
     }
-  }, [sedeGuardia, fechaAsistencia]);
+  }, [sedeGuardia, fechaAsistencia, esSoloGuardia, hoyStr]);
 
   useEffect(() => {
     cargarDatos();
@@ -118,7 +120,7 @@ export default function Caseta() {
       await registrarRetardoEnPuerta(empleadoSeleccionado);
       setEmpleadoSeleccionado('');
       await cargarDatos();
-      alert('⏳ Hora de llegada congelada en puerta y enviada al Jefe de Área. El trabajador queda en la lista de Espera en Puerta hasta recibir autorización o instrucción de retiro.');
+      alert('✅ Solicitud enviada al Jefe de Área. El colaborador queda en la lista de Espera en Puerta hasta recibir instrucción.');
       navigate('/caseta');
       setSubTabPases('por_cruzar');
     } catch (err) {
@@ -126,13 +128,6 @@ export default function Caseta() {
     } finally {
       setProcesandoId(null);
     }
-  };
-
-  const calcularMinutosEspera = (createdAt) => {
-    if (!createdAt) return null;
-    const diffMs = Date.now() - new Date(createdAt).getTime();
-    const min = Math.max(1, Math.floor(diffMs / 60000));
-    return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
   };
 
   const AvatarColaborador = ({ u, size = 40 }) => {
@@ -246,7 +241,7 @@ export default function Caseta() {
   `;
 
   // ====================================================================
-  // MÓDULO 1 DEL SIDEBAR: PASES DE PUERTA (/caseta)
+  // MÓDULO 1 DEL SIDEBAR: PASES DE PUERTA (/caseta) - SIN RELOJES NI HORAS
   // ====================================================================
   if (vista === 'pases') {
     const totalPorCruzarYEspera = pasesPorCruzar.length + retenidosEnEspera.length;
@@ -256,7 +251,6 @@ export default function Caseta() {
         <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
         <style>{estilosComunesCaseta}</style>
 
-        {/* BARRA DE 3 PESTAÑAS OPERATIVAS */}
         <div className="tabs-aprobacion-bar caseta-tabs-bar">
           <button
             className={`tab-btn ${subTabPases === 'por_cruzar' ? 'active' : ''}`}
@@ -293,7 +287,7 @@ export default function Caseta() {
           </button>
         </div>
 
-        {/* SUB-PESTAÑA 1: EN PUERTA (RETENIDOS EN ESPERA + LISTOS PARA CRUZAR O RETIRAR) */}
+        {/* SUB-PESTAÑA 1: EN PUERTA (RETENIDOS EN ESPERA + LISTOS PARA ACCIÓN) */}
         {subTabPases === 'por_cruzar' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
 
@@ -317,74 +311,68 @@ export default function Caseta() {
                   alignItems: 'center'
                 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <Hourglass size={13} /> EN ESPERA DE FIRMA DEL JEFE (NO DAR ACCESO AÚN)
+                    <Hourglass size={13} /> EN ESPERA DE INSTRUCCIÓN DE JEFATURA (NO DAR ACCESO AÚN)
                   </span>
                   <span>{retenidosEnEspera.length}</span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {retenidosEnEspera.map((p, idx) => {
-                    const tiempoEspera = calcularMinutosEspera(p.created_at);
-                    return (
-                      <div
-                        key={p.id}
-                        className="caseta-card"
-                        style={{
-                          border: 'none',
-                          borderRadius: 0,
-                          borderBottom: idx < retenidosEnEspera.length - 1 ? `1px solid ${c.border}` : 'none'
-                        }}
-                      >
-                        <div className="caseta-card-left">
-                          <AvatarColaborador u={p.usuarios} />
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                              {p.usuarios?.nombre_completo}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px', fontSize: '11.5px', fontWeight: '700' }}>
-                              <span style={{ color: '#d97706', background: 'rgba(245,158,11,0.14)', padding: '1.5px 6px', borderRadius: '4px' }}>
-                                ⏳ Turno: {p.esperandoFirmaDe}
-                              </span>
-                              <span style={{ color: c.textMuted }}>
-                                • {p.horaLlegadaPuerta ? `En puerta: ${p.horaLlegadaPuerta}` : p.horarioProgramado}
-                              </span>
-                              {tiempoEspera && (
-                                <span style={{ color: c.textMuted }}>({tiempoEspera})</span>
-                              )}
-                            </div>
+                  {retenidosEnEspera.map((p, idx) => (
+                    <div
+                      key={p.id}
+                      className="caseta-card"
+                      style={{
+                        border: 'none',
+                        borderRadius: 0,
+                        borderBottom: idx < retenidosEnEspera.length - 1 ? `1px solid ${c.border}` : 'none'
+                      }}
+                    >
+                      <div className="caseta-card-left">
+                        <AvatarColaborador u={p.usuarios} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
+                            {p.usuarios?.nombre_completo}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px', fontSize: '11.5px', fontWeight: '700' }}>
+                            <span style={{ color: '#d97706', background: 'rgba(245,158,11,0.14)', padding: '1.5px 6px', borderRadius: '4px' }}>
+                              ⏳ Esperando a: {p.esperandoFirmaDe}
+                            </span>
+                            <span style={{ color: c.textMuted, fontFamily: 'ui-monospace, monospace' }}>
+                              #{p.usuarios?.numero_empleado}
+                            </span>
                           </div>
                         </div>
-
-                        <div className="caseta-card-actions">
-                          {p.horaLlegadaPuerta ? (
-                            <span style={{
-                              fontSize: '11.5px', fontWeight: '800', color: '#16a34a',
-                              background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
-                              padding: '6px 10px', borderRadius: '8px', width: '100%', textAlign: 'center',
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                            }}>
-                              <CheckCircle2 size={13} /> Hora congelada: {p.horaLlegadaPuerta}
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleSellarPase(p.id, 'congelar_llegada')}
-                              disabled={procesandoId === p.id}
-                              className="caseta-btn-action"
-                              style={{ background: '#f59e0b', color: '#fff' }}
-                            >
-                              <MapPin size={14} />
-                              {procesandoId === p.id ? 'Congelando...' : 'Congelar Hora en Puerta'}
-                            </button>
-                          )}
-                        </div>
                       </div>
-                    );
-                  })}
+
+                      <div className="caseta-card-actions">
+                        {p.horaLlegadaPuerta ? (
+                          <span style={{
+                            fontSize: '11.5px', fontWeight: '800', color: '#16a34a',
+                            background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)',
+                            padding: '6px 10px', borderRadius: '8px', width: '100%', textAlign: 'center',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          }}>
+                            <CheckCircle2 size={13} /> Presencia registrada
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSellarPase(p.id, 'congelar_llegada')}
+                            disabled={procesandoId === p.id}
+                            className="caseta-btn-action"
+                            style={{ background: '#f59e0b', color: '#fff' }}
+                          >
+                            <MapPin size={14} />
+                            {procesandoId === p.id ? 'Registrando...' : 'Confirmar Presencia en Puerta'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* BLOQUE B: PASES CON INSTRUCCIÓN LISTA PARA CASETA (ENTRADA, SALIDA O SE REGRESA A CASA) */}
+            {/* BLOQUE B: PASES CON INSTRUCCIÓN LISTA PARA CASETA (SIN MOSTRAR HORAS) */}
             {pasesPorCruzar.length === 0 && retenidosEnEspera.length === 0 ? (
               <div style={{
                 background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
@@ -400,8 +388,8 @@ export default function Caseta() {
                 const colorBorde = esRegresoCasa ? '#ef4444' : (esSalida ? '#0284c7' : '#16a34a');
                 const bgBadge = esRegresoCasa ? 'rgba(239,68,68,0.14)' : (esSalida ? 'rgba(2,132,199,0.12)' : 'rgba(22,163,74,0.12)');
                 const textoBadge = esRegresoCasa
-                  ? (p.esRechazado ? '🚫 RECHAZADO • NO DAR ACCESO' : '🚫 SE REGRESA A CASA • SIN ACCESO')
-                  : (esSalida ? (p.requiereRegreso ? '🚪 SALIDA (CON REGRESO)' : '🚪 SALIDA DEFINITIVA') : '✅ ENTRADA AUTORIZADA');
+                  ? (p.esRechazado ? '🚫 ACCESO DENEGADO • SE REGRESA' : '🚫 SE REGRESA A CASA • SIN ACCESO')
+                  : (esSalida ? (p.requiereRegreso ? '🔵 SALIDA (CON REGRESO)' : '🔵 SALIDA DEFINITIVA') : '🟢 ENTRADA AUTORIZADA');
 
                 return (
                   <div
@@ -431,20 +419,12 @@ export default function Caseta() {
                           {p.usuarios?.nombre_completo}
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px', fontSize: '12px', color: c.textMuted, fontWeight: '600' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Clock size={12} />
-                            {p.horaLlegadaPuerta ? `Llegó: ${p.horaLlegadaPuerta}` : p.horarioProgramado}
-                          </span>
-                          {p.autorizadoPor && (
-                            <>
-                              <span>•</span>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: c.text }}>
-                                <ShieldCheck size={12} color={colorBorde} /> {p.autorizadoPor}
-                              </span>
-                            </>
-                          )}
-                        </div>
+                        {p.autorizadoPor && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', fontSize: '11.5px', color: c.textMuted, fontWeight: '600' }}>
+                            <ShieldCheck size={12} color={colorBorde} />
+                            <span>Instrucción de: <strong style={{ color: c.text }}>{p.autorizadoPor}</strong></span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -460,8 +440,8 @@ export default function Caseta() {
                       >
                         {esRegresoCasa ? <CornerUpLeft size={15} /> : (esSalida ? <LogOut size={15} /> : <LogIn size={15} />)}
                         {procesandoId === p.id
-                          ? 'Sellando...'
-                          : (esRegresoCasa ? 'Confirmar Retiro a Casa' : (esSalida ? 'Sellar Salida' : 'Sellar Entrada'))}
+                          ? 'Confirmando...'
+                          : (esRegresoCasa ? 'Confirmar Retiro a Casa' : (esSalida ? 'Confirmar Salida' : 'Confirmar Entrada'))}
                       </button>
                     </div>
                   </div>
@@ -471,7 +451,7 @@ export default function Caseta() {
           </div>
         )}
 
-        {/* SUB-PESTAÑA 2: PERSONAL FUERA PENDIENTE DE REINGRESAR */}
+        {/* SUB-PESTAÑA 2: PERSONAL FUERA PENDIENTE DE REINGRESAR (SIN HORAS) */}
         {subTabPases === 'reingresos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
             {personalFuera.length === 0 ? (
@@ -490,8 +470,8 @@ export default function Caseta() {
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
                         {p.usuarios?.nombre_completo}
                       </div>
-                      <div style={{ fontSize: '12px', color: c.textMuted, fontWeight: '700', marginTop: '2px' }}>
-                        Salió a las <strong>{p.horaSalidaCaseta}</strong> • {p.horarioProgramado}
+                      <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700', marginTop: '2px' }}>
+                        #{p.usuarios?.numero_empleado} • Fuera de planta (Pendiente de reingreso)
                       </div>
                     </div>
                   </div>
@@ -504,7 +484,7 @@ export default function Caseta() {
                       style={{ background: '#2563eb', color: '#fff' }}
                     >
                       <LogIn size={15} />
-                      {procesandoId === p.id ? 'Sellando...' : 'Sellar Reingreso a Planta'}
+                      {procesandoId === p.id ? 'Confirmando...' : 'Confirmar Reingreso'}
                     </button>
                   </div>
                 </div>
@@ -513,7 +493,7 @@ export default function Caseta() {
           </div>
         )}
 
-        {/* SUB-PESTAÑA 3: BITÁCORA DE SELLADOS HOY */}
+        {/* SUB-PESTAÑA 3: BITÁCORA DE SELLADOS HOY (SIN HORAS) */}
         {subTabPases === 'sellados' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
             {crucesCompletadosHoy.length === 0 ? (
@@ -555,18 +535,18 @@ export default function Caseta() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', fontWeight: '800' }}>
                     {p.seRegresaACasa ? (
                       <span style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', padding: '4px 9px', borderRadius: '6px' }}>
-                        ↩️ Retirado a casa: {p.horaRetiroCaseta || 'Hoy'}
+                        ↩️ Retirado a casa
                       </span>
                     ) : (
                       <>
                         {p.horaSalidaCaseta && (
                           <span style={{ background: 'rgba(2,132,199,0.12)', color: '#0284c7', padding: '4px 9px', borderRadius: '6px' }}>
-                            Salida: {p.horaSalidaCaseta}
+                            ✓ Salida sellada
                           </span>
                         )}
                         {p.horaEntradaCaseta && (
                           <span style={{ background: c.accentSoft, color: c.accent, padding: '4px 9px', borderRadius: '6px' }}>
-                            {p.tipo_permiso === 'salida' ? `Regresó: ${p.horaEntradaCaseta}` : `Entrada: ${p.horaEntradaCaseta}`}
+                            {p.tipo_permiso === 'salida' ? '✓ Reingreso sellado' : '✓ Entrada sellada'}
                           </span>
                         )}
                       </>
@@ -582,10 +562,9 @@ export default function Caseta() {
   }
 
   // ====================================================================
-  // MÓDULO 2 DEL SIDEBAR: APOYO RETARDO (/caseta/retardo)
+  // MÓDULO 2 DEL SIDEBAR: APOYO RETARDO (/caseta/retardo) - SIN RELOJ VISIBLE
   // ====================================================================
   if (vista === 'retardo') {
-    const horaActual = new Date().toTimeString().slice(0, 5);
     return (
       <div className="caseta-wrap">
         <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
@@ -595,22 +574,13 @@ export default function Caseta() {
           background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '14px',
           padding: '18px', width: '100%', boxSizing: 'border-box'
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
-            <div style={{ flex: '1 1 240px' }}>
-              <div style={{ fontSize: '16px', fontWeight: '800', color: c.text }}>
-                Apoyo de Retardo en Puerta
-              </div>
-              <div style={{ fontSize: '12.5px', color: c.textMuted, marginTop: '3px', lineHeight: 1.4 }}>
-                Congela la hora exacta de llegada del colaborador en caseta y envía la alerta a su Jefe de Área para que autorice su ingreso o indique si se regresa a casa.
-              </div>
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: c.text }}>
+              Solicitar Autorización de Acceso en Puerta
             </div>
-            <span style={{
-              fontSize: '12px', fontWeight: '800', color: c.accent, background: c.accentSoft,
-              border: `1px solid ${c.border}`, padding: '6px 11px', borderRadius: '8px',
-              display: 'inline-flex', alignItems: 'center', gap: '6px'
-            }}>
-              <Clock size={14} /> Hora en puerta: {horaActual} hrs
-            </span>
+            <div style={{ fontSize: '12.5px', color: c.textMuted, marginTop: '3px', lineHeight: 1.4 }}>
+              Selecciona al colaborador que se encuentra en puerta para enviar la alerta a su Jefe de Área y recibir instrucción de acceso o retiro.
+            </div>
           </div>
 
           <BuscadorPersonal
@@ -630,8 +600,8 @@ export default function Caseta() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
             }}
           >
-            <Clock size={16} />
-            {procesandoId === 'nuevo-retardo' ? 'Congelando llegada...' : 'Congelar Llegada y Solicitar Autorización'}
+            <Send size={15} />
+            {procesandoId === 'nuevo-retardo' ? 'Enviando solicitud...' : 'Notificar a Jefatura'}
           </button>
         </div>
       </div>
@@ -639,7 +609,7 @@ export default function Caseta() {
   }
 
   // ====================================================================
-  // MÓDULO 3 DEL SIDEBAR: PASE DE LISTA Y CONSULTA (/caseta/asistencia)
+  // MÓDULO 3 DEL SIDEBAR: PASE DE LISTA (/caseta/asistencia) - SIN HORAS VISIBLES
   // ====================================================================
   const termino = (busquedaTexto || '').toLowerCase().trim();
   const personalFiltrado = empleadosSede.filter(emp => {
@@ -657,35 +627,36 @@ export default function Caseta() {
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
       <style>{estilosComunesCaseta}</style>
 
-      {/* BARRA COMPACTA DE PASE DE LISTA: FECHA + PRESENTES + LUPA DISCRETA */}
       <div style={{
         background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
         padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '5px 10px'
-            }}>
-              <Calendar size={14} color={c.accent} />
-              <input
-                type="date"
-                value={fechaAsistencia}
-                max={hoyStr}
-                onChange={(e) => setFechaAsistencia(e.target.value)}
-                style={{
-                  border: 'none', background: 'transparent', color: c.text,
-                  fontSize: '12.5px', fontWeight: '800', outline: 'none', cursor: 'pointer'
-                }}
-              />
-            </div>
+            {!esSoloGuardia && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '5px 10px'
+              }}>
+                <Calendar size={14} color={c.accent} />
+                <input
+                  type="date"
+                  value={fechaAsistencia}
+                  max={hoyStr}
+                  onChange={(e) => setFechaAsistencia(e.target.value)}
+                  style={{
+                    border: 'none', background: 'transparent', color: c.text,
+                    fontSize: '12.5px', fontWeight: '800', outline: 'none', cursor: 'pointer'
+                  }}
+                />
+              </div>
+            )}
 
             <span style={{
               fontSize: '12px', fontWeight: '800', color: c.accent, background: c.accentSoft,
               padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px'
             }}>
-              <UserCheck size={14} /> {totalPresentes} / {empleadosSede.length}
+              <UserCheck size={14} /> Presentes hoy: {totalPresentes} / {empleadosSede.length}
             </span>
           </div>
 
@@ -746,7 +717,7 @@ export default function Caseta() {
         )}
       </div>
 
-      {/* LISTA COMPACTA DE PERSONAL CON INDICADORES DE VACACIONES / FALTAS / RETIROS */}
+      {/* LISTA DE PERSONAL SIN MOSTRAR HORAS AL GUARDIA */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', width: '100%' }}>
         {personalFiltrado.map((emp) => {
           const reg = mapaAsistencias[emp.id];
@@ -754,6 +725,7 @@ export default function Caseta() {
           const tieneEntrada = Boolean(reg?.hora_entrada);
           const tieneSalida = Boolean(reg?.hora_salida);
           const bloqueadoPorRetiro = incidencia?.etiqueta?.includes('regresó');
+          const ausenteJustificado = incidencia?.etiqueta?.includes('Vacaciones') || incidencia?.etiqueta?.includes('Falta');
 
           return (
             <div
@@ -798,7 +770,7 @@ export default function Caseta() {
                     background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.28)',
                     padding: '5px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
                   }}>
-                    <CheckCircle2 size={12.5} /> {reg.hora_entrada}
+                    <CheckCircle2 size={12.5} /> {esSoloGuardia ? 'Entrada registrada' : `Entrada: ${reg.hora_entrada}`}
                   </span>
                 ) : bloqueadoPorRetiro ? (
                   <span style={{
@@ -807,7 +779,15 @@ export default function Caseta() {
                   }}>
                     Sin acceso hoy
                   </span>
-                ) : esFechaHoy ? (
+                ) : ausenteJustificado ? (
+                  <span style={{
+                    fontSize: '11px', fontWeight: '700', color: c.textMuted,
+                    background: c.bg, border: `1px solid ${c.border}`,
+                    padding: '4px 8px', borderRadius: '6px'
+                  }}>
+                    Ausencia autorizada
+                  </span>
+                ) : (esFechaHoy || esSoloGuardia) ? (
                   <button
                     onClick={() => handleMarcarAsistencia(emp.id, 'entrada')}
                     disabled={procesandoId === `${emp.id}-entrada`}
@@ -837,9 +817,9 @@ export default function Caseta() {
                       background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
                       padding: '5px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
                     }}>
-                      <LogOut size={12.5} /> {reg.hora_salida}
+                      <LogOut size={12.5} /> {esSoloGuardia ? 'Salida registrada' : `Salida: ${reg.hora_salida}`}
                     </span>
-                  ) : esFechaHoy ? (
+                  ) : (esFechaHoy || esSoloGuardia) ? (
                     <button
                       onClick={() => handleMarcarAsistencia(emp.id, 'salida')}
                       disabled={procesandoId === `${emp.id}-salida`}
