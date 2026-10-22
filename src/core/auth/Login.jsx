@@ -93,7 +93,7 @@ export default function Login({ alEntrar }) {
 
 const styles = {
   fondo: { 
-    minHeight: 'var(--app-vh, 100vh)', 
+    minHeight: '100vh', 
     display: 'flex', 
     justifyContent: 'center', 
     alignItems: 'center', 

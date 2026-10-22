@@ -211,7 +211,7 @@ export default function AprobarDirecto() {
 }
 
 const s = {
-  contenedor: { minHeight: 'var(--app-vh, 100vh)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#171717', padding: '16px', boxSizing: 'border-box', fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' },
+  contenedor: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#171717', padding: '16px', boxSizing: 'border-box', fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' },
   tarjeta: { width: '100%', maxWidth: '400px', backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', textAlign: 'center', boxSizing: 'border-box' },
   header: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', borderBottom: '1px solid #e5e5e5', paddingBottom: '12px', marginBottom: '14px' },
   subtituloHeader: { fontSize: '10px', fontWeight: '800', color: '#737373', letterSpacing: '0.04em' },
