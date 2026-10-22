@@ -25,7 +25,7 @@ export default function VistaArbol({
   const [esMobile, setEsMobile] = useState(window.innerWidth < 768);
 
   // Todo inicia comprimido para limpieza visual
-  const [divisionesAbiertas, setDivisionesAbiertas] = useState({ produccion: true });
+  const [divisionesAbiertas, setDivisionesAbiertas] = useState({});
   const [deptosAbiertosLocal, setDeptosAbiertosLocal] = useState({});
   const [subareasAbiertas, setSubareasAbiertas] = useState({});
 
