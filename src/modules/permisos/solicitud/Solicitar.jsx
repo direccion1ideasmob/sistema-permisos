@@ -16,15 +16,15 @@ export default function Solicitar() {
   };
 
   return (
-    <div className="permisos-container solicitar-wrapper">
+    <div className="solicitar-wrapper">
       <style>{generarEstilosPermisos(c, modoOscuro)}</style>
       <style>{`
         .solicitar-wrapper {
           width: 100%;
-          max-width: 940px;
+          max-width: 980px;
           min-height: calc(100vh - 110px);
           margin: 0 auto;
-          padding: 20px 24px;
+          padding: 22px 24px;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -34,7 +34,7 @@ export default function Solicitar() {
           .solicitar-wrapper {
             min-height: auto;
             justify-content: flex-start;
-            padding: 10px 10px 28px 10px;
+            padding: 12px 12px 28px 12px;
           }
         }
       `}</style>

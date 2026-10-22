@@ -4,7 +4,7 @@ import { obtenerPermisosUsuario, escalarPermisoAGerencia } from '../services/per
 import { obtenerTemaPermisos, generarEstilosPermisos } from '../permisosStyles';
 import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHistorial';
 import {
-  Clock, CheckCircle2, FileText, AlertTriangle, ShieldCheck,
+  Clock, FileText, AlertTriangle, ShieldCheck,
   XCircle, FastForward, MessageSquare, DoorOpen, CornerUpLeft,
   Calendar, ChevronDown, ChevronUp, User, Stethoscope, Briefcase
 } from 'lucide-react';
@@ -56,14 +56,13 @@ export default function MisPermisos() {
     }
   };
 
-  // Paleta semántica por tipo de permiso (idéntica a TarjetaAprobacion)
   const getEstiloTipo = (tipoRaw = '') => {
     const t = tipoRaw.toLowerCase();
-    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.09)', border: 'rgba(239, 68, 68, 0.28)', label: 'Retardo' };
-    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.09)', border: 'rgba(139, 92, 246, 0.28)', label: 'Falta' };
-    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.09)', border: 'rgba(16, 185, 129, 0.28)', label: 'Vacaciones' };
-    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', label: 'Salida Anticipada' };
-    return { color: c.text, bg: c.surface, border: c.border, label: tipoRaw || 'Permiso' };
+    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.09)', border: 'rgba(239, 68, 68, 0.28)', label: 'RETARDO' };
+    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.09)', border: 'rgba(139, 92, 246, 0.28)', label: 'FALTA' };
+    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.09)', border: 'rgba(16, 185, 129, 0.28)', label: 'VACACIONES' };
+    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', label: 'SALIDA ANTICIPADA' };
+    return { color: c.text, bg: c.surface, border: c.border, label: (tipoRaw || 'PERMISO').toUpperCase() };
   };
 
   const formatearFechaCorta = (fechaStr = '') => {
@@ -71,13 +70,12 @@ export default function MisPermisos() {
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const partes = fechaStr.split('-');
     if (partes.length !== 3) return fechaStr;
-    return `${parseInt(partes[2], 10)} ${meses[parseInt(partes[1], 10) - 1] || partes[1]} ${partes[0]}`;
+    return `${String(parseInt(partes[2], 10)).padStart(2, '0')} ${meses[parseInt(partes[1], 10) - 1] || partes[1]} ${partes[0]}`;
   };
 
   const enProceso = misPermisos.filter(p => p.estado_general === 'en_firmas');
   const finalizados = misPermisos.filter(p => p.estado_general !== 'en_firmas');
 
-  // Agrupación de Concluidos por Mes (Ej: "Octubre 2026")
   const gruposPorMes = useMemo(() => {
     const nombresMeses = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -114,11 +112,8 @@ export default function MisPermisos() {
     else if (low.includes('vacaciones')) Icono = Calendar;
 
     return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: '5px',
-        fontSize: '13px', fontWeight: '700', color: c.textMuted
-      }}>
-        <Icono size={14} color={c.textMuted} strokeWidth={2} />
+      <span className="badge-naturaleza-fijo" style={{ color: c.textMuted }}>
+        <Icono size={14} color={c.textMuted} strokeWidth={2} style={{ flexShrink: 0 }} />
         <span>{cat}</span>
       </span>
     );
@@ -162,7 +157,8 @@ export default function MisPermisos() {
 
     return (
       <div style={{
-        padding: '12px 10px',
+        height: '64px',
+        padding: '10px',
         borderRadius: '11px',
         background: config.bg,
         border: `1.5px solid ${config.border}`,
@@ -170,7 +166,9 @@ export default function MisPermisos() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '5px'
+        justifyContent: 'center',
+        gap: '5px',
+        boxSizing: 'border-box'
       }}>
         <span style={{ fontSize: '11.5px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
           {nombreArea}
@@ -183,27 +181,131 @@ export default function MisPermisos() {
   };
 
   return (
-    <div className="permisos-container mis-permisos-wrapper">
+    <div className="mis-permisos-wrapper">
       <style>{generarEstilosPermisos(c, modoOscuro)}</style>
       <style>{`
         .mis-permisos-wrapper {
-          max-width: 1020px;
+          width: 100%;
+          max-width: 980px;
           margin: 0 auto;
           padding: 22px 24px;
           box-sizing: border-box;
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .tabs-mis-permisos {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          background: ${c.surfaceCard};
+          padding: 4px;
+          border-radius: 11px;
+          border: 1.5px solid ${c.border};
+          gap: 4px;
+          min-width: 310px;
+        }
+        .tab-mp-btn {
+          height: 38px;
+          padding: 0 16px;
+          border-radius: 8px;
+          border: none;
+          font-size: 13.5px;
+          font-weight: 800;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          transition: all 0.15s;
+          white-space: nowrap;
         }
         .sellos-grid-3 {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 10px;
         }
+        .tarjeta-permiso-uniforme {
+          width: 100%;
+          min-height: 98px;
+          background: ${c.surfaceCard};
+          border: 1.5px solid ${c.border};
+          border-radius: 15px;
+          padding: 18px 22px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 12px;
+          box-sizing: border-box;
+          box-shadow: ${modoOscuro ? '0 4px 16px rgba(0,0,0,0.22)' : '0 2px 8px rgba(0,0,0,0.03)'};
+        }
+        .badge-folio-fijo {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 92px;
+          height: 28px;
+          font-family: ui-monospace, monospace;
+          font-size: 13px;
+          font-weight: 800;
+          color: ${c.text};
+          background: ${c.bg};
+          border: 1px solid ${c.border};
+          border-radius: 6px;
+          box-sizing: border-box;
+          flex-shrink: 0;
+        }
+        .badge-tipo-fijo {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 148px;
+          height: 28px;
+          font-size: 12px;
+          font-weight: 800;
+          border-radius: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
+          box-sizing: border-box;
+          flex-shrink: 0;
+        }
+        .badge-naturaleza-fijo {
+          display: inline-flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 5px;
+          min-width: 96px;
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .badge-dictamen-fijo {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 114px;
+          height: 28px;
+          font-size: 12px;
+          font-weight: 800;
+          border-radius: 6px;
+          text-transform: uppercase;
+          box-sizing: border-box;
+          flex-shrink: 0;
+        }
         @media (max-width: 680px) {
           .mis-permisos-wrapper {
-            padding: 12px 10px 28px 10px;
+            padding: 12px 12px 28px 12px;
+          }
+          .tabs-mis-permisos {
+            width: 100%;
+            min-width: 0;
           }
           .sellos-grid-3 {
             grid-template-columns: 1fr;
             gap: 8px;
+          }
+          .tarjeta-permiso-uniforme {
+            padding: 16px;
+          }
+          .badge-naturaleza-fijo {
+            justify-content: flex-start;
+            min-width: auto;
           }
         }
       `}</style>
@@ -215,27 +317,23 @@ export default function MisPermisos() {
           <p style={{ fontSize: '13.5px', color: c.textMuted, margin: '4px 0 0 0', fontWeight: '500' }}>Seguimiento de firmas y archivo mensual de pases.</p>
         </div>
 
-        <div style={{ display: 'flex', background: c.surfaceCard, padding: '4px', borderRadius: '11px', border: `1.5px solid ${c.border}`, gap: '4px' }}>
+        <div className="tabs-mis-permisos">
           <button
             onClick={() => setPestaña('proceso')}
+            className="tab-mp-btn"
             style={{
-              padding: '9px 16px', borderRadius: '8px', border: 'none',
               background: pestaña === 'proceso' ? (modoOscuro ? '#334155' : '#0f172a') : 'transparent',
-              color: pestaña === 'proceso' ? '#ffffff' : c.textMuted,
-              fontSize: '13.5px', fontWeight: '800', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '7px', transition: 'all 0.15s'
+              color: pestaña === 'proceso' ? '#ffffff' : c.textMuted
             }}
           >
             <Clock size={15} /> En Proceso ({enProceso.length})
           </button>
           <button
             onClick={() => setPestaña('historial')}
+            className="tab-mp-btn"
             style={{
-              padding: '9px 16px', borderRadius: '8px', border: 'none',
               background: pestaña === 'historial' ? (modoOscuro ? '#334155' : '#0f172a') : 'transparent',
-              color: pestaña === 'historial' ? '#ffffff' : c.textMuted,
-              fontSize: '13.5px', fontWeight: '800', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '7px', transition: 'all 0.15s'
+              color: pestaña === 'historial' ? '#ffffff' : c.textMuted
             }}
           >
             <FileText size={15} /> Concluidos ({finalizados.length})
@@ -255,7 +353,7 @@ export default function MisPermisos() {
             <p style={{ fontSize: '14px', color: c.textMuted, margin: 0 }}>Tus pases activos o en revisión aparecerán aquí.</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
             {enProceso.map(p => {
               const horasTranscurridas = (horaActual - new Date(p.created_at)) / (1000 * 60 * 60);
               const puedeEscalar = p.firma_1_estado === 'pendiente' && horasTranscurridas >= 1;
@@ -269,25 +367,15 @@ export default function MisPermisos() {
               return (
                 <div
                   key={p.id}
-                  style={{
-                    background: c.surfaceCard,
-                    border: `1.5px solid ${c.border}`,
-                    borderLeft: `5px solid ${estilo.color}`,
-                    borderRadius: '16px',
-                    padding: '20px 22px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '14px',
-                    boxShadow: modoOscuro ? '0 4px 18px rgba(0,0,0,0.25)' : '0 2px 10px rgba(0,0,0,0.03)'
-                  }}
+                  className="tarjeta-permiso-uniforme"
+                  style={{ borderLeft: `5px solid ${estilo.color}` }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: '13px', fontWeight: '800', color: estilo.color,
-                        background: estilo.bg, border: `1px solid ${estilo.border}`,
-                        padding: '4px 11px', borderRadius: '7px', textTransform: 'uppercase', letterSpacing: '0.03em'
-                      }}>
+                      <span
+                        className="badge-tipo-fijo"
+                        style={{ color: estilo.color, background: estilo.bg, border: `1px solid ${estilo.border}` }}
+                      >
                         {estilo.label}
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14.5px', color: c.text, fontWeight: '700' }}>
@@ -302,7 +390,7 @@ export default function MisPermisos() {
                     {renderEtiquetaNaturaleza(categoria)}
                   </div>
 
-                  <div style={{ fontSize: '15px', color: c.text, lineHeight: '1.5', background: c.bg, padding: '12px 16px', borderRadius: '11px', border: `1px solid ${c.border}` }}>
+                  <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.5', background: c.bg, padding: '12px 16px', borderRadius: '11px', border: `1px solid ${c.border}` }}>
                     {motivoLimpio}
                     {supervisorSubarea && (
                       <div style={{ fontSize: '13.5px', color: c.textMuted, fontWeight: '700', marginTop: '8px' }}>
@@ -348,8 +436,8 @@ export default function MisPermisos() {
           </div>
         )
       ) : (
-        /* PESTAÑA CONCLUIDOS: AGRUPADA POR MES */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        /* PESTAÑA CONCLUIDOS: AGRUPADA POR MES CON ANCHO Y ALTURA 100% UNIFORMES */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', width: '100%' }}>
           {gruposPorMes.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '52px 24px', background: c.surfaceCard, borderRadius: '16px', border: `1.5px dashed ${c.border}` }}>
               <p style={{ fontSize: '14.5px', color: c.textMuted, margin: 0, fontWeight: '600' }}>No tienes historial de pases concluidos.</p>
@@ -361,32 +449,34 @@ export default function MisPermisos() {
               const rechazadosMes = grupo.items.length - autorizadosMes;
 
               return (
-                <div key={grupo.clave} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* CABECERA DEL MES (PLEGABLE) */}
+                <div key={grupo.clave} style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                  {/* CABECERA DEL MES (MISMO ANCHO 100% QUE LAS TARJETAS) */}
                   <button
                     type="button"
                     onClick={() => toggleMes(grupo.clave)}
                     style={{
                       width: '100%',
+                      height: '48px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '12px 18px',
-                      borderRadius: '12px',
+                      padding: '0 20px',
+                      borderRadius: '13px',
                       background: c.surfaceCard,
                       border: `1.5px solid ${c.border}`,
                       color: c.text,
                       cursor: 'pointer',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      boxSizing: 'border-box'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                       <Calendar size={17} color={c.textMuted} />
-                      <span style={{ fontSize: '15px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      <span style={{ fontSize: '14.5px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                         {grupo.etiqueta}
                       </span>
                       <span style={{
-                        fontSize: '12.5px', fontWeight: '700', color: c.textMuted,
+                        fontSize: '12px', fontWeight: '700', color: c.textMuted,
                         background: c.bg, border: `1px solid ${c.border}`,
                         padding: '2px 10px', borderRadius: '999px'
                       }}>
@@ -409,9 +499,9 @@ export default function MisPermisos() {
                     </div>
                   </button>
 
-                  {/* LISTA DE TARJETAS DEL MES */}
+                  {/* LISTA DE TARJETAS DEL MES (SIN PADDING LATERAL PARA QUE MIDA IGUAL QUE LA BARRA SUPERIOR) */}
                   {!contraido && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '4px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                       {grupo.items.map(p => {
                         const esAutorizado = ['autorizado', 'aprobado', 'completado_caseta'].includes(p.estado_general);
                         const pagoLower = (p.pago || '').toLowerCase();
@@ -424,7 +514,6 @@ export default function MisPermisos() {
                           ? `${formatearFechaCorta(p.fecha_permiso)} al ${formatearFechaCorta(p.fecha_fin)}`
                           : formatearFechaCorta(p.fecha_permiso);
 
-                        // Color semántico exclusivo para el Dictamen final
                         let colorDictamen = '#16a34a';
                         let bgDictamen = 'rgba(22, 163, 74, 0.1)';
                         let borderDictamen = 'rgba(22, 163, 74, 0.3)';
@@ -438,39 +527,28 @@ export default function MisPermisos() {
                           borderDictamen = 'rgba(245, 158, 11, 0.32)';
                         }
 
+                        const tieneRegistroCaseta = Boolean(horaSalidaCaseta || horaEntradaCaseta || horaRegresadoCaseta);
+
                         return (
                           <div
                             key={p.id}
-                            style={{
-                              background: c.surfaceCard,
-                              border: `1.5px solid ${c.border}`,
-                              borderLeft: `5px solid ${estilo.color}`,
-                              borderRadius: '15px',
-                              padding: '18px 22px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '10px',
-                              boxShadow: modoOscuro ? '0 4px 16px rgba(0,0,0,0.22)' : '0 2px 8px rgba(0,0,0,0.03)'
-                            }}
+                            className="tarjeta-permiso-uniforme"
+                            style={{ borderLeft: `5px solid ${estilo.color}` }}
                           >
+                            {/* FILA 1: COLUMNAS DE ANCHO FIJO PARA ALINEACIÓN VERTICAL PERFECTA */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
-                                {esAutorizado && p.folio && !p.folio.startsWith('REQ-') && !p.folio.startsWith('CAS-') && (
-                                  <span style={{
-                                    fontFamily: 'ui-monospace, monospace', fontSize: '13px', fontWeight: '800',
-                                    color: c.text, background: c.bg, border: `1px solid ${c.border}`,
-                                    padding: '3px 9px', borderRadius: '6px'
-                                  }}>
-                                    {p.folio}
-                                  </span>
-                                )}
-                                <span style={{
-                                  fontSize: '12.5px', fontWeight: '800', color: estilo.color,
-                                  background: estilo.bg, border: `1px solid ${estilo.border}`,
-                                  padding: '3px 10px', borderRadius: '6px', textTransform: 'uppercase'
-                                }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                <span className="badge-folio-fijo">
+                                  {(esAutorizado && p.folio && !p.folio.startsWith('REQ-') && !p.folio.startsWith('CAS-')) ? p.folio : 'SIN FOLIO'}
+                                </span>
+
+                                <span
+                                  className="badge-tipo-fijo"
+                                  style={{ color: estilo.color, background: estilo.bg, border: `1px solid ${estilo.border}` }}
+                                >
                                   {estilo.label}
                                 </span>
+
                                 <span style={{ fontSize: '14px', color: c.text, fontWeight: '700' }}>
                                   {fechaTxt}
                                 </span>
@@ -479,54 +557,63 @@ export default function MisPermisos() {
                                 </span>
                               </div>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                                 {renderEtiquetaNaturaleza(categoria)}
-                                <span style={{
-                                  fontSize: '12px', fontWeight: '800',
-                                  color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}`,
-                                  padding: '4px 10px', borderRadius: '6px', textTransform: 'uppercase'
-                                }}>
+                                <span
+                                  className="badge-dictamen-fijo"
+                                  style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
+                                >
                                   {esAutorizado ? (p.pago || 'AUTORIZADO') : 'RECHAZADO'}
                                 </span>
                               </div>
                             </div>
 
-                            <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.45' }}>
-                              {motivoLimpio}
+                            {/* FILA 2: MOTIVO A LA IZQUIERDA Y SELLO DE CASETA INTEGRADO A LA DERECHA (MISMA ALTURA DE TARJETA) */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                              <div style={{ fontSize: '14.5px', color: c.text, lineHeight: '1.4', flex: 1, minWidth: '200px' }}>
+                                {motivoLimpio}
+                              </div>
+
+                              {tieneRegistroCaseta && (
+                                <div style={{
+                                  height: '28px',
+                                  padding: '0 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '12.5px',
+                                  fontWeight: '700',
+                                  color: seRegreso ? '#d97706' : c.textMuted,
+                                  background: seRegreso ? 'rgba(245,158,11,0.1)' : c.bg,
+                                  border: `1px solid ${seRegreso ? 'rgba(245,158,11,0.3)' : c.border}`,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  flexShrink: 0,
+                                  boxSizing: 'border-box'
+                                }}>
+                                  {horaSalidaCaseta && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><DoorOpen size={13.5} /> Salida: <strong style={{ color: c.text }}>{horaSalidaCaseta}</strong></span>}
+                                  {horaEntradaCaseta && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><DoorOpen size={13.5} /> Entrada: <strong style={{ color: c.text }}>{horaEntradaCaseta}</strong></span>}
+                                  {horaRegresadoCaseta && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><CornerUpLeft size={13.5} /> Regresado: <strong>{horaRegresadoCaseta}</strong></span>}
+                                </div>
+                              )}
                             </div>
 
                             {notasFlujo && notasFlujo.length > 0 && (
                               <div style={{
-                                fontSize: '13.5px', color: c.textMuted, background: c.bg,
-                                padding: '9px 13px', borderRadius: '9px', border: `1px solid ${c.border}`,
-                                display: 'flex', flexDirection: 'column', gap: '4px'
+                                fontSize: '13px', color: c.textMuted, background: c.bg,
+                                padding: '8px 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
+                                display: 'flex', flexDirection: 'column', gap: '3px'
                               }}>
                                 {notasFlujo.map((n, idx) => (
                                   <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <MessageSquare size={14} color={c.textMuted} />
+                                    <MessageSquare size={13.5} color={c.textMuted} />
                                     <span><strong style={{ color: c.text }}>Nota {n.autor}:</strong> {n.texto}</span>
                                   </div>
                                 ))}
                               </div>
                             )}
 
-                            {(horaSalidaCaseta || horaEntradaCaseta || horaRegresadoCaseta) && (
-                              <div style={{
-                                fontSize: '13px', fontWeight: '700',
-                                color: seRegreso ? '#d97706' : c.textMuted,
-                                background: seRegreso ? 'rgba(245,158,11,0.1)' : c.bg,
-                                border: `1px solid ${seRegreso ? 'rgba(245,158,11,0.3)' : c.border}`,
-                                padding: '7px 12px', borderRadius: '8px',
-                                display: 'inline-flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', width: 'fit-content'
-                              }}>
-                                {horaSalidaCaseta && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><DoorOpen size={14} /> Salida: <strong style={{ color: c.text }}>{horaSalidaCaseta}</strong></span>}
-                                {horaEntradaCaseta && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><DoorOpen size={14} /> Entrada: <strong style={{ color: c.text }}>{horaEntradaCaseta}</strong></span>}
-                                {horaRegresadoCaseta && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><CornerUpLeft size={14} /> Regresado en puerta: <strong>{horaRegresadoCaseta}</strong></span>}
-                              </div>
-                            )}
-
                             {!esAutorizado && motivoRechazo && (
-                              <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#dc2626', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', padding: '8px 13px', borderRadius: '8px' }}>
+                              <div style={{ fontSize: '13px', fontWeight: '700', color: '#dc2626', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', padding: '7px 12px', borderRadius: '8px' }}>
                                 Motivo de rechazo: {motivoRechazo}
                               </div>
                             )}

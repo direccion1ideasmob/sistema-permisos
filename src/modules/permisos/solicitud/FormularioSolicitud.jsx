@@ -173,7 +173,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       <style>{`
         .form-card-container {
           width: 100%;
-          max-width: 900px;
+          max-width: 100%;
           margin: 0 auto;
           background: ${t.bg};
           border: 1.5px solid ${t.border};
@@ -219,9 +219,22 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           width: 100%;
           min-width: 0;
           max-width: 100%;
-          padding: 13px 15px;
+          min-height: 48px;
+          padding: 12px 15px;
           border-radius: 11px;
           border: 1.5px solid ${t.inputBorder};
+          background: ${t.inputBg};
+          color: ${t.text};
+          font-size: 15px;
+          font-weight: 600;
+          outline: none;
+          transition: all 0.2s;
+          box-sizing: border-box;
+          font-family: inherit;
+          display: block;
+          -webkit-appearance: none;
+          appearance: none;
+        };
           background: ${t.inputBg};
           color: ${t.text};
           font-size: 15px;
@@ -252,14 +265,26 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           gap: 18px;
         }
         .pill-movimiento {
+          width: 100%;
+          min-height: 88px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 10px;
-          padding: 20px 10px;
+          gap: 9px;
+          padding: 16px 10px;
           border-radius: 14px;
           border: 1.5px solid ${t.border};
+          background: ${t.surface};
+          color: ${t.textMuted};
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: center;
+          box-sizing: border-box;
+          min-width: 0;
+        };
           background: ${t.surface};
           color: ${t.textMuted};
           font-size: 14px;
