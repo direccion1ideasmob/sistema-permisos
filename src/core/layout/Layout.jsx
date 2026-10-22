@@ -216,7 +216,7 @@ export default function Layout() {
 
 const s = {
   appBase: { 
-    position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', 
+    position: 'relative', width: '100%', height: 'var(--app-vh, 100vh)', overflow: 'hidden', 
     fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
     letterSpacing: '-0.015em',
     transition: 'background-color 0.2s ease'
@@ -231,7 +231,7 @@ const s = {
     justifyContent: 'center', cursor: 'pointer', boxShadow: '0 3px 12px rgba(0,0,0,0.2)'
   },
   mobileBackdrop: {
-    position: 'fixed', top: 0, left: 0, width: '100%', height: '100vh',
+    position: 'fixed', top: 0, left: 0, width: '100%', height: 'var(--app-vh, 100vh)',
     backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 200, backdropFilter: 'blur(2px)'
   },
   mainArea: { 
