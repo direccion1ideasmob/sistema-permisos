@@ -1,3 +1,4 @@
+import { registrarCheckCaseta } from '../../vigilancia/services/vigilanciaService';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 
@@ -258,6 +259,12 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
     await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
       titulo: seRegresa ? `↩️ Retardo Dictaminado: Se Regresa` : `✅ ${tipoPase} Autorizado`,
+        });
+        // AUTO-SELLO EN PUERTA AL AUTORIZAR: Si el colaborador ya estaba esperando en la reja y fue autorizado para pasar, sellar su entrada automáticamente
+        if (!seRegresa && (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
+          try { await registrarCheckCaseta(solicitudId, 'entrada'); } catch (_) {}
+        }
+        if (false) await enviarNotificacion({
       mensaje: seRegresa
         ? `Folio de respaldo: ${nuevoFolioGenerado}\nDictamen: Se regresa al trabajador (Sin acceso en planta)`
         : `Folio Oficial: ${nuevoFolioGenerado}\nDictamen: ${dictamenPago}`,

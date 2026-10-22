@@ -554,6 +554,21 @@ export const registrarRetardoEnPuerta = async (empleadoId) => {
   return { modo: 'en_espera_rh', permiso: creado };
 };
 
+export const deshacerSalidaReciente = async (usuarioId) => {
+  const hoyStr = obtenerFechaLocalHoy();
+  const { data: reg } = await supabase
+    .from('asistencias_caseta')
+    .select('id')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha', hoyStr)
+    .maybeSingle();
+
+  if (reg) {
+    await supabase.from('asistencias_caseta').update({ hora_salida: null }).eq('id', reg.id);
+  }
+  return { ok: true };
+};
+
 export const deshacerEntradaReciente = async (usuarioId) => {
   const hoyStr = obtenerFechaLocalHoy();
   const { data: reg } = await supabase

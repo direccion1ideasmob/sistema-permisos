@@ -1,11 +1,13 @@
-import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { obtenerHistorialGeneralPermisos, obtenerCatalogoDepartamentosSimple } from '../services/permisosService';
 import TablaHistorial from './TablaHistorial';
 import ModalPapeletaPDF from './ModalPapeletaPDF';
 import ModalExportarExcel from './ModalExportarExcel';
+import VistaAsistenciaDiariaRH from './VistaAsistenciaDiariaRH';
+import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../aprobacionesStyles';
+import { FileText, UserCheck } from 'lucide-react';
 
 export default function ControlHistorial() {
   const { usuario } = useAuth();
@@ -23,6 +25,7 @@ export default function ControlHistorial() {
 
   const c = obtenerTemaAprobaciones(modoOscuro);
 
+  const [pestanaRH, setPestanaRH] = useState('permisos'); // 'permisos' | 'asistencia_diaria'
   const [solicitudes, setSolicitudes] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -40,7 +43,7 @@ export default function ControlHistorial() {
       const data = await obtenerHistorialGeneralPermisos();
       setSolicitudes(data);
     } catch (err) {
-      console.error("Error al cargar historial general para RH:", err);
+      console.error('Error al cargar historial general para RH:', err);
     } finally {
       setCargando(false);
     }
@@ -52,7 +55,6 @@ export default function ControlHistorial() {
 
   return (
     <div className="aprobaciones-container control-historial-wrapper">
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}><ControlHoraCorteRH usuario={usuario} c={c} /></div>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
       <style>{`
         .control-historial-wrapper {
@@ -67,7 +69,55 @@ export default function ControlHistorial() {
         }
       `}</style>
 
-      {cargando ? (
+      {/* BARRA SUPERIOR DE NAVEGACIÓN RH + RELOJ CON CANDADO */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px',
+        marginBottom: '12px',
+        flexWrap: 'wrap'
+      }}>
+        <div className="tabs-aprobacion-bar" style={{
+          display: 'inline-grid',
+          gridTemplateColumns: 'repeat(2, auto)',
+          gap: '4px',
+          height: '38px',
+          padding: '4px',
+          margin: 0
+        }}>
+          <button
+            type="button"
+            className={`tab-btn ${pestanaRH === 'permisos' ? 'active' : ''}`}
+            onClick={() => setPestanaRH('permisos')}
+            style={{ padding: '0 14px', fontSize: '12.5px', gap: '6px' }}
+          >
+            <FileText size={14} />
+            <span>Historial de Permisos</span>
+          </button>
+
+          <button
+            type="button"
+            className={`tab-btn ${pestanaRH === 'asistencia_diaria' ? 'active' : ''}`}
+            onClick={() => setPestanaRH('asistencia_diaria')}
+            style={{ padding: '0 14px', fontSize: '12.5px', gap: '6px' }}
+          >
+            <UserCheck size={14} />
+            <span>Lista de Asistencia Diaria</span>
+          </button>
+        </div>
+
+        <ControlHoraCorteRH usuario={usuario} c={c} />
+      </div>
+
+      {pestanaRH === 'asistencia_diaria' ? (
+        <VistaAsistenciaDiariaRH
+          usuario={usuario}
+          departamentos={departamentos}
+          c={c}
+          modoOscuro={modoOscuro}
+        />
+      ) : cargando ? (
         <div style={{ textAlign: 'center', padding: '44px', color: c.textMuted, fontSize: '15px', fontWeight: '600' }}>
           Cargando historial...
         </div>
@@ -93,9 +143,8 @@ export default function ControlHistorial() {
 
       {mostrarModalExportar && (
         <ModalExportarExcel
-          solicitudesPrecargadas={solicitudes}
+          solicitudes={solicitudes}
           departamentos={departamentos}
-          c={c}
           modoOscuro={modoOscuro}
           onClose={() => setMostrarModalExportar(false)}
         />

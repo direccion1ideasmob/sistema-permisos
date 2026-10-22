@@ -7,6 +7,7 @@ import {
   registrarCheckCaseta,
   registrarAsistenciaLista,
   deshacerEntradaReciente,
+  deshacerSalidaReciente,
   cancelarPasePorInasistenciaOCambio,
   obtenerFechaLocalHoy
 } from './services/vigilanciaService';
@@ -113,7 +114,13 @@ export default function Caseta() {
     }
   };
 
-  const handleMarcarAsistencia = async (empleadoId, tipoMarca) => {
+  const handleMarcarAsistencia = async (empleadoId, tipoMarca, nombreEmp = '') => {
+    if (tipoMarca === 'salida') {
+      const horaActualNum = new Date().getHours();
+      if (horaActualNum < 16) {
+        if (!window.confirm(`¿Confirmas registrar la SALIDA de fin de turno de ${nombreEmp || 'este colaborador'}?`)) return;
+      }
+    }
     setProcesandoId(`${empleadoId}-${tipoMarca}`);
     try {
       const res = await registrarAsistenciaLista(empleadoId, tipoMarca, usuario?.id || null, false);
@@ -875,7 +882,7 @@ export default function Caseta() {
                       </span>
                     ) : (
                       <button
-                        onClick={() => handleMarcarAsistencia(emp.id, 'salida')}
+                        onClick={() => handleMarcarAsistencia(emp.id, 'salida', emp.nombre_completo)}
                         disabled={procesandoId === `${emp.id}-salida`}
                         style={{
                           height: '34px', padding: '0 12px', borderRadius: '8px', border: `1px solid ${c.border}`,
