@@ -35,7 +35,6 @@ export default function Aprobaciones() {
     if (!usuario?.id) return;
     setCargando(true);
     try {
-      // Si es RH, solo descarga las solicitudes vivas ('en_firmas') porque su historial maestro vive en Control / Historial
       const data = await obtenerSolicitudesAprobacion({ soloEnFirmas: esRH, usuarioId: usuario.id, rol: usuario.rol });
       setSolicitudes(data);
     } catch (err) {
@@ -127,19 +126,20 @@ export default function Aprobaciones() {
   const listadoActual = tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesTransito;
 
   return (
-    <div className="aprobaciones-container">
+    <div className="aprobaciones-container" style={{ maxWidth: tabActiva === 'historial' ? '100%' : '1060px', margin: '0 auto', padding: '20px 24px', boxSizing: 'border-box' }}>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
 
-      {/* BARRA SEGMENTADA: RH SOLO VE BANDEJAS VIVAS (SU HISTORIAL ESTÁ EN CONTROL / HISTORIAL) */}
-      <div className="tabs-aprobacion-bar">
+      {/* BARRA SEGMENTADA DE ALTURA CÓMODA (46px) Y FUENTE 14.5px */}
+      <div className="tabs-aprobacion-bar" style={{ height: '46px', marginBottom: '20px', boxSizing: 'border-box' }}>
         <button
           onClick={() => setTabActiva('pendientes')}
           className={`tab-btn ${tabActiva === 'pendientes' ? 'active' : ''}`}
+          style={{ fontSize: '14.5px', height: '100%', padding: '0 18px', gap: '8px' }}
         >
-          <Inbox size={15} />
+          <Inbox size={18} />
           <span>{esRH ? 'Por Dictaminar' : 'Por Autorizar'}</span>
           {solicitudesPendientes.length > 0 && (
-            <span className="tab-badge" style={{ background: c.accent, color: '#fff' }}>
+            <span className="tab-badge" style={{ background: c.accent, color: '#fff', fontSize: '12.5px', padding: '2px 9px' }}>
               {solicitudesPendientes.length}
             </span>
           )}
@@ -149,11 +149,12 @@ export default function Aprobaciones() {
           <button
             onClick={() => setTabActiva('transito')}
             className={`tab-btn ${tabActiva === 'transito' ? 'active' : ''}`}
+            style={{ fontSize: '14.5px', height: '100%', padding: '0 18px', gap: '8px' }}
           >
-            <Radar size={15} />
+            <Radar size={18} />
             <span>En Tránsito</span>
             {solicitudesTransito.length > 0 && (
-              <span className="tab-badge" style={{ background: '#f59e0b', color: '#fff' }}>
+              <span className="tab-badge" style={{ background: '#f59e0b', color: '#fff', fontSize: '12.5px', padding: '2px 9px' }}>
                 {solicitudesTransito.length}
               </span>
             )}
@@ -164,26 +165,30 @@ export default function Aprobaciones() {
           <button
             onClick={() => setTabActiva('historial')}
             className={`tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
+            style={{ fontSize: '14.5px', height: '100%', padding: '0 18px', gap: '8px' }}
           >
-            <Archive size={15} />
+            <Archive size={18} />
             <span>Historial de mi Área</span>
           </button>
         )}
       </div>
 
       {cargando ? (
-        <div style={{ textAlign: 'center', padding: '30px', color: c.textMuted, fontSize: '14px' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '15px', fontWeight: '600' }}>
           Cargando solicitudes...
         </div>
       ) : (!esRH && tabActiva === 'historial') ? (
         <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} />
       ) : listadoActual.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '15px', background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px' }}>
+        <div style={{
+          textAlign: 'center', padding: '54px 24px', color: c.textMuted, fontSize: '16px', fontWeight: '600',
+          background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '16px'
+        }}>
           {tabActiva === 'pendientes' && (esRH ? 'No hay pases pendientes por dictaminar.' : 'No tienes solicitudes pendientes por autorizar.')}
           {tabActiva === 'transito' && 'No hay permisos en tránsito actualmente.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {listadoActual.map(solicitud => (
             <TarjetaAprobacion
               key={solicitud.id}
