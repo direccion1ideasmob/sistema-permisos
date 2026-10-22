@@ -68,7 +68,7 @@ export default function MisPermisos() {
     if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.09)', border: 'rgba(239, 68, 68, 0.28)', label: 'RETARDO' };
     if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.09)', border: 'rgba(139, 92, 246, 0.28)', label: 'FALTA' };
     if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.09)', border: 'rgba(16, 185, 129, 0.28)', label: 'VACACIONES' };
-    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', label: 'SALIDA ANTICIPADA' };
+    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', label: 'SALIDA' };
     return { color: c.text, bg: c.surface, border: c.border, label: (tipoRaw || 'PERMISO').toUpperCase() };
   };
 
@@ -332,13 +332,13 @@ export default function MisPermisos() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 148px;
+          width: 104px;
           height: 28px;
           font-size: 11.5px;
           font-weight: 800;
           border-radius: 6px;
           text-transform: uppercase;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.03em;
           box-sizing: border-box;
           flex-shrink: 0;
           white-space: nowrap;
@@ -459,13 +459,13 @@ export default function MisPermisos() {
             font-size: 11px;
           }
           .badge-tipo-fijo {
-            width: auto;
-            padding: 0 8px;
+            width: 86px;
+            padding: 0 6px;
             height: 24px;
             font-size: 10.5px;
           }
           .badge-dictamen-fijo {
-            width: auto;
+            min-width: 88px;
             padding: 0 8px;
             height: 24px;
             font-size: 10.5px;
