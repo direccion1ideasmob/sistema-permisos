@@ -174,41 +174,203 @@ export default function TarjetaAprobacion({
 
   return (
     <div
+      className="ta-card-wrap"
       style={{
         background: c.surfaceCard,
         border: `1.5px solid ${c.border}`,
         borderLeft: `5px solid ${estilo.color}`,
         borderRadius: '16px',
-        padding: '20px 24px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '14px',
+        boxSizing: 'border-box',
+        width: '100%',
+        overflow: 'hidden',
         boxShadow: modoOscuro ? '0 4px 16px rgba(0,0,0,0.25)' : '0 2px 10px rgba(0,0,0,0.04)'
       }}
     >
-      {/* RENGLÓN 1: CABECERA (AVATAR 50px + NOMBRE/PUESTO | BADGE DE TIPO) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
-          <img
-            src={urlFoto}
-            alt=""
-            style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', border: `1.5px solid ${c.border}`, flexShrink: 0 }}
-          />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '17px', fontWeight: '800', color: c.text, lineHeight: 1.25 }}>
+      <style>{`
+        .ta-card-wrap {
+          padding: 20px 24px;
+          gap: 14px;
+        }
+        .ta-header-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          width: 100%;
+        }
+        .ta-user-block {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          min-width: 0;
+          flex: 1;
+        }
+        .ta-avatar {
+          width: 50px;
+          height: 50px;
+          border-radius: 12px;
+          object-fit: cover;
+          border: 1.5px solid ${c.border};
+          flex-shrink: 0;
+        }
+        .ta-name {
+          font-size: 17px;
+          font-weight: 800;
+          color: ${c.text};
+          line-height: 1.25;
+        }
+        .ta-subtitle {
+          font-size: 14px;
+          color: ${c.textMuted};
+          font-weight: 600;
+          margin-top: 3px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .ta-badge-tipo {
+          font-size: 13px;
+          font-weight: 800;
+          padding: 5px 13px;
+          border-radius: 8px;
+          flex-shrink: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
+        }
+        .ta-mobile-top-meta {
+          display: none;
+        }
+        .ta-actions-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-top: 2px;
+          width: 100%;
+        }
+        .ta-buttons-group {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-left: auto;
+        }
+        .ta-btn-rechazar, .ta-btn-evaluar {
+          height: 40px;
+          padding: 0 18px;
+          border-radius: 10px;
+          font-size: 14px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          white-space: nowrap;
+          box-sizing: border-box;
+        }
+
+        /* =========================================================
+           VISTA MÓVIL (< 640PX): COMPACTA, SIN TEXTOS ENCIMADOS NI DESBORDES
+           ========================================================= */
+        @media (max-width: 640px) {
+          .ta-card-wrap {
+            padding: 14px;
+            gap: 10px;
+            border-radius: 14px;
+          }
+          .ta-mobile-top-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            width: 100%;
+          }
+          .ta-badge-desktop {
+            display: none !important;
+          }
+          .ta-badge-tipo {
+            font-size: 11px;
+            padding: 3px 9px;
+            border-radius: 6px;
+          }
+          .ta-user-block {
+            gap: 11px;
+          }
+          .ta-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+          }
+          .ta-name {
+            font-size: 15px;
+            line-height: 1.22;
+          }
+          .ta-subtitle {
+            font-size: 12.5px;
+            white-space: normal;
+            line-height: 1.25;
+          }
+          .ta-actions-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+          .ta-buttons-group {
+            width: 100%;
+            margin-left: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+          .ta-btn-rechazar, .ta-btn-evaluar {
+            width: 100%;
+            max-width: none !important;
+            height: 38px;
+            padding: 0 10px;
+            font-size: 13px;
+          }
+        }
+      `}</style>
+
+      {/* FILA EXCLUSIVA MÓVIL: FOLIO + TIPO DE PASE ARRIBA PARA NO CHOCAR CON EL NOMBRE */}
+      <div className="ta-mobile-top-meta">
+        <span style={{
+          fontFamily: 'ui-monospace, monospace', fontSize: '11.5px', fontWeight: '800',
+          color: c.textMuted, background: c.bg, border: `1px solid ${c.border}`,
+          padding: '2px 8px', borderRadius: '6px'
+        }}>
+          {solicitud.folio}
+        </span>
+
+        <span
+          className="ta-badge-tipo"
+          style={{ color: estilo.color, backgroundColor: estilo.bg, border: `1.5px solid ${estilo.border}` }}
+        >
+          {estilo.text}
+        </span>
+      </div>
+
+      {/* RENGLÓN 1: AVATAR + NOMBRE Y PUESTO COMPLETO (SIN ENCIMARSE) */}
+      <div className="ta-header-row">
+        <div className="ta-user-block">
+          <img src={urlFoto} alt="" className="ta-avatar" />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="ta-name">
               {aTitulo(u.nombre_completo || 'Colaborador')}
             </div>
-            <div style={{ fontSize: '14px', color: c.textMuted, fontWeight: '600', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div className="ta-subtitle">
               {subtituloFicha}
             </div>
           </div>
         </div>
 
-        <span style={{
-          fontSize: '13.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg,
-          border: `1.5px solid ${estilo.border}`, padding: '5px 13px', borderRadius: '8px', flexShrink: 0,
-          textTransform: 'uppercase', letterSpacing: '0.03em'
-        }}>
+        <span
+          className="ta-badge-tipo ta-badge-desktop"
+          style={{ color: estilo.color, backgroundColor: estilo.bg, border: `1.5px solid ${estilo.border}` }}
+        >
           {estilo.text}
         </span>
       </div>
@@ -217,23 +379,24 @@ export default function TarjetaAprobacion({
       <div style={{
         background: modoOscuro ? 'rgba(255,255,255,0.03)' : '#f8fafc',
         border: `1px solid ${c.border}`,
-        borderRadius: '12px',
-        padding: '13px 16px',
+        borderRadius: '11px',
+        padding: '11px 13px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '7px'
+        gap: '6px',
+        boxSizing: 'border-box'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', fontSize: '14.5px', fontWeight: '700', color: c.text }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Calendar size={15} color={c.accent} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '13.5px', fontWeight: '700', color: c.text }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Calendar size={14} color={c.accent} />
               {fechaFormateada}
             </span>
             {horarioRaw && (
               <>
                 <span style={{ color: c.border }}>•</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: c.textSubtle }}>
-                  <Clock size={15} color={c.textMuted} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: c.textSubtle }}>
+                  <Clock size={14} color={c.textMuted} />
                   {horarioRaw}
                 </span>
               </>
@@ -242,26 +405,25 @@ export default function TarjetaAprobacion({
 
           {reincidencias > 0 && (
             <span style={{
-              fontSize: '13px', fontWeight: '800', color: '#dc2626', background: 'rgba(239,68,68,0.12)',
-              padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '5px'
+              fontSize: '12px', fontWeight: '800', color: '#dc2626', background: 'rgba(239,68,68,0.12)',
+              padding: '3px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px'
             }}>
-              <AlertTriangle size={14} /> {reincidencias} retardo(s) previo(s)
+              <AlertTriangle size={13} /> {reincidencias} retardo(s) previo(s)
             </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '15px', color: c.textSubtle, lineHeight: 1.45 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '14px', color: c.textSubtle, lineHeight: 1.4 }}>
           {etiqueta && (
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '5px',
-              fontSize: '13px', fontWeight: '700', color: c.textMuted
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              fontSize: '12.5px', fontWeight: '700', color: c.textMuted
             }}>
-              {etiqueta.toLowerCase().includes('cita') ? <Stethoscope size={14} color={c.textMuted} /> :
-               etiqueta.toLowerCase().includes('trabajo') ? <Briefcase size={14} color={c.textMuted} /> :
-               etiqueta.toLowerCase().includes('vacaciones') ? <Calendar size={14} color={c.textMuted} /> :
-               <User size={14} color={c.textMuted} />}
-              <span>{etiqueta}</span>
-              <span style={{ opacity: 0.4 }}>—</span>
+              {etiqueta.toLowerCase().includes('cita') ? <Stethoscope size={13} color={c.textMuted} /> :
+               etiqueta.toLowerCase().includes('trabajo') ? <Briefcase size={13} color={c.textMuted} /> :
+               etiqueta.toLowerCase().includes('vacaciones') ? <Calendar size={13} color={c.textMuted} /> :
+               <User size={13} color={c.textMuted} />}
+              <span>{etiqueta}:</span>
             </span>
           )}
           <span style={{ fontWeight: '600', color: c.text }}>{redaccion}</span>
@@ -269,11 +431,11 @@ export default function TarjetaAprobacion({
 
         {notasPrevias && notasPrevias.length > 0 && (
           <div style={{
-            marginTop: '4px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`,
-            display: 'flex', flexDirection: 'column', gap: '4px'
+            marginTop: '2px', paddingTop: '6px', borderTop: `1px dashed ${c.border}`,
+            display: 'flex', flexDirection: 'column', gap: '3px'
           }}>
             {notasPrevias.map((n, idx) => (
-              <div key={idx} style={{ fontSize: '14px', color: c.text }}>
+              <div key={idx} style={{ fontSize: '13px', color: c.text }}>
                 <strong style={{ color: c.accent }}>💬 {n.autor}:</strong> {n.texto}
               </div>
             ))}
@@ -281,37 +443,38 @@ export default function TarjetaAprobacion({
         )}
       </div>
 
-      {/* RENGLÓN 3: AVALES PREVIOS + BOTONES DE ACCIÓN */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', marginTop: '2px' }}>
+      {/* RENGLÓN 3: AVALES PREVIOS + BOTONES DE ACCIÓN ENCUADRADOS */}
+      <div className="ta-actions-row">
         {(avalesPrevios.length > 0 || esperandoA) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {avalesPrevios.length > 0 && (
               <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                fontSize: '14px', fontWeight: '700', color: '#16a34a'
+                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                fontSize: '13px', fontWeight: '700', color: '#16a34a'
               }}>
-                <CheckCircle2 size={15} /> Avaló: {avalesPrevios.join(', ')}
+                <CheckCircle2 size={14} /> Avaló: {avalesPrevios.join(', ')}
               </span>
             )}
             {esperandoA && (
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706' }}>
                 ⏳ Turno de: {formatearNombreCorto(esperandoA)}
               </span>
             )}
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 220px', justifyContent: 'flex-end' }}>
+        <div className="ta-buttons-group">
           {esPendiente && mostrarOverride && (
             <button
               onClick={() => onForzarFirma(solicitud)}
+              className="ta-btn-rechazar"
               style={{
-                flex: 1, maxWidth: '200px', padding: '10px 16px', borderRadius: '10px', border: '1.5px solid rgba(239,68,68,0.4)',
-                backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '14.5px', fontWeight: '800',
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                gridColumn: '1 / -1',
+                border: '1.5px solid rgba(239,68,68,0.4)',
+                backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', fontWeight: '800'
               }}
             >
-              <LockOpen size={15} /> Saltar Firma
+              <LockOpen size={14} /> Saltar Firma
             </button>
           )}
 
@@ -319,23 +482,23 @@ export default function TarjetaAprobacion({
             <>
               <button
                 onClick={() => onRechazar(solicitud)}
+                className="ta-btn-rechazar"
                 style={{
-                  flex: 1, maxWidth: '175px', padding: '10px 18px', borderRadius: '10px', border: `1.5px solid ${c.border}`,
-                  background: 'transparent', color: c.textMuted, fontSize: '14.5px', fontWeight: '700',
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                  border: `1.5px solid ${c.border}`,
+                  background: 'transparent', color: c.textMuted, fontWeight: '700'
                 }}
               >
-                <X size={16} color={c.danger} /> Rechazar
+                <X size={15} color={c.danger} /> Rechazar
               </button>
               <button
                 onClick={() => onAprobar(solicitud)}
+                className="ta-btn-evaluar"
                 style={{
-                  flex: 1.2, maxWidth: '195px', padding: '10px 20px', borderRadius: '10px', border: 'none',
-                  backgroundColor: c.accent, color: '#fff', fontSize: '14.5px', fontWeight: '800',
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                  border: 'none',
+                  backgroundColor: c.accent, color: '#fff', fontWeight: '800'
                 }}
               >
-                <Check size={16} /> Evaluar
+                <Check size={15} /> Evaluar
               </button>
             </>
           )}

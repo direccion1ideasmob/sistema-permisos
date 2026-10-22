@@ -126,20 +126,73 @@ export default function Aprobaciones() {
   const listadoActual = tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesTransito;
 
   return (
-    <div className="aprobaciones-container" style={{ maxWidth: tabActiva === 'historial' ? '100%' : '1060px', margin: '0 auto', padding: '20px 24px', boxSizing: 'border-box' }}>
+    <div className="aprobaciones-container aprob-main-wrap" style={{ maxWidth: tabActiva === 'historial' ? '100%' : '1060px', margin: '0 auto' }}>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+      <style>{`
+        .aprob-main-wrap {
+          padding: 20px 24px;
+          box-sizing: border-box;
+          width: 100%;
+        }
+        .aprob-tabs-bar {
+          height: 46px;
+          margin-bottom: 16px;
+          box-sizing: border-box;
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 6px;
+        }
+        .aprob-tab-btn {
+          font-size: 14.5px !important;
+          height: 100% !important;
+          padding: 0 14px !important;
+          gap: 8px !important;
+          min-width: 0 !important;
+        }
+        .aprob-txt-mobile {
+          display: none;
+        }
+        @media (max-width: 768px) {
+          .aprob-main-wrap {
+            padding: 44px 8px 24px 8px;
+            gap: 12px;
+          }
+          .aprob-tabs-bar {
+            height: 40px;
+            margin-bottom: 6px;
+            padding: 3px !important;
+            border-radius: 10px !important;
+          }
+          .aprob-tab-btn {
+            font-size: 12.5px !important;
+            padding: 0 6px !important;
+            gap: 5px !important;
+            border-radius: 7px !important;
+          }
+          .aprob-tab-btn svg {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+          }
+          .aprob-txt-desktop {
+            display: none;
+          }
+          .aprob-txt-mobile {
+            display: inline;
+          }
+        }
+      `}</style>
 
-      {/* BARRA SEGMENTADA DE ALTURA CÓMODA (46px) Y FUENTE 14.5px */}
-      <div className="tabs-aprobacion-bar" style={{ height: '46px', marginBottom: '20px', boxSizing: 'border-box' }}>
+      {/* BARRA SEGMENTADA SIMÉTRICA */}
+      <div className="tabs-aprobacion-bar aprob-tabs-bar">
         <button
           onClick={() => setTabActiva('pendientes')}
-          className={`tab-btn ${tabActiva === 'pendientes' ? 'active' : ''}`}
-          style={{ fontSize: '14.5px', height: '100%', padding: '0 18px', gap: '8px' }}
+          className={`tab-btn aprob-tab-btn ${tabActiva === 'pendientes' ? 'active' : ''}`}
         >
-          <Inbox size={18} />
+          <Inbox size={17} />
           <span>{esRH ? 'Por Dictaminar' : 'Por Autorizar'}</span>
           {solicitudesPendientes.length > 0 && (
-            <span className="tab-badge" style={{ background: c.accent, color: '#fff', fontSize: '12.5px', padding: '2px 9px' }}>
+            <span className="tab-badge" style={{ background: c.accent, color: '#fff', fontSize: '11.5px', padding: '1px 7px' }}>
               {solicitudesPendientes.length}
             </span>
           )}
@@ -148,13 +201,12 @@ export default function Aprobaciones() {
         {esRH && (
           <button
             onClick={() => setTabActiva('transito')}
-            className={`tab-btn ${tabActiva === 'transito' ? 'active' : ''}`}
-            style={{ fontSize: '14.5px', height: '100%', padding: '0 18px', gap: '8px' }}
+            className={`tab-btn aprob-tab-btn ${tabActiva === 'transito' ? 'active' : ''}`}
           >
-            <Radar size={18} />
+            <Radar size={17} />
             <span>En Tránsito</span>
             {solicitudesTransito.length > 0 && (
-              <span className="tab-badge" style={{ background: '#f59e0b', color: '#fff', fontSize: '12.5px', padding: '2px 9px' }}>
+              <span className="tab-badge" style={{ background: '#f59e0b', color: '#fff', fontSize: '11.5px', padding: '1px 7px' }}>
                 {solicitudesTransito.length}
               </span>
             )}
@@ -164,31 +216,31 @@ export default function Aprobaciones() {
         {!esRH && (
           <button
             onClick={() => setTabActiva('historial')}
-            className={`tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
-            style={{ fontSize: '14.5px', height: '100%', padding: '0 18px', gap: '8px' }}
+            className={`tab-btn aprob-tab-btn ${tabActiva === 'historial' ? 'active' : ''}`}
           >
-            <Archive size={18} />
-            <span>Historial de mi Área</span>
+            <Archive size={17} />
+            <span className="aprob-txt-desktop">Historial de mi Área</span>
+            <span className="aprob-txt-mobile">Historial</span>
           </button>
         )}
       </div>
 
       {cargando ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '15px', fontWeight: '600' }}>
+        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '14px', fontWeight: '600' }}>
           Cargando solicitudes...
         </div>
       ) : (!esRH && tabActiva === 'historial') ? (
         <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} />
       ) : listadoActual.length === 0 ? (
         <div style={{
-          textAlign: 'center', padding: '54px 24px', color: c.textMuted, fontSize: '16px', fontWeight: '600',
-          background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '16px'
+          textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '14.5px', fontWeight: '600',
+          background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '14px'
         }}>
           {tabActiva === 'pendientes' && (esRH ? 'No hay pases pendientes por dictaminar.' : 'No tienes solicitudes pendientes por autorizar.')}
           {tabActiva === 'transito' && 'No hay permisos en tránsito actualmente.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
           {listadoActual.map(solicitud => (
             <TarjetaAprobacion
               key={solicitud.id}
