@@ -1,3 +1,4 @@
+import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { obtenerHistorialGeneralPermisos, obtenerCatalogoDepartamentosSimple } from '../services/permisosService';
@@ -51,6 +52,7 @@ export default function ControlHistorial() {
 
   return (
     <div className="aprobaciones-container control-historial-wrapper">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}><ControlHoraCorteRH usuario={usuario} c={c} /></div>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
       <style>{`
         .control-historial-wrapper {

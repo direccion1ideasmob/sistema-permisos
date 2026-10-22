@@ -1,3 +1,4 @@
+import ControlHoraCorteRH from './ControlHoraCorteRH';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
 import {
@@ -184,6 +185,7 @@ export default function Aprobaciones() {
       `}</style>
 
       {/* BARRA SEGMENTADA SIMÉTRICA */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}><ControlHoraCorteRH usuario={usuario} c={c} /></div>
       <div className="tabs-aprobacion-bar aprob-tabs-bar">
         <button
           onClick={() => setTabActiva('pendientes')}
