@@ -25,7 +25,7 @@ export default function VistaArbol({
   const [esMobile, setEsMobile] = useState(window.innerWidth < 768);
 
   // Todo inicia comprimido para limpieza visual
-  const [divisionesAbiertas, setDivisionesAbiertas] = useState({});
+  const [divisionesAbiertas, setDivisionesAbiertas] = useState({ produccion: true });
   const [deptosAbiertosLocal, setDeptosAbiertosLocal] = useState({});
   const [subareasAbiertas, setSubareasAbiertas] = useState({});
 
@@ -192,24 +192,25 @@ export default function VistaArbol({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          padding: 11px 14px;
-          border-radius: 8px;
+          gap: 10px;
+          padding: 8px 12px;
+          border-radius: 9px;
           background: ${c.surfaceCard};
           border: 1px solid ${c.border};
-          transition: border-color 0.15s ease;
+          transition: all 0.15s ease;
           position: relative;
           width: 100%;
           box-sizing: border-box;
         }
         .placa-industrial:hover {
           border-color: ${c.lineStrong};
+          box-shadow: ${modoOscuro ? '0 4px 12px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.04)'};
         }
 
         .industrial-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-          gap: 14px;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+          gap: 12px;
           width: 100%;
           box-sizing: border-box;
           align-items: start;
@@ -217,30 +218,30 @@ export default function VistaArbol({
 
         .tronco-gerencia {
           position: relative;
-          padding-bottom: 14px;
+          padding-bottom: 12px;
           width: 100%;
-          max-width: 460px;
+          max-width: 480px;
           box-sizing: border-box;
         }
         .tronco-gerencia::after {
           content: '';
           position: absolute;
-          left: 26px;
+          left: 24px;
           bottom: 0;
           width: 1.5px;
-          height: 14px;
+          height: 12px;
           background: ${c.lineStrong};
         }
 
         .rama-subordinados {
           position: relative;
-          margin-left: 22px;
-          padding-left: 18px;
+          margin-left: 18px;
+          padding-left: 16px;
           border-left: 1.5px solid ${c.lineStrong};
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          margin-top: 10px;
+          gap: 7px;
+          margin-top: 7px;
           padding-top: 2px;
           box-sizing: border-box;
         }
@@ -252,16 +253,16 @@ export default function VistaArbol({
         .nodo-subordinado::before {
           content: '';
           position: absolute;
-          left: -18px;
+          left: -16px;
           top: 50%;
-          width: 18px;
+          width: 16px;
           height: 1.5px;
           background: ${c.lineStrong};
         }
         .nodo-subordinado::after {
           content: '';
           position: absolute;
-          left: -21px;
+          left: -19px;
           top: calc(50% - 2.5px);
           width: 5px;
           height: 5px;
@@ -272,22 +273,23 @@ export default function VistaArbol({
         @media (max-width: 640px) {
           .industrial-grid {
             grid-template-columns: 1fr;
-            gap: 10px;
+            gap: 8px;
           }
           .placa-industrial {
-            padding: 10px 12px;
-            gap: 10px;
+            padding: 8px 10px;
+            gap: 8px;
           }
           .rama-subordinados {
-            margin-left: 12px;
-            padding-left: 14px;
+            margin-left: 10px;
+            padding-left: 12px;
+            gap: 6px;
           }
           .nodo-subordinado::before {
-            left: -14px;
-            width: 14px;
+            left: -12px;
+            width: 12px;
           }
           .nodo-subordinado::after {
-            left: -17px;
+            left: -15px;
           }
         }
       `}</style>
@@ -772,10 +774,11 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
   const esGerencia = tipoNodo === 'gerencia';
   const esLider = tipoNodo === 'lider';
   const esSubordinado = tipoNodo === 'subordinado';
+  const esMando = esGerencia || esLider || (u.rol && u.rol !== 'empleado');
 
   const tamanoFoto = esMobile 
-    ? (esGerencia ? '44px' : '40px') 
-    : (esGerencia ? '52px' : (esLider ? '46px' : '42px'));
+    ? (esGerencia ? '38px' : '34px') 
+    : (esGerencia ? '42px' : (esLider ? '38px' : '34px'));
 
   let IconoRango = User;
   if (esGerencia) IconoRango = Crown;
@@ -787,11 +790,11 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
       key={u.id} 
       className="placa-industrial"
       style={{
-        borderLeft: `3px solid ${badge.accentBar}`,
-        background: esSubordinado ? (modoOscuro ? '#161616' : '#f8fafc') : c.surfaceCard
+        borderLeft: `3.5px solid ${badge.accentBar}`,
+        background: esSubordinado ? (modoOscuro ? '#161616' : '#fcfcfd') : c.surfaceCard
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: esMobile ? '10px' : '12px', minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: esMobile ? '9px' : '11px', minWidth: 0, flex: 1 }}>
         <img 
           src={urlFoto} 
           alt="" 
@@ -800,7 +803,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
           style={{ 
             width: tamanoFoto, 
             height: tamanoFoto, 
-            borderRadius: '6px', 
+            borderRadius: '7px', 
             objectFit: 'cover', 
             cursor: 'pointer', 
             border: `1px solid ${c.border}`, 
@@ -809,28 +812,70 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
         />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '9.5px', fontWeight: '700', color: c.subText }}>
-              <Hash size={9} />{u.numero_empleado}
-            </span>
-
-            <span style={{ 
-              display: 'inline-flex', alignItems: 'center', gap: '3px',
-              fontSize: '8.5px', fontWeight: '800', color: badge.text, background: badge.bg,
-              border: `1px solid ${badge.border}`, padding: '1px 5px', borderRadius: '4px', whiteSpace: 'nowrap', letterSpacing: '0.03em'
+          {/* RENGLÓN 1: NOMBRE COMPLETO <---> BADGE DE MANDO (SOLO SI ES LÍDER/GERENCIA) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minWidth: 0 }}>
+            <div style={{
+              fontSize: esMobile ? '12.5px' : '13px',
+              fontWeight: '800',
+              color: c.text,
+              lineHeight: '1.2',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+              flex: 1
             }}>
-              <IconoRango size={9} />
-              {badge.label}
-            </span>
+              {u.nombre_completo}
+            </div>
+
+            {esMando ? (
+              <span style={{ 
+                display: 'inline-flex', alignItems: 'center', gap: '3px',
+                fontSize: '9px', fontWeight: '800', color: badge.text, background: badge.bg,
+                border: `1px solid ${badge.border}`, padding: '1.5px 6px', borderRadius: '4px',
+                whiteSpace: 'nowrap', letterSpacing: '0.03em', flexShrink: 0
+              }}>
+                <IconoRango size={9.5} />
+                {badge.label}
+              </span>
+            ) : (
+              <span style={{
+                fontFamily: 'ui-monospace, monospace',
+                fontSize: '10.5px',
+                fontWeight: '700',
+                color: c.subText,
+                flexShrink: 0
+              }}>
+                #{u.numero_empleado}
+              </span>
+            )}
           </div>
 
-          <div style={{ fontSize: esMobile ? '12.5px' : '13px', fontWeight: '800', color: c.text, lineHeight: '1.25', wordBreak: 'break-word' }}>
-            {u.nombre_completo}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10.5px', color: c.subText, fontWeight: '500', lineHeight: '1.2' }}>
+          {/* RENGLÓN 2: #EMPLEADO (SI ES MANDO) + PUESTO EN 1 SOLA LÍNEA LIMPIA */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontSize: '11px',
+            color: c.subText,
+            fontWeight: '600',
+            lineHeight: '1.2',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>
+            {esMando && (
+              <>
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700', color: c.subText }}>
+                  #{u.numero_empleado}
+                </span>
+                <span>•</span>
+              </>
+            )}
             <Briefcase size={10} style={{ flexShrink: 0, opacity: 0.65 }} />
-            <span style={{ wordBreak: 'break-word' }}>{u.puesto || 'SIN PUESTO'}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {u.puesto || 'COLABORADOR'}
+            </span>
           </div>
         </div>
       </div>
@@ -838,7 +883,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
       {seguridadDesbloqueada && (
         <button
           onClick={(e) => onEditarUsuario(u, e)}
-          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '4px', color: c.text, cursor: 'pointer', padding: '5px 7px', fontSize: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
+          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.text, cursor: 'pointer', padding: '5px 7px', fontSize: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
           title="Reacomodar en el organigrama"
         >
           <Edit2 size={11} />
