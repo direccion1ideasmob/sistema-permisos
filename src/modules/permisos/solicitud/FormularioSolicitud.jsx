@@ -155,6 +155,13 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     }
   };
 
+  const catálogoTipos = [
+    { key: 'salida', label: 'Salida Anticipada', icon: Clock, color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.1)' },
+    { key: 'retardo', label: 'Llegada Tarde', icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
+    { key: 'falta', label: 'Falta Programada', icon: Calendar, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
+    { key: 'vacaciones', label: 'Vacaciones', icon: Calendar, color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
+  ];
+
   return (
     <>
       <style>{`
@@ -169,29 +176,55 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           box-shadow: ${modoOscuro ? '0 10px 35px rgba(0,0,0,0.4)' : '0 8px 30px rgba(0,0,0,0.05)'};
           font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
           box-sizing: border-box;
+          overflow: hidden;
+        }
+        .form-header-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+          border-bottom: 1.5px solid ${t.border};
+          padding-bottom: 16px;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .form-title-main {
+          font-size: 21px;
+          font-weight: 800;
+          color: ${t.text};
+          letter-spacing: -0.01em;
+        }
+        .form-subtitle-user {
+          font-size: 14px;
+          font-weight: 600;
+          color: ${t.textMuted};
+          margin-top: 3px;
         }
         .zinc-label {
           display: block;
-          font-size: 13px;
+          font-size: 12.5px;
           font-weight: 800;
           color: ${t.textMuted};
           text-transform: uppercase;
           letter-spacing: 0.04em;
-          margin-bottom: 10px;
+          margin-bottom: 9px;
         }
         .zinc-input {
           width: 100%;
-          padding: 14px 16px;
+          min-width: 0;
+          max-width: 100%;
+          padding: 13px 15px;
           border-radius: 11px;
           border: 1.5px solid ${t.inputBorder};
           background: ${t.inputBg};
           color: ${t.text};
-          font-size: 15.5px;
+          font-size: 15px;
           font-weight: 600;
           outline: none;
           transition: all 0.2s;
           box-sizing: border-box;
           font-family: inherit;
+          -webkit-appearance: none;
         }
         .zinc-input:focus {
           border-color: ${t.accent};
@@ -202,9 +235,14 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           grid-template-columns: repeat(4, 1fr);
           gap: 14px;
         }
+        .grid-responsivo-naturaleza {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
         .grid-responsivo-fechas {
           display: grid;
-          grid-template-columns: ${tieneSegundoCampoHorario ? 'repeat(2, 1fr)' : '1fr'};
+          grid-template-columns: ${tieneSegundoCampoHorario ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)'};
           gap: 18px;
         }
         .pill-movimiento {
@@ -213,65 +251,93 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           align-items: center;
           justify-content: center;
           gap: 10px;
-          padding: 22px 12px;
+          padding: 20px 10px;
           border-radius: 14px;
           border: 1.5px solid ${t.border};
           background: ${t.surface};
           color: ${t.textMuted};
-          font-size: 14.5px;
+          font-size: 14px;
           font-weight: 700;
           cursor: pointer;
           transition: all 0.2s;
           text-align: center;
-        }
-        .pill-movimiento.active {
-          border-color: ${t.accent};
-          background: ${t.accentSoft};
-          color: ${t.accent};
+          min-width: 0;
         }
         .pill-movimiento:active {
           transform: scale(0.98);
         }
         @media (max-width: 760px) {
-          .form-card-container { padding: 20px; }
-          .grid-responsivo-tipos { grid-template-columns: repeat(2, 1fr); }
-          .grid-responsivo-fechas { grid-template-columns: 1fr; gap: 12px; }
-          .pill-movimiento { padding: 14px 8px; font-size: 13px; }
+          .form-card-container {
+            padding: 18px 16px;
+            border-radius: 16px;
+          }
+          .form-header-row {
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+          }
+          .form-title-main {
+            font-size: 17px;
+          }
+          .form-subtitle-user {
+            font-size: 12.5px;
+          }
+          .grid-responsivo-tipos {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+          }
+          .grid-responsivo-naturaleza {
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+          .grid-responsivo-fechas {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 14px;
+          }
+          .pill-movimiento {
+            padding: 14px 8px;
+            font-size: 13px;
+            gap: 7px;
+          }
+          .zinc-input {
+            padding: 12px 13px;
+            font-size: 14.5px;
+          }
         }
       `}</style>
 
       <div className="form-card-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '26px', borderBottom: `1.5px solid ${t.border}`, paddingBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="form-header-row">
           <div>
-            <div style={{ fontSize: '21px', fontWeight: '800', color: t.text, letterSpacing: '-0.01em' }}>NUEVA SOLICITUD DE PASE</div>
-            <div style={{ fontSize: '14.5px', fontWeight: '600', color: t.textMuted, marginTop: '4px' }}>{sesionActual.nombre_completo || usuario?.nombre_completo}</div>
+            <div className="form-title-main">NUEVA SOLICITUD DE PASE</div>
+            <div className="form-subtitle-user">{sesionActual.nombre_completo || usuario?.nombre_completo}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12.5px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Elaboración</div>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: t.text, marginTop: '2px' }}>{fechaHoy}</div>
+            <div style={{ fontSize: '11.5px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Elaboración</div>
+            <div style={{ fontSize: '16.5px', fontWeight: '800', color: t.text, marginTop: '2px' }}>{fechaHoy}</div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label className="zinc-label">1. Tipo de Movimiento / Permiso</label>
             <div className="grid-responsivo-tipos">
-              {[
-                { key: 'salida', label: 'Salida Anticipada', icon: Clock },
-                { key: 'retardo', label: 'Llegada Tarde', icon: AlertTriangle },
-                { key: 'falta', label: 'Falta Programada', icon: Calendar },
-                { key: 'vacaciones', label: 'Vacaciones', icon: Calendar }
-              ].map(item => {
+              {catálogoTipos.map(item => {
                 const Icono = item.icon;
                 const activo = tipoPermiso === item.key;
                 return (
                   <button
-                    key={item.key} type="button"
+                    key={item.key}
+                    type="button"
                     onClick={() => setTipoPermiso(item.key)}
-                    className={`pill-movimiento ${activo ? 'active' : ''}`}
-                    style={activo && item.key === 'retardo' ? { borderColor: t.danger, backgroundColor: t.dangerSoft, color: t.danger } : {}}
+                    className="pill-movimiento"
+                    style={activo ? {
+                      borderColor: item.color,
+                      backgroundColor: item.bg,
+                      color: item.color
+                    } : {}}
                   >
-                    <Icono size={25} /> <span>{item.label}</span>
+                    <Icono size={23} />
+                    <span>{item.label}</span>
                   </button>
                 );
               })}
@@ -279,15 +345,15 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           </div>
 
           {alertaReincidencia && tipoPermiso === 'retardo' && (
-            <div style={{ padding: '14px 16px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: `1px solid #f59e0b`, fontSize: '14.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
-              <Info size={20} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: `1px solid #f59e0b`, fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
+              <Info size={19} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
               <span><strong>Atención:</strong> El sistema detecta incidencias previas de retardo en tu historial reciente. Esta información será anexada para la evaluación de tu Jefatura y Recursos Humanos.</span>
             </div>
           )}
 
           {esRetardoUrgente && (
-            <div style={{ padding: '14px 16px', borderRadius: '11px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '14.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
-              <ShieldAlert size={20} color={t.danger} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ padding: '13px 15px', borderRadius: '11px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
+              <ShieldAlert size={19} color={t.danger} style={{ flexShrink: 0, marginTop: '2px' }} />
               <span><strong>ALERTA DE ACCESO:</strong> Estás registrando un aviso de retardo de último momento. Al enviar, el Gerente recibirá una notificación urgente para dictaminar tu acceso o si debes regresar a casa.</span>
             </div>
           )}
@@ -295,47 +361,57 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           {tipoPermiso && tipoPermiso !== 'vacaciones' && (
             <div>
               <label className="zinc-label">2. Naturaleza del Asunto</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                {['Personal / Familiar', 'Cita Médica', 'Asunto de Trabajo'].map(nat => (
-                  <button
-                    key={nat} type="button" onClick={() => setNaturaleza(nat)}
-                    style={{
-                      padding: '13px 14px', borderRadius: '11px',
-                      border: `1.5px solid ${naturaleza === nat ? t.accent : t.border}`,
-                      background: naturaleza === nat ? t.accentSoft : t.surface,
-                      color: naturaleza === nat ? t.accent : t.textMuted,
-                      fontSize: '14.5px', fontWeight: '700', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
-                    }}
-                  >
-                    {nat}
-                  </button>
-                ))}
+              <div className="grid-responsivo-naturaleza">
+                {['Personal / Familiar', 'Cita Médica', 'Asunto de Trabajo'].map(nat => {
+                  const activa = naturaleza === nat;
+                  return (
+                    <button
+                      key={nat}
+                      type="button"
+                      onClick={() => setNaturaleza(nat)}
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '11px',
+                        border: `1.5px solid ${activa ? t.text : t.border}`,
+                        background: activa ? (modoOscuro ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)') : t.surface,
+                        color: activa ? t.text : t.textMuted,
+                        fontSize: '14px',
+                        fontWeight: activa ? '800' : '700',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {nat}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
           <div className="grid-responsivo-fechas">
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label className="zinc-label">{tipoPermiso === 'vacaciones' ? 'Fecha Inicio *' : 'Fecha en que aplica el pase *'}</label>
               <input type="date" required className="zinc-input" min={minDate} value={fechaPermiso} onChange={e => setFechaPermiso(e.target.value)} />
             </div>
 
             {tipoPermiso === 'vacaciones' && (
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Fecha Fin *</label>
                 <input type="date" required className="zinc-input" min={fechaPermiso} value={fechaFinVacaciones} onChange={e => setFechaFinVacaciones(e.target.value)} />
               </div>
             )}
 
             {tipoPermiso === 'retardo' && (
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Hora Estimada de Llegada *</label>
                 <input type="time" required className="zinc-input" value={horaLlegadaRetardo} onChange={e => setHoraLlegadaRetardo(e.target.value)} />
               </div>
             )}
 
             {tipoPermiso === 'salida' && (
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Hora en que te retiras *</label>
                 <input type="time" required className="zinc-input" value={horaSalida} onChange={e => setHoraSalida(e.target.value)} />
               </div>
@@ -343,16 +419,16 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           </div>
 
           {tipoPermiso === 'salida' && (
-            <div style={{ padding: '16px 18px', borderRadius: '12px', background: t.surface, border: `1.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ padding: '14px 16px', borderRadius: '12px', background: t.surface, border: `1.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input type="checkbox" id="checkRegresa" checked={regresaMismoDia} onChange={e => setRegresaMismoDia(e.target.checked)} style={{ width: '19px', height: '19px', accentColor: t.accent, cursor: 'pointer' }} />
-                <label htmlFor="checkRegresa" style={{ fontSize: '15px', color: t.text, cursor: 'pointer', fontWeight: '700' }}>
+                <input type="checkbox" id="checkRegresa" checked={regresaMismoDia} onChange={e => setRegresaMismoDia(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#0ea5e9', cursor: 'pointer', flexShrink: 0 }} />
+                <label htmlFor="checkRegresa" style={{ fontSize: '14.5px', color: t.text, cursor: 'pointer', fontWeight: '700', lineHeight: 1.35 }}>
                   ¿Regresas a laborar en el mismo turno? (Salida y reingreso)
                 </label>
               </div>
 
               {regresaMismoDia && (
-                <div style={{ marginTop: '4px' }}>
+                <div style={{ marginTop: '2px', minWidth: 0 }}>
                   <label className="zinc-label">Hora estimada de retorno al puesto *</label>
                   <input type="time" required className="zinc-input" value={horaRegreso} onChange={e => setHoraRegreso(e.target.value)} />
                 </div>
@@ -374,7 +450,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           <button 
             type="submit" disabled={guardando || !tipoPermiso}
             style={{
-              padding: '16px', borderRadius: '12px', border: 'none',
+              padding: '15px', borderRadius: '12px', border: 'none',
               backgroundColor: !tipoPermiso ? t.surface : (esRetardoUrgente ? t.danger : t.accent), 
               color: !tipoPermiso ? t.textMuted : '#ffffff',
               fontSize: '15px', fontWeight: '800', cursor: !tipoPermiso ? 'not-allowed' : 'pointer',
@@ -382,7 +458,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
               boxShadow: !tipoPermiso ? 'none' : (esRetardoUrgente ? '0 4px 14px rgba(239, 68, 68, 0.3)' : `0 4px 14px ${t.accentSoft}`)
             }}
           >
-            <Send size={19} /> {guardando ? 'Registrando en sistema...' : (esRetardoUrgente ? 'ENVIAR AVISO DE URGENCIA' : 'FIRMAR Y ENVIAR SOLICITUD')}
+            <Send size={18} /> {guardando ? 'Registrando en sistema...' : (esRetardoUrgente ? 'ENVIAR AVISO DE URGENCIA' : 'FIRMAR Y ENVIAR SOLICITUD')}
           </button>
         </form>
       </div>
