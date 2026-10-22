@@ -385,7 +385,7 @@ export default function VistaArbol({
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                    <span style={{ fontSize: esMobile ? '13px' : '13.5px', fontWeight: '800', color: c.text, letterSpacing: '0.04em' }}>
+                    <span style={{ fontSize: esMobile ? '13.5px' : '15px', fontWeight: '800', color: c.text, letterSpacing: '0.03em' }}>
                       {sec.label}
                     </span>
                     {titularTexto && (
@@ -471,7 +471,7 @@ export default function VistaArbol({
                               <div style={{ color: c.subText, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 {abierto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                               </div>
-                              <span style={{ fontSize: '12.5px', fontWeight: '800', color: c.text, letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: esMobile ? '13px' : '14px', fontWeight: '800', color: c.text, letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {depto.nombre}
                               </span>
                             </div>
@@ -587,7 +587,7 @@ export default function VistaArbol({
                                               <div style={{ color: c.subText, display: 'flex', alignItems: 'center' }}>
                                                 {subAbierta ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                                               </div>
-                                              <span style={{ fontSize: '11px', fontWeight: '800', color: c.text, textTransform: 'uppercase', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                              <span style={{ fontSize: esMobile ? '11.5px' : '12.5px', fontWeight: '800', color: c.text, textTransform: 'uppercase', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {grupo.etiqueta}
                                               </span>
                                             </div>
@@ -777,8 +777,8 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
   const esMando = esGerencia || esLider || (u.rol && u.rol !== 'empleado');
 
   const tamanoFoto = esMobile 
-    ? (esGerencia ? '38px' : '34px') 
-    : (esGerencia ? '42px' : (esLider ? '38px' : '34px'));
+    ? (esGerencia ? '42px' : '38px') 
+    : (esGerencia ? '48px' : (esLider ? '44px' : '40px'));
 
   let IconoRango = User;
   if (esGerencia) IconoRango = Crown;
@@ -790,11 +790,12 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
       key={u.id} 
       className="placa-industrial"
       style={{
-        borderLeft: `3.5px solid ${badge.accentBar}`,
+        padding: esMobile ? '9px 11px' : '10px 14px',
+        borderLeft: `4px solid ${badge.accentBar}`,
         background: esSubordinado ? (modoOscuro ? '#161616' : '#fcfcfd') : c.surfaceCard
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: esMobile ? '9px' : '11px', minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: esMobile ? '10px' : '12px', minWidth: 0, flex: 1 }}>
         <img 
           src={urlFoto} 
           alt="" 
@@ -803,7 +804,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
           style={{ 
             width: tamanoFoto, 
             height: tamanoFoto, 
-            borderRadius: '7px', 
+            borderRadius: '8px', 
             objectFit: 'cover', 
             cursor: 'pointer', 
             border: `1px solid ${c.border}`, 
@@ -811,82 +812,145 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
           }}
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
-          {/* RENGLÓN 1: NOMBRE COMPLETO <---> BADGE DE MANDO (SOLO SI ES LÍDER/GERENCIA) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minWidth: 0 }}>
+        {esMobile ? (
+          /* =========================================================
+             DISEÑO MÓVIL: SI ES MANDO, ETIQUETA ARRIBA Y NOMBRE LIBRE
+             ========================================================= */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+            {esMando ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                  <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', fontWeight: '700', color: c.subText }}>
+                    #{u.numero_empleado}
+                  </span>
+                  <span style={{ 
+                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                    fontSize: '9.5px', fontWeight: '800', color: badge.text, background: badge.bg,
+                    border: `1px solid ${badge.border}`, padding: '1.5px 6px', borderRadius: '4px',
+                    whiteSpace: 'nowrap', letterSpacing: '0.02em', flexShrink: 0
+                  }}>
+                    <IconoRango size={9.5} />
+                    {badge.label}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: '13.5px', fontWeight: '800', color: c.text, lineHeight: '1.22',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>
+                  {u.nombre_completo}
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  fontSize: '11.5px', color: c.subText, fontWeight: '600',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>
+                  <Briefcase size={10.5} style={{ flexShrink: 0, opacity: 0.65 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.puesto || 'COLABORADOR'}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{
+                    fontSize: '13.5px', fontWeight: '800', color: c.text, lineHeight: '1.22',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1
+                  }}>
+                    {u.nombre_completo}
+                  </div>
+                  <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '11px', fontWeight: '700', color: c.subText, flexShrink: 0 }}>
+                    #{u.numero_empleado}
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  fontSize: '11.5px', color: c.subText, fontWeight: '600',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }}>
+                  <Briefcase size={10.5} style={{ flexShrink: 0, opacity: 0.65 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.puesto || 'COLABORADOR'}</span>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          /* =========================================================
+             DISEÑO LAPTOP 14": TIPOGRAFÍA MÁS GRANDE Y LEGIBLE
+             ========================================================= */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', minWidth: 0 }}>
+              <div style={{
+                fontSize: (esGerencia || esLider) ? '15px' : '14.5px',
+                fontWeight: '800',
+                color: c.text,
+                lineHeight: '1.2',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+                flex: 1
+              }}>
+                {u.nombre_completo}
+              </div>
+
+              {esMando ? (
+                <span style={{ 
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  fontSize: '10.5px', fontWeight: '800', color: badge.text, background: badge.bg,
+                  border: `1px solid ${badge.border}`, padding: '2px 8px', borderRadius: '5px',
+                  whiteSpace: 'nowrap', letterSpacing: '0.03em', flexShrink: 0
+                }}>
+                  <IconoRango size={11} />
+                  {badge.label}
+                </span>
+              ) : (
+                <span style={{
+                  fontFamily: 'ui-monospace, monospace',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  color: c.subText,
+                  flexShrink: 0
+                }}>
+                  #{u.numero_empleado}
+                </span>
+              )}
+            </div>
+
             <div style={{
-              fontSize: esMobile ? '12.5px' : '13px',
-              fontWeight: '800',
-              color: c.text,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12.5px',
+              color: c.subText,
+              fontWeight: '600',
               lineHeight: '1.2',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              minWidth: 0,
-              flex: 1
+              textOverflow: 'ellipsis'
             }}>
-              {u.nombre_completo}
+              {esMando && (
+                <>
+                  <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700', color: c.subText }}>
+                    #{u.numero_empleado}
+                  </span>
+                  <span>•</span>
+                </>
+              )}
+              <Briefcase size={11.5} style={{ flexShrink: 0, opacity: 0.65 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {u.puesto || 'COLABORADOR'}
+              </span>
             </div>
-
-            {esMando ? (
-              <span style={{ 
-                display: 'inline-flex', alignItems: 'center', gap: '3px',
-                fontSize: '9px', fontWeight: '800', color: badge.text, background: badge.bg,
-                border: `1px solid ${badge.border}`, padding: '1.5px 6px', borderRadius: '4px',
-                whiteSpace: 'nowrap', letterSpacing: '0.03em', flexShrink: 0
-              }}>
-                <IconoRango size={9.5} />
-                {badge.label}
-              </span>
-            ) : (
-              <span style={{
-                fontFamily: 'ui-monospace, monospace',
-                fontSize: '10.5px',
-                fontWeight: '700',
-                color: c.subText,
-                flexShrink: 0
-              }}>
-                #{u.numero_empleado}
-              </span>
-            )}
           </div>
-
-          {/* RENGLÓN 2: #EMPLEADO (SI ES MANDO) + PUESTO EN 1 SOLA LÍNEA LIMPIA */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            fontSize: '11px',
-            color: c.subText,
-            fontWeight: '600',
-            lineHeight: '1.2',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
-            {esMando && (
-              <>
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700', color: c.subText }}>
-                  #{u.numero_empleado}
-                </span>
-                <span>•</span>
-              </>
-            )}
-            <Briefcase size={10} style={{ flexShrink: 0, opacity: 0.65 }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {u.puesto || 'COLABORADOR'}
-            </span>
-          </div>
-        </div>
+        )}
       </div>
 
       {seguridadDesbloqueada && (
         <button
           onClick={(e) => onEditarUsuario(u, e)}
-          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.text, cursor: 'pointer', padding: '5px 7px', fontSize: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
+          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.text, cursor: 'pointer', padding: '5px 7px', fontSize: '10.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
           title="Reacomodar en el organigrama"
         >
-          <Edit2 size={11} />
+          <Edit2 size={12} />
         </button>
       )}
     </div>
