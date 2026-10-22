@@ -1,29 +1,40 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // <-- Importamos el navegador
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../core/auth/AuthContext';
 import FormularioSolicitud from './FormularioSolicitud';
 import { obtenerTemaPermisos, generarEstilosPermisos } from '../permisosStyles';
 
 export default function Solicitar() {
   const { usuario } = useAuth();
-  const navigate = useNavigate(); // <-- Instanciamos el navegador
+  const navigate = useNavigate();
   
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaPermisos(modoOscuro);
 
-  // Función que se dispara cuando el formulario termina de guardar en Supabase
   const manejarExito = () => {
-    // Redireccionamos al empleado a su panel de seguimiento
     navigate('/mis-permisos');
   };
 
   return (
-    <div className="permisos-container" style={{ maxWidth: '780px', margin: '0 auto', padding: '16px' }}>
+    <div
+      className="permisos-container"
+      style={{
+        width: '100%',
+        maxWidth: '940px',
+        minHeight: 'calc(100vh - 110px)',
+        margin: '0 auto',
+        padding: '20px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        boxSizing: 'border-box'
+      }}
+    >
       <style>{generarEstilosPermisos(c, modoOscuro)}</style>
 
       <FormularioSolicitud 
         usuario={usuario} 
-        onSolicitudCreada={manejarExito} // <-- Le pasamos la instrucción de redirección
+        onSolicitudCreada={manejarExito}
         c={c} 
         modoOscuro={modoOscuro} 
       />
