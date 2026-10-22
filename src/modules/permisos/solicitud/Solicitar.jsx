@@ -18,7 +18,7 @@ export default function Solicitar() {
   };
 
   return (
-    <div className="permisos-container" style={{ maxWidth: '650px', margin: '0 auto', padding: '16px' }}>
+    <div className="permisos-container" style={{ maxWidth: '780px', margin: '0 auto', padding: '16px' }}>
       <style>{generarEstilosPermisos(c, modoOscuro)}</style>
 
       <FormularioSolicitud 

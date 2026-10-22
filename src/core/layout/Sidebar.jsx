@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { registrarSuscripcionPush } from '../notificaciones/notificacionesService';
 
 import { 
-  ClipboardList, PenLine, FileBarChart, Users, ShieldCheck, 
+  ClipboardList, PenLine, FileBarChart, Users,
   LogOut, X, Camera, Image as ImageIcon, Sun, Moon,
   Settings, FilePlus, Bell, Clock, DoorOpen
 } from 'lucide-react';
@@ -73,7 +73,6 @@ export default function Sidebar({
     setLoading(false);
   };
 
-  // === ACTIVACIÓN DE NOTIFICACIONES PUSH (1 CLIC EN PC Y CELULAR) ===
   const activarAlertas = async () => {
     if (suscribiendo) return;
     setSuscribiendo(true);
@@ -91,13 +90,11 @@ export default function Sidebar({
 
       const endpointActual = sub.endpoint;
 
-      // 1. Limpieza absoluta en Supabase para evitar clones de este aparato
       await supabase
         .from('suscripciones_push')
         .delete()
         .eq('endpoint', endpointActual);
 
-      // 2. Inserción limpia vinculada al usuario actual
       const { error } = await supabase
         .from('suscripciones_push')
         .insert([{ 
@@ -132,14 +129,15 @@ export default function Sidebar({
     <>
       <aside style={{
         ...s.sidebar,
-        width: isMobile ? '72vw' : '260px',
-        maxWidth: isMobile ? '280px' : '260px',
-        padding: isMobile ? '16px 12px' : '20px 16px',
+        width: isMobile ? '74vw' : '272px',
+        maxWidth: isMobile ? '290px' : '272px',
+        padding: isMobile ? '16px 14px' : '18px 16px',
         backgroundColor: tema.sidebarBg,
         borderRight: `1.5px solid ${tema.border}`,
-        position: isMobile ? 'fixed' : 'relative',
+        position: isMobile ? 'fixed' : 'sticky',
+        top: 0,
         transform: isMobile ? (menuAbierto ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-        marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-260px'),
+        marginLeft: isMobile ? '0' : (menuAbierto ? '0' : '-272px'),
         boxShadow: modoOscuro ? 'none' : '4px 0 25px rgba(0,0,0,0.05)'
       }}>
 
@@ -158,17 +156,14 @@ export default function Sidebar({
         {/* 2. CABECERA CON BOTONES GLOBALES */}
         <div style={s.brandHeader}>
           <div style={s.headerActions}>
-            
-            {/* Botón Tema Oscuro */}
             <button 
               onClick={() => setModoOscuro(!modoOscuro)} 
               style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
               title={modoOscuro ? "Modo Claro" : "Modo Oscuro"}
             >
-              {modoOscuro ? <Sun size={14} /> : <Moon size={14} />}
+              {modoOscuro ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
-            {/* Botón Global de Notificaciones (1 CLIC) */}
             <button 
               onClick={activarAlertas} 
               disabled={suscribiendo}
@@ -180,22 +175,21 @@ export default function Sidebar({
               }}
               title="Activar Notificaciones Push en este dispositivo"
             >
-              <Bell size={14} className={suscribiendo ? "animate-pulse" : ""} />
+              <Bell size={15} className={suscribiendo ? "animate-pulse" : ""} />
             </button>
 
-            {/* Botón Cerrar Menú Móvil */}
             <button 
               onClick={() => setMenuAbierto(false)} 
               style={{ ...s.btnIcon, border: `1.5px solid ${tema.border}`, color: tema.textSecondary }}
               title="Contraer menú"
               aria-label="Contraer menú"
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           </div>
         </div>
 
-        {/* 3. PERFIL */}
+        {/* 3. PERFIL (FOTO Y TEXTO PROPORCIONALMENTE MÁS GRANDES) */}
         <div style={{ ...s.profileBox, border: `1.5px solid ${tema.border}`, backgroundColor: modoOscuro ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
           <div
             style={s.avatarWrapper}
@@ -203,7 +197,7 @@ export default function Sidebar({
             title="Ver foto de perfil"
           >
             <img src={miFoto} alt="Perfil" style={s.avatarImg} />
-            <div style={s.avatarEditBadge}><Camera size={11} color="#fff" /></div>
+            <div style={s.avatarEditBadge}><Camera size={12} color="#fff" /></div>
           </div>
 
           <div style={s.profileDetails}>
@@ -224,13 +218,13 @@ export default function Sidebar({
                   cursor: puedeEditarNombre ? 'pointer' : 'default' 
                 }} 
                 onClick={() => puedeEditarNombre && setEditandoNombre(true)}
-                title={puedeEditarNombre ? "Clic para editar nombre" : ""}
+                title={usuarioLogueado?.nombre_completo || ''}
               >
                 {usuarioLogueado?.nombre_completo || 'Usuario'}
               </span>
             )}
             
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
               <span style={{ ...s.userRole, color: tema.textSecondary }}>
                 {rol.replace(/_/g, ' ')}
               </span>
@@ -240,7 +234,7 @@ export default function Sidebar({
                 style={{ background: 'transparent', border: 'none', color: tema.textSecondary, cursor: 'pointer', display: 'flex', padding: '2px', transition: 'color 0.2s' }}
                 title="Seguridad y PIN"
               >
-                <Settings size={14} />
+                <Settings size={15} />
               </button>
             </div>
           </div>
@@ -252,9 +246,9 @@ export default function Sidebar({
             <Link 
               to="/solicitar" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/solicitar' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <FilePlus size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <FilePlus size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
               <span style={s.navText}>Solicitar Pase</span>
             </Link>
           )}
@@ -263,9 +257,9 @@ export default function Sidebar({
             <Link 
               to="/mis-permisos" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/mis-permisos' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <ClipboardList size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <ClipboardList size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
               <span style={s.navText}>Mis Permisos</span>
             </Link>
           )}
@@ -274,9 +268,9 @@ export default function Sidebar({
             <Link 
               to="/aprobaciones" 
               onClick={cerrarMenuMovil} 
-              style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              style={location.pathname === '/aprobaciones' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
             >
-              <PenLine size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+              <PenLine size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
               <span style={s.navText}>Aprobaciones</span>
             </Link>
           )}
@@ -286,17 +280,17 @@ export default function Sidebar({
               <Link 
                 to="/control-historial" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/control-historial' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <FileBarChart size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <FileBarChart size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Control / Historial</span>
               </Link>
               <Link 
                 to="/directorio" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/directorio' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <Users size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <Users size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Directorio RH</span>
               </Link>
             </>
@@ -307,35 +301,38 @@ export default function Sidebar({
               <Link 
                 to="/caseta" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <DoorOpen size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <DoorOpen size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Pases de Puerta</span>
               </Link>
               <Link 
                 to="/caseta/asistencia" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <ClipboardList size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <ClipboardList size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Pase de Lista</span>
               </Link>
               <Link 
                 to="/caseta/retardo" 
                 onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta/retardo' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+                style={location.pathname === '/caseta/retardo' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `3.5px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
-                <Clock size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <Clock size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Apoyo Retardo</span>
               </Link>
             </>
           )}
+        </nav>
 
+        {/* 5. BOTÓN CERRAR SESIÓN SIEMPRE VISIBLE ABAJO */}
+        <div style={s.logoutContainer}>
           <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
-            <LogOut size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+            <LogOut size={16} strokeWidth={2} style={{ flexShrink: 0 }} />
             <span style={s.navText}>Cerrar Sesión</span>
           </button>
-        </nav>
+        </div>
 
       </aside>
 
@@ -352,10 +349,10 @@ export default function Sidebar({
           >
             <div style={s.modalHeader}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '13px', fontWeight: '800', color: tema.textPrimary }}>
+                <span style={{ fontSize: '14px', fontWeight: '800', color: tema.textPrimary }}>
                   {usuarioLogueado?.nombre_completo || 'Colaborador'}
                 </span>
-                <span style={{ fontSize: '11px', fontWeight: '600', color: tema.textSecondary, textTransform: 'uppercase' }}>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: tema.textSecondary, textTransform: 'uppercase' }}>
                   {usuarioLogueado?.puesto || rol.replace(/_/g, ' ')}
                 </span>
               </div>
@@ -372,7 +369,7 @@ export default function Sidebar({
             </div>
 
             {loading ? (
-              <div style={{ textAlign: 'center', fontSize: '12px', fontWeight: '700', color: '#16a34a', padding: '8px' }}>
+              <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: '700', color: '#16a34a', padding: '8px' }}>
                 Actualizando fotografía...
               </div>
             ) : (
@@ -400,9 +397,9 @@ export default function Sidebar({
 const s = {
   sidebar: { 
     zIndex: 300, 
-    height: '100dvh', 
-    overflowY: 'auto', 
-    paddingBottom: '40px', 
+    height: '100vh',
+    maxHeight: '100vh',
+    overflow: 'hidden', 
     display: 'flex', 
     flexDirection: 'column', 
     transition: 'all 0.3s ease', 
@@ -412,71 +409,74 @@ const s = {
     WebkitBackdropFilter: 'blur(10px)'
   },
   sidebarWatermarkContainer: {
-    position: 'absolute', top: '60%', left: '50%', transform: 'translate(-50%, -50%)',
-    width: '90%', pointerEvents: 'none', zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+    position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%, -50%)',
+    width: '88%', pointerEvents: 'none', zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
   },
   sidebarWatermarkImg: {
-    width: '100%', maxHeight: '210px', objectFit: 'contain', userSelect: 'none', transition: 'opacity 0.3s ease'
+    width: '100%', maxHeight: '200px', objectFit: 'contain', userSelect: 'none', transition: 'opacity 0.3s ease'
   },
   brandHeader: {
     position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-    paddingBottom: '12px', marginBottom: '8px'
+    paddingBottom: '10px', marginBottom: '6px', flexShrink: 0
   },
   headerActions: {
-    display: 'flex', alignItems: 'center', gap: '5px'
+    display: 'flex', alignItems: 'center', gap: '6px'
   },
   btnIcon: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', 
-    borderRadius: '7px', background: 'transparent', cursor: 'pointer'
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', 
+    borderRadius: '8px', background: 'transparent', cursor: 'pointer'
   },
   profileBox: {
-    position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '10px',
-    padding: '10px 8px', borderRadius: '10px', marginBottom: '16px'
+    position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '12px',
+    padding: '12px 10px', borderRadius: '12px', marginBottom: '16px', flexShrink: 0
   },
   avatarWrapper: {
-    width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0
+    width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0
   },
   avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
   avatarEditBadge: {
-    position: 'absolute', bottom: 0, left: 0, width: '100%', height: '13px',
+    position: 'absolute', bottom: 0, left: 0, width: '100%', height: '15px',
     backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center'
   },
   profileDetails: { display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 },
-  userName: { fontSize: '12.5px', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  inputEdit: { fontSize: '11px', padding: '3px 5px', borderRadius: '5px', outline: 'none' },
-  userRole: { fontSize: '10.5px', textTransform: 'capitalize', marginTop: '1px' },
+  userName: { fontSize: '14px', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  inputEdit: { fontSize: '12.5px', padding: '4px 6px', borderRadius: '5px', outline: 'none' },
+  userRole: { fontSize: '12px', textTransform: 'capitalize', fontWeight: '500' },
   nav: { 
-    position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' 
+    position: 'relative', zIndex: 1, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '5px' 
   },
   navLink: {
-    display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
-    borderRadius: '8px', fontSize: '12.5px', fontWeight: '500', textDecoration: 'none', transition: 'all 0.15s ease'
+    display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 12px',
+    borderRadius: '9px', fontSize: '14px', fontWeight: '500', textDecoration: 'none', transition: 'all 0.15s ease'
   },
   navLinkActive: {
-    display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px',
-    borderRadius: '0 8px 8px 0', fontSize: '12.5px', fontWeight: '600', textDecoration: 'none', transition: 'all 0.15s ease'
+    display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 12px',
+    borderRadius: '0 9px 9px 0', fontSize: '14px', fontWeight: '700', textDecoration: 'none', transition: 'all 0.15s ease'
   },
   navText: {
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
   },
+  logoutContainer: {
+    position: 'relative', zIndex: 2, paddingTop: '12px', marginTop: 'auto', flexShrink: 0
+  },
   btnLogout: {
-    marginTop: 'auto', display: 'flex', alignItems : 'center', justifyContent: 'center',
-    gap: '6px', padding: '10px', borderRadius: '8px', border: 'none',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    gap: '8px', padding: '11px 12px', borderRadius: '9px', border: 'none',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '13.5px', fontWeight: '700', cursor: 'pointer'
   },
   modalOverlay: {
     position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)',
     zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
   },
   modalCard: {
-    width: '100%', maxWidth: '320px', borderRadius: '18px', padding: '18px',
+    width: '100%', maxWidth: '340px', borderRadius: '18px', padding: '20px',
     display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
   },
   modalHeader: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px'
   },
   btnCloseModal: {
-    width: '30px', height: '30px', borderRadius: '50%', background: 'transparent',
+    width: '32px', height: '32px', borderRadius: '50%', background: 'transparent',
     display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0
   },
   photoPreviewWrap: {
@@ -491,10 +491,10 @@ const s = {
   },
   actionBtnPrimary: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-    padding: '10px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer'
+    padding: '10px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer'
   },
   actionBtnSecondary: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-    padding: '10px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', background: 'transparent'
+    padding: '10px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', background: 'transparent'
   }
 };
