@@ -50,8 +50,20 @@ export default function ControlHistorial() {
   }, [usuario?.id, cargarTodasSolicitudes]);
 
   return (
-    <div className="aprobaciones-container" style={{ padding: '18px 22px', boxSizing: 'border-box' }}>
+    <div className="aprobaciones-container control-historial-wrapper">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+      <style>{`
+        .control-historial-wrapper {
+          padding: 18px 22px;
+          box-sizing: border-box;
+          width: 100%;
+        }
+        @media (max-width: 768px) {
+          .control-historial-wrapper {
+            padding: 10px 10px 28px 10px;
+          }
+        }
+      `}</style>
 
       {cargando ? (
         <div style={{ textAlign: 'center', padding: '44px', color: c.textMuted, fontSize: '15px', fontWeight: '600' }}>

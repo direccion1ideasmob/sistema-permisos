@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, FileSpreadsheet, Download, Search, Users, Calendar, Filter, Check } from 'lucide-react';
+import { X, FileSpreadsheet, Download, Search, Users, Calendar, Filter } from 'lucide-react';
 import { supabase } from '../../../core/api/supabaseClient';
 import { parsearDatosObservaciones, limpiarMotivo } from './TablaHistorial';
 
@@ -13,7 +13,6 @@ export default function ModalExportarExcel({
   const [cargando, setCargando] = useState(false);
   const [registrosBase, setRegistrosBase] = useState(solicitudesPrecargadas);
 
-  // Filtros de exportación masiva
   const [rangoRapido, setRangoRapido] = useState('historico_completo');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
@@ -22,11 +21,9 @@ export default function ModalExportarExcel({
   const [tipoPermiso, setTipoPermiso] = useState('todos');
   const [dictamen, setDictamen] = useState('todos');
 
-  // Selección opcional de 1 o varios colaboradores específicos
   const [busquedaEmp, setBusquedaEmp] = useState('');
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState([]);
 
-  // Si no vinieron precargadas, las consultamos al abrir el modal
   useEffect(() => {
     if (solicitudesPrecargadas && solicitudesPrecargadas.length > 0) {
       setRegistrosBase(solicitudesPrecargadas);
@@ -99,7 +96,6 @@ export default function ModalExportarExcel({
     return true;
   };
 
-  // Catálogo único de colaboradores presentes en el historial para poder elegir 1 o varios
   const catalogoColaboradores = useMemo(() => {
     const mapa = new Map();
     registrosBase.forEach(p => {
@@ -137,7 +133,6 @@ export default function ModalExportarExcel({
     setEmpleadosSeleccionados(prev => prev.filter(e => e.id !== id));
   };
 
-  // Filtrado en tiempo real para saber exactamente cuántos registros se van a exportar
   const datosFiltrados = useMemo(() => {
     return registrosBase.filter(p => {
       const f = String(p.fecha_permiso || p.fecha_elaboracion || '').slice(0, 10);
@@ -259,6 +254,8 @@ export default function ModalExportarExcel({
 
   const selectInputStyle = {
     width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
     height: '42px',
     padding: '0 12px',
     borderRadius: '10px',
@@ -275,40 +272,94 @@ export default function ModalExportarExcel({
   return (
     <div style={{
       position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(5px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 7000, padding: '20px',
-      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif'
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 7000, padding: '14px',
+      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif', boxSizing: 'border-box'
     }}>
-      <div style={{
-        backgroundColor: bgCard,
-        border: `1.5px solid ${borderCol}`,
-        borderRadius: '20px',
-        width: '100%',
-        maxWidth: '640px',
-        padding: '28px 32px',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.55)',
-        color: textMain,
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-        maxHeight: '92vh',
-        overflowY: 'auto'
-      }}>
+      <style>{`
+        .modal-excel-card {
+          background-color: ${bgCard};
+          border: 1.5px solid ${borderCol};
+          border-radius: 20px;
+          width: 100%;
+          max-width: 640px;
+          padding: 28px 32px;
+          box-shadow: 0 25px 60px rgba(0,0,0,0.55);
+          color: ${textMain};
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          max-height: 92vh;
+          overflow-y: auto;
+        }
+        .excel-grid-4 {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 8px;
+        }
+        .excel-grid-2 {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
+        .excel-footer-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 4px;
+          padding-top: 16px;
+          border-top: 1.5px solid ${borderCol};
+        }
+        .excel-footer-btns {
+          display: flex;
+          gap: 10px;
+        }
+        @media (max-width: 640px) {
+          .modal-excel-card {
+            padding: 18px 16px;
+            border-radius: 16px;
+            gap: 14px;
+          }
+          .excel-grid-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .excel-grid-2 {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 10px;
+          }
+          .excel-footer-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .excel-footer-btns {
+            width: 100%;
+          }
+          .excel-footer-btns button {
+            flex: 1;
+            justify-content: center;
+          }
+        }
+      `}</style>
+
+      <div className="modal-excel-card">
         {/* CABECERA */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1.5px solid ${borderCol}`, paddingBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1.5px solid ${borderCol}`, paddingBottom: '14px', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              width: '44px', height: '44px', borderRadius: '12px',
+              width: '42px', height: '42px', borderRadius: '11px',
               background: 'rgba(22, 163, 74, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
             }}>
-              <FileSpreadsheet size={24} color={accent} />
+              <FileSpreadsheet size={22} color={accent} />
             </div>
             <div>
-              <h3 style={{ fontSize: '19px', fontWeight: '900', margin: 0, color: textMain, letterSpacing: '-0.01em' }}>
-                Exportar Reporte de Permisos (.CSV / Excel)
+              <h3 style={{ fontSize: '17.5px', fontWeight: '900', margin: 0, color: textMain, letterSpacing: '-0.01em' }}>
+                Exportar Reporte (.CSV / Excel)
               </h3>
-              <p style={{ fontSize: '13.5px', color: textSub, margin: '3px 0 0 0', fontWeight: '500' }}>
-                Configura el corte por periodo, nómina, departamento o personal específico.
+              <p style={{ fontSize: '12.5px', color: textSub, margin: '2px 0 0 0', fontWeight: '500' }}>
+                Configura el corte por periodo, nómina, departamento o personal.
               </p>
             </div>
           </div>
@@ -316,22 +367,22 @@ export default function ModalExportarExcel({
             onClick={onClose}
             style={{
               background: bgInput, border: `1.5px solid ${borderCol}`, cursor: 'pointer',
-              color: textSub, width: '36px', height: '36px', borderRadius: '50%',
+              color: textSub, width: '34px', height: '34px', borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
             }}
           >
-            <X size={18} />
+            <X size={17} />
           </button>
         </div>
 
-        {/* 1. PERIODO Y RANGO DE FECHAS */}
+        {/* 1. PERIODO */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
             <label style={labelStyle}>
               <Calendar size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '5px' }} />
               1. Periodo del Reporte
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+            <div className="excel-grid-4">
               {[
                 { id: 'esta_semana', label: 'Esta Semana' },
                 { id: 'este_mes', label: 'Este Mes' },
@@ -345,12 +396,11 @@ export default function ModalExportarExcel({
                     type="button"
                     onClick={() => aplicarRangoRapido(btn.id)}
                     style={{
-                      height: '40px', padding: '0 10px', borderRadius: '10px', fontSize: '13px', fontWeight: '800',
+                      height: '38px', padding: '0 8px', borderRadius: '9px', fontSize: '12.5px', fontWeight: '800',
                       border: `1.5px solid ${activo ? accent : borderCol}`,
                       cursor: 'pointer',
                       backgroundColor: activo ? 'rgba(22, 163, 74, 0.12)' : bgInput,
-                      color: activo ? accent : textSub,
-                      transition: 'all 0.15s'
+                      color: activo ? accent : textSub
                     }}
                   >
                     {btn.label}
@@ -360,9 +410,9 @@ export default function ModalExportarExcel({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="excel-grid-2">
             <div>
-              <span style={{ fontSize: '11.5px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '5px' }}>
+              <span style={{ fontSize: '11px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '4px' }}>
                 DESDE FECHA (OPCIONAL)
               </span>
               <input
@@ -373,7 +423,7 @@ export default function ModalExportarExcel({
               />
             </div>
             <div>
-              <span style={{ fontSize: '11.5px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '5px' }}>
+              <span style={{ fontSize: '11px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '4px' }}>
                 HASTA FECHA (OPCIONAL)
               </span>
               <input
@@ -386,15 +436,15 @@ export default function ModalExportarExcel({
           </div>
         </div>
 
-        {/* 2. FILTROS ORGANIZACIONALES Y DE INCIDENCIA */}
+        {/* 2. FILTROS ORGANIZACIONALES */}
         <div>
           <label style={labelStyle}>
             <Filter size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '5px' }} />
             2. Filtros de Nómina, Área e Incidencia
           </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="excel-grid-2">
             <div>
-              <span style={{ fontSize: '11.5px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '5px' }}>TIPO DE NÓMINA</span>
+              <span style={{ fontSize: '11px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '4px' }}>TIPO DE NÓMINA</span>
               <select value={clasificacion} onChange={(e) => setClasificacion(e.target.value)} style={selectInputStyle}>
                 <option value="todas">Todas las Nóminas</option>
                 <option value="Producción">Nómina Producción</option>
@@ -404,7 +454,7 @@ export default function ModalExportarExcel({
             </div>
 
             <div>
-              <span style={{ fontSize: '11.5px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '5px' }}>DEPARTAMENTO</span>
+              <span style={{ fontSize: '11px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '4px' }}>DEPARTAMENTO</span>
               <select value={deptoId} onChange={(e) => setDeptoId(e.target.value)} style={selectInputStyle}>
                 <option value="todos">Todos los Departamentos</option>
                 {departamentos.map(d => (
@@ -414,7 +464,7 @@ export default function ModalExportarExcel({
             </div>
 
             <div>
-              <span style={{ fontSize: '11.5px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '5px' }}>TIPO DE PERMISO</span>
+              <span style={{ fontSize: '11px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '4px' }}>TIPO DE PERMISO</span>
               <select value={tipoPermiso} onChange={(e) => setTipoPermiso(e.target.value)} style={selectInputStyle}>
                 <option value="todos">Todos los Tipos</option>
                 <option value="salida">Salidas Anticipadas</option>
@@ -425,7 +475,7 @@ export default function ModalExportarExcel({
             </div>
 
             <div>
-              <span style={{ fontSize: '11.5px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '5px' }}>DICTAMEN DE PAGO</span>
+              <span style={{ fontSize: '11px', color: textSub, fontWeight: '700', display: 'block', marginBottom: '4px' }}>DICTAMEN DE PAGO</span>
               <select value={dictamen} onChange={(e) => setDictamen(e.target.value)} style={selectInputStyle}>
                 <option value="todos">Todos los Dictámenes</option>
                 <option value="Con goce">Con Goce de Sueldo</option>
@@ -438,15 +488,15 @@ export default function ModalExportarExcel({
           </div>
         </div>
 
-        {/* 3. SELECCIÓN DE PERSONAL (TODA LA PLANTILLA O MÚLTIPLES EMPLEADOS) */}
-        <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        {/* 3. SELECCIÓN DE PERSONAL */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Users size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '5px' }} />
               3. Alcance de Colaboradores
             </label>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: empleadosSeleccionados.length === 0 ? accent : textSub }}>
-              {empleadosSeleccionados.length === 0 ? '✓ Exportando toda la plantilla filtrada' : `${empleadosSeleccionados.length} colaborador(es) seleccionado(s)`}
+            <span style={{ fontSize: '11.5px', fontWeight: '700', color: empleadosSeleccionados.length === 0 ? accent : textSub }}>
+              {empleadosSeleccionados.length === 0 ? '✓ Toda la plantilla filtrada' : `${empleadosSeleccionados.length} seleccionado(s)`}
             </span>
           </div>
 
@@ -457,7 +507,7 @@ export default function ModalExportarExcel({
                   key={emp.id}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    padding: '5px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '700',
+                    padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
                     background: 'rgba(22, 163, 74, 0.12)', color: accent, border: '1px solid rgba(22, 163, 74, 0.3)'
                   }}
                 >
@@ -467,38 +517,28 @@ export default function ModalExportarExcel({
                     onClick={() => quitarEmpleado(emp.id)}
                     style={{ background: 'transparent', border: 'none', color: accent, cursor: 'pointer', padding: 0, display: 'flex' }}
                   >
-                    <X size={14} />
+                    <X size={13} />
                   </button>
                 </span>
               ))}
-              <button
-                type="button"
-                onClick={() => setEmpleadosSeleccionados([])}
-                style={{
-                  background: 'transparent', border: 'none', color: '#ef4444',
-                  fontSize: '12px', fontWeight: '700', cursor: 'pointer', padding: '0 6px'
-                }}
-              >
-                Quitar todos
-              </button>
             </div>
           )}
 
           <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '13px', top: '13px', color: textSub }} />
+            <Search size={15} style={{ position: 'absolute', left: '12px', top: '13px', color: textSub }} />
             <input
               type="text"
-              placeholder="Dejar vacío para exportar a TODOS, o escribe para agregar 1 o varios empleados..."
+              placeholder="Vacío = TODOS, o escribe para agregar empleados..."
               value={busquedaEmp}
               onChange={(e) => setBusquedaEmp(e.target.value)}
-              style={{ ...selectInputStyle, paddingLeft: '38px' }}
+              style={{ ...selectInputStyle, paddingLeft: '36px', fontSize: '13px' }}
             />
           </div>
 
           {sugerenciasColaboradores.length > 0 && (
             <div style={{
-              marginTop: '6px', borderRadius: '11px', border: `1.5px solid ${borderCol}`,
-              background: bgCard, overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.2)'
+              marginTop: '6px', borderRadius: '10px', border: `1.5px solid ${borderCol}`,
+              background: bgCard, overflow: 'hidden'
             }}>
               {sugerenciasColaboradores.map(emp => (
                 <button
@@ -506,38 +546,35 @@ export default function ModalExportarExcel({
                   type="button"
                   onClick={() => agregarEmpleado(emp)}
                   style={{
-                    width: '100%', padding: '10px 14px', border: 'none', borderBottom: `1px solid ${borderCol}`,
+                    width: '100%', padding: '9px 12px', border: 'none', borderBottom: `1px solid ${borderCol}`,
                     background: 'transparent', color: textMain, textAlign: 'left', cursor: 'pointer',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px'
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px'
                   }}
                 >
                   <span><strong>#{emp.numero}</strong> — {emp.nombre}</span>
-                  <span style={{ fontSize: '12px', color: textSub, fontWeight: '600' }}>{emp.depto} + Agregar</span>
+                  <span style={{ fontSize: '11.5px', color: accent, fontWeight: '700' }}>+ Agregar</span>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* PIE DEL MODAL CON RESUMEN EN VIVO */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
-          marginTop: '4px', paddingTop: '16px', borderTop: `1.5px solid ${borderCol}`
-        }}>
-          <div style={{ fontSize: '13.5px', fontWeight: '700', color: textSub }}>
+        {/* PIE DEL MODAL */}
+        <div className="excel-footer-row">
+          <div style={{ fontSize: '13px', fontWeight: '700', color: textSub }}>
             Registros encontrados:{' '}
-            <strong style={{ color: datosFiltrados.length > 0 ? accent : '#ef4444', fontSize: '15px' }}>
+            <strong style={{ color: datosFiltrados.length > 0 ? accent : '#ef4444', fontSize: '14.5px' }}>
               {datosFiltrados.length}
             </strong>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="excel-footer-btns">
             <button
               type="button"
               onClick={onClose}
               style={{
-                height: '44px', padding: '0 20px', borderRadius: '11px', border: `1.5px solid ${borderCol}`,
-                background: 'transparent', color: textSub, fontSize: '14.5px', fontWeight: '700', cursor: 'pointer'
+                height: '42px', padding: '0 18px', borderRadius: '10px', border: `1.5px solid ${borderCol}`,
+                background: 'transparent', color: textSub, fontSize: '14px', fontWeight: '700', cursor: 'pointer'
               }}
             >
               Cancelar
@@ -547,15 +584,15 @@ export default function ModalExportarExcel({
               onClick={descargarCSV}
               disabled={cargando || datosFiltrados.length === 0}
               style={{
-                height: '44px', padding: '0 22px', borderRadius: '11px', border: 'none',
+                height: '42px', padding: '0 20px', borderRadius: '10px', border: 'none',
                 backgroundColor: datosFiltrados.length === 0 ? borderCol : accent,
-                color: '#ffffff', fontSize: '14.5px', fontWeight: '800',
+                color: '#ffffff', fontSize: '14px', fontWeight: '800',
                 cursor: (cargando || datosFiltrados.length === 0) ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: '8px'
+                display: 'inline-flex', alignItems: 'center', gap: '7px'
               }}
             >
-              <Download size={17} />
-              {cargando ? 'Generando...' : `Descargar CSV (${datosFiltrados.length})`}
+              <Download size={16} />
+              {cargando ? 'Generando...' : `Descargar (${datosFiltrados.length})`}
             </button>
           </div>
         </div>

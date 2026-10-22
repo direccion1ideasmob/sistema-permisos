@@ -80,7 +80,7 @@ const obtenerRangoSemana = (offset = 0, fechaReferenciaStr = null) => {
   }
   base.setHours(12, 0, 0, 0);
 
-  const diaSemana = base.getDay(); // 0 = Domingo, 1 = Lunes
+  const diaSemana = base.getDay();
   const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
 
   const lunes = new Date(base);
@@ -200,7 +200,6 @@ export default function TablaHistorial({
     };
   }, [solicitudesEnPeriodo, esControlRH]);
 
-  // Si la pestaña actual tiene 0 registros en la semana pero otra área sí tiene, podemos cambiar o mostrar
   const solicitudesProcesadas = useMemo(() => {
     const base = esControlRH ? (pasesPorArea[areaActiva] || []) : solicitudesEnPeriodo;
     const term = busqueda.toLowerCase().trim();
@@ -301,12 +300,12 @@ export default function TablaHistorial({
 
     return (
       <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: '7px',
-        padding: '6px 12px', borderRadius: '8px',
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
+        padding: '5px 10px', borderRadius: '8px',
         background: c.surfaceCard, border: `1px solid ${c.border}`,
-        fontSize: '13px', color: c.text
+        fontSize: '12.5px', color: c.text
       }}>
-        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, flexShrink: 0 }} />
         <span style={{ color: textSecundario, fontWeight: '700' }}>{rolLabel}:</span>
         <strong style={{ fontWeight: '800' }}>{acortarNombre(nombre || 'Autorizado')}</strong>
       </div>
@@ -317,20 +316,186 @@ export default function TablaHistorial({
   const totalColumnas = esControlRH ? 6 : 4;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+    <div className="th-main-wrapper">
+      <style>{`
+        .th-main-wrapper {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .th-top-bar {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
+        .th-tabs-area {
+          flex: 0 1 520px;
+          margin: 0;
+          height: 44px;
+          box-sizing: border-box;
+        }
+        .th-right-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-left: auto;
+        }
+        .th-week-box {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: ${c.surfaceCard};
+          border: 1px solid ${c.border};
+          padding: 0 12px;
+          height: 44px;
+          box-sizing: border-box;
+          border-radius: 11px;
+        }
+        .th-btn-export {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 0 18px;
+          height: 44px;
+          box-sizing: border-box;
+          border-radius: 11px;
+          border: none;
+          background: ${c.accent};
+          color: #fff;
+          font-size: 13.5px;
+          font-weight: 800;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .th-filters-bar {
+          background: ${c.surfaceCard};
+          border: 1px solid ${c.border};
+          border-radius: 11px;
+          padding: 10px 14px;
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .th-search-box {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: ${c.bg};
+          border: 1px solid ${c.border};
+          border-radius: 8px;
+          padding: 0 14px;
+          height: ${alturaControl};
+          box-sizing: border-box;
+          flex: 1 1 260px;
+          min-width: 0;
+        }
+        .th-select-filter {
+          background: ${c.bg};
+          color: ${c.text};
+          border: 1px solid ${c.border};
+          border-radius: 8px;
+          padding: 0 12px;
+          height: ${alturaControl};
+          box-sizing: border-box;
+          font-size: 13px;
+          font-weight: 700;
+          outline: none;
+        }
+        .th-desktop-table-view {
+          display: block;
+        }
+        .th-mobile-cards-view {
+          display: none;
+        }
 
-      {/* 1. BARRA SUPERIOR LIMPIA Y PROPORCIONADA (44px) */}
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        /* =========================================================
+           VISTA MÓVIL (< 768PX): TARJETAS LIMPIAS Y CONTROLES APILADOS
+           ========================================================= */
+        @media (max-width: 768px) {
+          .th-top-bar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .th-tabs-area {
+            flex: none;
+            width: 100%;
+            height: 42px;
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+          }
+          .th-tabs-area .tab-btn {
+            padding: 0 6px !important;
+            font-size: 12px !important;
+            gap: 4px !important;
+          }
+          .th-right-actions {
+            width: 100%;
+            margin-left: 0;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+          .th-week-box {
+            width: 100%;
+            justify-content: space-between;
+            padding: 0 10px;
+            height: 44px;
+          }
+          .th-btn-export {
+            width: 100%;
+            height: 42px;
+          }
+          .th-filters-bar {
+            padding: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+          .th-search-box {
+            grid-column: 1 / -1;
+            width: 100%;
+          }
+          .th-select-filter {
+            width: 100%;
+            font-size: 12.5px;
+            padding: 0 8px;
+          }
+          .th-select-full-mobile {
+            grid-column: 1 / -1;
+          }
+          .th-desktop-table-view {
+            display: none !important;
+          }
+          .th-mobile-cards-view {
+            display: flex !important;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+          }
+        }
+      `}</style>
+
+      {/* 1. BARRA SUPERIOR */}
+      <div className="th-top-bar">
         {esControlRH && (
-          <div className="tabs-aprobacion-bar" style={{ flex: '0 1 520px', margin: 0, height: '44px', boxSizing: 'border-box' }}>
+          <div className="tabs-aprobacion-bar th-tabs-area">
             <button
               className={`tab-btn ${areaActiva === 'produccion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('produccion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 16px' }}
+              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
             >
-              <Factory size={15} />
+              <Factory size={14} />
               <span>Producción</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '12px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '11.5px' }}>
                 {pasesPorArea.produccion?.length || 0}
               </span>
             </button>
@@ -338,11 +503,11 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'administracion' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('administracion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 16px' }}
+              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
             >
-              <Building2 size={15} />
-              <span>Administración</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '12px' }}>
+              <Building2 size={14} />
+              <span>Admin</span>
+              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '11.5px' }}>
                 {pasesPorArea.administracion?.length || 0}
               </span>
             </button>
@@ -350,85 +515,83 @@ export default function TablaHistorial({
             <button
               className={`tab-btn ${areaActiva === 'obra' ? 'active' : ''}`}
               onClick={() => { setAreaActiva('obra'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 16px' }}
+              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
             >
-              <HardHat size={15} />
+              <HardHat size={14} />
               <span>Obra</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '12px' }}>
+              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '11.5px' }}>
                 {pasesPorArea.obra?.length || 0}
               </span>
             </button>
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {/* NAVEGADOR SEMANAL FUNCIONAL */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: c.surfaceCard, border: `1px solid ${c.border}`,
-            padding: '0 12px', height: '44px', boxSizing: 'border-box', borderRadius: '11px'
-          }}>
-            <CalendarDays size={16} color={textSecundario} />
-
+        <div className="th-right-actions">
+          {/* NAVEGADOR SEMANAL */}
+          <div className="th-week-box">
             {modoPeriodo === 'semana' ? (
               <>
-                <button
-                  onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
-                  title="Semana anterior"
-                  style={{
-                    width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                    background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <ChevronLeft size={15} />
-                </button>
-
-                <div style={{ padding: '0 6px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  <span style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>
-                    Semana {infoSemana.numSemana}
-                  </span>
-                  <span style={{ fontSize: '12.5px', fontWeight: '600', color: textSecundario, marginLeft: '6px' }}>
-                    ({infoSemana.etiquetaRango})
-                  </span>
-                </div>
-
-                <button
-                  onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); setSeleccionados([]); }}
-                  title="Semana siguiente"
-                  style={{
-                    width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                    background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}
-                >
-                  <ChevronRight size={15} />
-                </button>
-
-                {offsetSemana !== 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <button
-                    onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
+                    onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
+                    title="Semana anterior"
                     style={{
-                      height: '28px', padding: '0 10px', borderRadius: '7px', border: 'none',
-                      background: c.accentSoft, color: c.accent, fontSize: '12px', fontWeight: '800', cursor: 'pointer'
+                      width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                      background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                     }}
                   >
-                    Hoy
+                    <ChevronLeft size={15} />
                   </button>
-                )}
 
-                <button
-                  onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
-                  style={{
-                    height: '28px', padding: '0 10px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                    background: c.bg, color: textSecundario, fontSize: '12px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap'
-                  }}
-                >
-                  Ver Todo ({solicitudes.length})
-                </button>
+                  <div style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
+                      Sem {infoSemana.numSemana}
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: textSecundario, marginLeft: '5px' }}>
+                      ({infoSemana.etiquetaRango})
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); setSeleccionados([]); }}
+                    title="Semana siguiente"
+                    style={{
+                      width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                      background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {offsetSemana !== 0 && (
+                    <button
+                      onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
+                      style={{
+                        height: '28px', padding: '0 8px', borderRadius: '7px', border: 'none',
+                        background: c.accentSoft, color: c.accent, fontSize: '11.5px', fontWeight: '800', cursor: 'pointer'
+                      }}
+                    >
+                      Hoy
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
+                    style={{
+                      height: '28px', padding: '0 9px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                      background: c.bg, color: textSecundario, fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Todo ({solicitudes.length})
+                  </button>
+                </div>
               </>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '8px' }}>
                 <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap' }}>
-                  Mostrando Todo ({solicitudes.length})
+                  Todo el historial ({solicitudes.length})
                 </span>
                 <button
                   onClick={() => {
@@ -441,38 +604,24 @@ export default function TablaHistorial({
                     background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
                   }}
                 >
-                  Volver a Semana {infoSemana.numSemana}
+                  Sem {infoSemana.numSemana}
                 </button>
               </div>
             )}
           </div>
 
           {esControlRH && onAbrirExportar && (
-            <button
-              onClick={onAbrirExportar}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '7px',
-                padding: '0 18px', height: '44px', boxSizing: 'border-box', borderRadius: '11px', border: 'none',
-                background: c.accent, color: '#fff', fontSize: '13.5px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
-              }}
-            >
+            <button onClick={onAbrirExportar} className="th-btn-export">
               <FileSpreadsheet size={16} /> Exportar Excel
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. BARRA DE BÚSQUEDA Y FILTROS DESPEJADA (SIN SELECTORES DE FECHA DUPLICADOS) */}
-      <div style={{
-        background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '11px',
-        padding: '10px 14px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'
-      }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px', background: c.bg,
-          border: `1px solid ${c.border}`, borderRadius: '8px', padding: '0 14px',
-          height: alturaControl, boxSizing: 'border-box', flex: '1 1 260px'
-        }}>
-          <Search size={15} color={textSecundario} />
+      {/* 2. BARRA DE FILTROS */}
+      <div className="th-filters-bar">
+        <div className="th-search-box">
+          <Search size={15} color={textSecundario} style={{ flexShrink: 0 }} />
           <input
             type="text"
             placeholder="Buscar por folio, colaborador o #empleado..."
@@ -486,10 +635,7 @@ export default function TablaHistorial({
           <select
             value={deptoFiltro}
             onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-            style={{
-              background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-              padding: '0 12px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
-            }}
+            className="th-select-filter"
           >
             <option value="todos">Todos los Deptos</option>
             {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
@@ -499,10 +645,7 @@ export default function TablaHistorial({
         <select
           value={tipoFiltro}
           onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
-          style={{
-            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-            padding: '0 12px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
-          }}
+          className="th-select-filter"
         >
           <option value="todos">Todos los Tipos</option>
           <option value="salida">Salida</option>
@@ -514,10 +657,7 @@ export default function TablaHistorial({
         <select
           value={filtroEstado}
           onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-          style={{
-            background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: '8px',
-            padding: '0 12px', height: alturaControl, boxSizing: 'border-box', fontSize: '13px', fontWeight: '700', outline: 'none'
-          }}
+          className="th-select-filter th-select-full-mobile"
         >
           <option value="todos">Autorizados y Rechazados</option>
           <option value="autorizado">Solo Autorizados</option>
@@ -528,10 +668,11 @@ export default function TablaHistorial({
           <button
             onClick={limpiarFiltros}
             title="Restablecer filtros"
+            className="th-select-full-mobile"
             style={{
               padding: '0 12px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
               border: `1px solid ${c.border}`, background: c.bg, color: textSecundario,
-              fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+              fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
             }}
           >
             <RotateCcw size={13} /> Limpiar
@@ -541,10 +682,11 @@ export default function TablaHistorial({
         {esControlRH && seleccionados.length > 0 && (
           <button
             onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
+            className="th-select-full-mobile"
             style={{
               padding: '0 14px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
               border: 'none', background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800',
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
             }}
           >
             <Printer size={14} /> Imprimir ({seleccionados.length})
@@ -552,11 +694,11 @@ export default function TablaHistorial({
         )}
       </div>
 
-      {/* 3. TABLA MAESTRO-DETALLE */}
+      {/* 3. LISTADO (TABLA EN LAPTOP / TARJETAS EN CELULAR) */}
       {solicitudesPaginadas.length === 0 ? (
         <div style={{
           background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-          padding: '42px 24px', textAlign: 'center', color: textSecundario, fontSize: '14.5px', fontWeight: '600'
+          padding: '42px 20px', textAlign: 'center', color: textSecundario, fontSize: '14px', fontWeight: '600'
         }}>
           <div>
             No hay permisos de <strong>{areaActiva === 'produccion' ? 'Producción' : areaActiva === 'administracion' ? 'Administración' : 'Obra'}</strong> en {modoPeriodo === 'semana' ? `la Semana ${infoSemana.numSemana} (${infoSemana.etiquetaRango})` : 'el periodo seleccionado'}.
@@ -568,340 +710,493 @@ export default function TablaHistorial({
           )}
         </div>
       ) : (
-        <div style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-              <colgroup>
-                {esControlRH && <col style={{ width: '42px' }} />}
-                <col style={{ width: esControlRH ? '30%' : '36%' }} />
-                <col style={{ width: esControlRH ? '27%' : '32%' }} />
-                <col style={{ width: '15%' }} />
-                <col style={{ width: '13%' }} />
-                {esControlRH && <col style={{ width: '195px' }} />}
-              </colgroup>
-              <thead>
-                <tr style={{
-                  background: c.surface, borderBottom: `1px solid ${c.border}`,
-                  color: textSecundario, fontSize: '12px', fontWeight: '800',
-                  textTransform: 'uppercase', letterSpacing: '0.04em'
-                }}>
-                  {esControlRH && (
-                    <th style={{ padding: '12px 10px 12px 16px', verticalAlign: 'middle' }}>
-                      <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                        {seleccionados.length > 0 && seleccionados.length === solicitudesPaginadas.length
-                          ? <CheckSquare size={17} color={c.accent} />
-                          : <Square size={17} />}
-                      </div>
-                    </th>
-                  )}
-                  <th style={{ padding: '12px 14px', verticalAlign: 'middle' }}>Colaborador / Folio</th>
-                  <th style={{ padding: '12px 14px', verticalAlign: 'middle' }}>Incidencia y Horario</th>
-                  <th style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Caseta</th>
-                  <th style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Dictamen</th>
-                  {esControlRH && <th style={{ padding: '12px 16px 12px 10px', verticalAlign: 'middle', textAlign: 'right' }}>Detalle / Papeleta</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {solicitudesPaginadas.map(s => {
-                  const u = s.usuarios || {};
-                  const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
-                  const seRegresoCasa = (s.pago || '').toLowerCase().includes('regresa');
-                  const seleccionado = seleccionados.includes(s.id);
-                  const expandido = expandidos.includes(s.id);
-                  const tipo = (s.tipo_permiso || '').toLowerCase();
-                  const aplicaCaseta = tipo === 'salida' || tipo === 'retardo';
-                  const estiloTipo = getEstiloTipo(s.tipo_permiso);
+        <>
+          {/* =========================================================
+              A) VISTA DE ESCRITORIO / LAPTOP 14" (TABLA EJECUTIVA)
+              ========================================================= */}
+          <div className="th-desktop-table-view" style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                <colgroup>
+                  {esControlRH && <col style={{ width: '42px' }} />}
+                  <col style={{ width: esControlRH ? '30%' : '36%' }} />
+                  <col style={{ width: esControlRH ? '27%' : '32%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '13%' }} />
+                  {esControlRH && <col style={{ width: '195px' }} />}
+                </colgroup>
+                <thead>
+                  <tr style={{
+                    background: c.surface, borderBottom: `1px solid ${c.border}`,
+                    color: textSecundario, fontSize: '12px', fontWeight: '800',
+                    textTransform: 'uppercase', letterSpacing: '0.04em'
+                  }}>
+                    {esControlRH && (
+                      <th style={{ padding: '12px 10px 12px 16px', verticalAlign: 'middle' }}>
+                        <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          {seleccionados.length > 0 && seleccionados.length === solicitudesPaginadas.length
+                            ? <CheckSquare size={17} color={c.accent} />
+                            : <Square size={17} />}
+                        </div>
+                      </th>
+                    )}
+                    <th style={{ padding: '12px 14px', verticalAlign: 'middle' }}>Colaborador / Folio</th>
+                    <th style={{ padding: '12px 14px', verticalAlign: 'middle' }}>Incidencia y Horario</th>
+                    <th style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Caseta</th>
+                    <th style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Dictamen</th>
+                    {esControlRH && <th style={{ padding: '12px 16px 12px 10px', verticalAlign: 'middle', textAlign: 'right' }}>Detalle / Papeleta</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {solicitudesPaginadas.map(s => {
+                    const u = s.usuarios || {};
+                    const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
+                    const seRegresoCasa = (s.pago || '').toLowerCase().includes('regresa');
+                    const seleccionado = seleccionados.includes(s.id);
+                    const expandido = expandidos.includes(s.id);
+                    const tipo = (s.tipo_permiso || '').toLowerCase();
+                    const aplicaCaseta = tipo === 'salida' || tipo === 'retardo';
+                    const estiloTipo = getEstiloTipo(s.tipo_permiso);
 
-                  const {
-                    horarioSolicitado,
-                    horaSalidaCaseta,
-                    horaEntradaCaseta,
-                    horaRegresadoCaseta,
-                    supervisorSubarea,
-                    motivoRechazo,
-                    notasFlujo
-                  } = parsearDatosObservaciones(s.observaciones);
+                    const {
+                      horarioSolicitado,
+                      horaSalidaCaseta,
+                      horaEntradaCaseta,
+                      horaRegresadoCaseta,
+                      supervisorSubarea,
+                      motivoRechazo,
+                      notasFlujo
+                    } = parsearDatosObservaciones(s.observaciones);
 
-                  const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
+                    const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
-                  const renderIconoCaseta = () => {
-                    if (!esAut) {
+                    const renderIconoCaseta = () => {
+                      if (!esAut) {
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
+                            background: 'rgba(239,68,68,0.1)', color: '#ef4444'
+                          }}>
+                            <XCircle size={14} /> Cancelado
+                          </span>
+                        );
+                      }
+                      if (seRegresoCasa) {
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
+                            background: 'rgba(245,158,11,0.14)', color: '#d97706'
+                          }}>
+                            <CornerUpLeft size={14} /> {horaRegresadoCaseta || 'Regresado'}
+                          </span>
+                        );
+                      }
+                      if (!aplicaCaseta) {
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '700',
+                            background: c.bg, color: textSecundario, border: `1px solid ${c.border}`
+                          }}>
+                            <MinusCircle size={13} /> N/A
+                          </span>
+                        );
+                      }
+                      if (horaSalidaCaseta || horaEntradaCaseta) {
+                        const textoHora = horaSalidaCaseta && horaEntradaCaseta
+                          ? `${horaSalidaCaseta.replace(/\s*hrs/i, '')} → ${horaEntradaCaseta.replace(/\s*hrs/i, '')}`
+                          : (horaSalidaCaseta || horaEntradaCaseta);
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
+                            background: c.bg, color: c.text, border: `1px solid ${c.border}`
+                          }}>
+                            <DoorOpen size={14} color={textSecundario} /> {textoHora}
+                          </span>
+                        );
+                      }
                       return (
-                        <span title="Permiso rechazado" style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                          background: 'rgba(239,68,68,0.1)', color: '#ef4444'
-                        }}>
-                          <XCircle size={14} /> Cancelado
-                        </span>
-                      );
-                    }
-                    if (seRegresoCasa) {
-                      return (
-                        <span title="Trabajador regresado en puerta" style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                          background: 'rgba(245,158,11,0.14)', color: '#d97706'
-                        }}>
-                          <CornerUpLeft size={14} /> {horaRegresadoCaseta || 'Regresado'}
-                        </span>
-                      );
-                    }
-                    if (!aplicaCaseta) {
-                      return (
-                        <span title="No requiere control de puerta" style={{
+                        <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '5px',
                           padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '700',
-                          background: c.bg, color: textSecundario, border: `1px solid ${c.border}`
+                          background: c.bg, color: textSecundario, border: `1px dashed ${c.border}`
                         }}>
-                          <MinusCircle size={13} /> N/A
+                          <Clock size={13} /> Sin sello
                         </span>
                       );
-                    }
-                    if (horaSalidaCaseta || horaEntradaCaseta) {
-                      const textoHora = horaSalidaCaseta && horaEntradaCaseta
-                        ? `${horaSalidaCaseta.replace(/\s*hrs/i, '')} → ${horaEntradaCaseta.replace(/\s*hrs/i, '')}`
-                        : (horaSalidaCaseta || horaEntradaCaseta);
-                      return (
-                        <span title="Sello registrado en vigilancia" style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '800',
-                          background: c.bg, color: c.text, border: `1px solid ${c.border}`
-                        }}>
-                          <DoorOpen size={14} color={textSecundario} /> {textoHora}
-                        </span>
-                      );
-                    }
+                    };
+
                     return (
-                      <span title="Sin sello registrado en caseta" style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '5px',
-                        padding: '4px 10px', borderRadius: '999px', fontSize: '12.5px', fontWeight: '700',
-                        background: c.bg, color: textSecundario, border: `1px dashed ${c.border}`
-                      }}>
-                        <Clock size={13} /> Sin sello
-                      </span>
-                    );
-                  };
+                      <React.Fragment key={s.id}>
+                        <tr
+                          onClick={() => toggleExpandir(s.id)}
+                          style={{
+                            cursor: 'pointer',
+                            borderBottom: expandido ? 'none' : `1px solid ${c.borderDivider}`,
+                            background: seleccionado
+                              ? (modoOscuro ? 'rgba(22,163,74,0.14)' : 'rgba(22,163,74,0.06)')
+                              : expandido
+                                ? (modoOscuro ? 'rgba(255,255,255,0.03)' : '#f8fafc')
+                                : 'transparent',
+                            transition: 'background 0.15s ease'
+                          }}
+                        >
+                          {esControlRH && (
+                            <td style={{ padding: '14px 10px 14px 16px', verticalAlign: 'middle' }} onClick={(e) => toggleSeleccion(s.id, e)}>
+                              <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                {seleccionado
+                                  ? <CheckSquare size={17} color={c.accent} />
+                                  : <Square size={17} color={textSecundario} style={{ opacity: 0.6 }} />}
+                              </div>
+                            </td>
+                          )}
 
-                  return (
-                    <React.Fragment key={s.id}>
-                      <tr
-                        onClick={() => toggleExpandir(s.id)}
-                        style={{
-                          cursor: 'pointer',
-                          borderBottom: expandido ? 'none' : `1px solid ${c.borderDivider}`,
-                          background: seleccionado
-                            ? (modoOscuro ? 'rgba(22,163,74,0.14)' : 'rgba(22,163,74,0.06)')
-                            : expandido
-                              ? (modoOscuro ? 'rgba(255,255,255,0.03)' : '#f8fafc')
-                              : 'transparent',
-                          transition: 'background 0.15s ease'
-                        }}
-                      >
-                        {esControlRH && (
-                          <td style={{ padding: '14px 10px 14px 16px', verticalAlign: 'middle' }} onClick={(e) => toggleSeleccion(s.id, e)}>
-                            <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                              {seleccionado
-                                ? <CheckSquare size={17} color={c.accent} />
-                                : <Square size={17} color={textSecundario} style={{ opacity: 0.6 }} />}
+                          <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                              <span style={{
+                                fontFamily: 'ui-monospace, monospace', fontSize: '12.5px', fontWeight: '800',
+                                color: c.text, background: c.bg, border: `1px solid ${c.border}`,
+                                padding: '2px 8px', borderRadius: '5px'
+                              }}>
+                                {s.folio}
+                              </span>
+                              <span style={{ fontSize: '13px', fontWeight: '800', color: textSecundario }}>
+                                #{u.numero_empleado}
+                              </span>
+                              <span style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                • {u.departamentos?.nombre || 'General'}{u.area && u.area !== u.departamentos?.nombre ? ` (${u.area})` : ''}
+                              </span>
                             </div>
-                          </td>
-                        )}
-
-                        {/* 1. COLABORADOR + FOLIO */}
-                        <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-                            <span style={{
-                              fontFamily: 'ui-monospace, monospace', fontSize: '12.5px', fontWeight: '800',
-                              color: c.text,
-                              background: c.bg,
-                              border: `1px solid ${c.border}`,
-                              padding: '2px 8px', borderRadius: '5px'
-                            }}>
-                              {s.folio}
-                            </span>
-                            <span style={{ fontSize: '13px', fontWeight: '800', color: textSecundario }}>
-                              #{u.numero_empleado}
-                            </span>
-                            <span style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              • {u.departamentos?.nombre || 'General'}{u.area && u.area !== u.departamentos?.nombre ? ` (${u.area})` : ''}
-                            </span>
-                          </div>
-                          <div style={{
-                            fontWeight: '800', color: c.text, fontSize: '15.5px',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                          }}>
-                            {u.nombre_completo || 'Colaborador'}
-                          </div>
-                        </td>
-
-                        {/* 2. INCIDENCIA CON PALETA SEMÁNTICA + FECHA + HORARIO + ICONO GRIS */}
-                        <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <span style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              minWidth: '82px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase',
-                              padding: '2px 8px', borderRadius: '5px',
-                              background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
-                            }}>
-                              {estiloTipo.label}
-                            </span>
-                            <span style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
-                              {s.fecha_permiso}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${s.fecha_fin}` : ''}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            <span>{horarioSolicitado}</span>
-                            {categoria && (
-                              <>
-                                <span>•</span>
-                                {renderIconoNaturaleza(categoria)}
-                              </>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* 3. CASETA */}
-                        <td style={{ padding: '14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          {renderIconoCaseta()}
-                        </td>
-
-                        {/* 4. DICTAMEN */}
-                        <td style={{ padding: '14px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                            minWidth: '108px', fontSize: '12.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
-                            backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
-                            color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
-                            border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
-                          }}>
-                            {esAut ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                            {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
-                          </span>
-                        </td>
-
-                        {/* 5. ACCIONES */}
-                        {esControlRH && (
-                          <td style={{ padding: '14px 16px 14px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                              <button
-                                onClick={() => toggleExpandir(s.id)}
-                                title="Ver motivo, comentarios y cadena de firmas"
-                                style={{
-                                  padding: '7px 10px', borderRadius: '7px',
-                                  border: `1px solid ${expandido ? c.text : c.border}`,
-                                  background: expandido ? c.surface : c.bg,
-                                  color: expandido ? c.text : textSecundario,
-                                  fontSize: '12.5px', fontWeight: '800', cursor: 'pointer',
-                                  display: 'inline-flex', alignItems: 'center', gap: '4px'
-                                }}
-                              >
-                                {expandido ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                                {expandido ? 'Ocultar' : 'Detalles'}
-                              </button>
-
-                              <button
-                                onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
-                                style={{
-                                  padding: '7px 12px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                                  background: c.bg, color: c.text, fontSize: '12.5px', fontWeight: '800',
-                                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                                }}
-                              >
-                                <Printer size={14} color={textSecundario} /> Papeleta
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-
-                      {/* CAJÓN DESPLEGABLE */}
-                      {expandido && (
-                        <tr style={{
-                          borderBottom: `1px solid ${c.borderDivider}`,
-                          background: modoOscuro ? 'rgba(255,255,255,0.025)' : '#f8fafc'
-                        }}>
-                          <td colSpan={totalColumnas} style={{ padding: '0 18px 16px 18px' }}>
                             <div style={{
-                              display: 'grid',
-                              gridTemplateColumns: '1.2fr 1fr',
-                              gap: '16px',
-                              padding: '14px 16px',
-                              borderRadius: '10px',
-                              background: c.bg,
-                              border: `1px solid ${c.border}`
+                              fontWeight: '800', color: c.text, fontSize: '15.5px',
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                             }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '12px', borderRight: `1px solid ${c.border}` }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                  <FileText size={13} color={textSecundario} />
-                                  <span>Motivo {categoria ? `• ${categoria}` : ''}</span>
-                                </div>
-                                <div style={{ fontSize: '14px', fontWeight: '600', color: c.text, lineHeight: 1.45 }}>
-                                  {motivoTexto || 'Sin motivo especificado.'}
-                                </div>
-
-                                {notasFlujo && notasFlujo.length > 0 && (
-                                  <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                      <MessageSquare size={12} color={textSecundario} />
-                                      <span>Comentarios de Autorización</span>
-                                    </div>
-                                    {notasFlujo.map((n, idx) => (
-                                      <div key={idx} style={{ fontSize: '13px', color: c.text }}>
-                                        <strong>{n.autor}:</strong> {n.texto}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {!esAut && motivoRechazo && (
-                                  <div style={{ fontSize: '13px', color: '#ef4444', fontWeight: '700', marginTop: '4px' }}>
-                                    Motivo de rechazo: {motivoRechazo}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                  <ShieldCheck size={14} color={textSecundario} />
-                                  <span>Cadena de Firmas y Aprobación</span>
-                                </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                  {supervisorSubarea && (
-                                    <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />
-                                  )}
-                                  <ChipFirmaDetalle
-                                    rolLabel="Jefe"
-                                    nombre={s.firmante1?.nombre_completo}
-                                    estado={s.firma_1_estado}
-                                  />
-                                  <ChipFirmaDetalle
-                                    rolLabel="Gerente"
-                                    nombre={s.firmante2?.nombre_completo}
-                                    estado={s.firma_2_estado}
-                                  />
-                                  <ChipFirmaDetalle
-                                    rolLabel="RH"
-                                    nombre={s.firmante3?.nombre_completo}
-                                    estado={s.firma_3_estado}
-                                  />
-                                </div>
-                              </div>
+                              {u.nombre_completo || 'Colaborador'}
                             </div>
                           </td>
+
+                          <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                minWidth: '82px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase',
+                                padding: '2px 8px', borderRadius: '5px',
+                                background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
+                              }}>
+                                {estiloTipo.label}
+                              </span>
+                              <span style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
+                                {s.fecha_permiso}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${s.fecha_fin}` : ''}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <span>{horarioSolicitado}</span>
+                              {categoria && (
+                                <>
+                                  <span>•</span>
+                                  {renderIconoNaturaleza(categoria)}
+                                </>
+                              )}
+                            </div>
+                          </td>
+
+                          <td style={{ padding: '14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {renderIconoCaseta()}
+                          </td>
+
+                          <td style={{ padding: '14px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                              minWidth: '108px', fontSize: '12.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
+                              backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
+                              color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
+                              border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
+                            }}>
+                              {esAut ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                              {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
+                            </span>
+                          </td>
+
+                          {esControlRH && (
+                            <td style={{ padding: '14px 16px 14px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                  onClick={() => toggleExpandir(s.id)}
+                                  style={{
+                                    padding: '7px 10px', borderRadius: '7px',
+                                    border: `1px solid ${expandido ? c.text : c.border}`,
+                                    background: expandido ? c.surface : c.bg,
+                                    color: expandido ? c.text : textSecundario,
+                                    fontSize: '12.5px', fontWeight: '800', cursor: 'pointer',
+                                    display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                  }}
+                                >
+                                  {expandido ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                                  {expandido ? 'Ocultar' : 'Detalles'}
+                                </button>
+
+                                <button
+                                  onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
+                                  style={{
+                                    padding: '7px 12px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                                    background: c.bg, color: c.text, fontSize: '12.5px', fontWeight: '800',
+                                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                  }}
+                                >
+                                  <Printer size={14} color={textSecundario} /> Papeleta
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+
+                        {expandido && (
+                          <tr style={{
+                            borderBottom: `1px solid ${c.borderDivider}`,
+                            background: modoOscuro ? 'rgba(255,255,255,0.025)' : '#f8fafc'
+                          }}>
+                            <td colSpan={totalColumnas} style={{ padding: '0 18px 16px 18px' }}>
+                              <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1.2fr 1fr',
+                                gap: '16px',
+                                padding: '14px 16px',
+                                borderRadius: '10px',
+                                background: c.bg,
+                                border: `1px solid ${c.border}`
+                              }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '12px', borderRight: `1px solid ${c.border}` }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
+                                    <FileText size={13} color={textSecundario} />
+                                    <span>Motivo {categoria ? `• ${categoria}` : ''}</span>
+                                  </div>
+                                  <div style={{ fontSize: '14px', fontWeight: '600', color: c.text, lineHeight: 1.45 }}>
+                                    {motivoTexto || 'Sin motivo especificado.'}
+                                  </div>
+
+                                  {notasFlujo && notasFlujo.length > 0 && (
+                                    <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
+                                        <MessageSquare size={12} color={textSecundario} />
+                                        <span>Comentarios de Autorización</span>
+                                      </div>
+                                      {notasFlujo.map((n, idx) => (
+                                        <div key={idx} style={{ fontSize: '13px', color: c.text }}>
+                                          <strong>{n.autor}:</strong> {n.texto}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {!esAut && motivoRechazo && (
+                                    <div style={{ fontSize: '13px', color: '#ef4444', fontWeight: '700', marginTop: '4px' }}>
+                                      Motivo de rechazo: {motivoRechazo}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
+                                    <ShieldCheck size={14} color={textSecundario} />
+                                    <span>Cadena de Firmas y Aprobación</span>
+                                  </div>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                    {supervisorSubarea && (
+                                      <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />
+                                    )}
+                                    <ChipFirmaDetalle rolLabel="Jefe" nombre={s.firmante1?.nombre_completo} estado={s.firma_1_estado} />
+                                    <ChipFirmaDetalle rolLabel="Gerente" nombre={s.firmante2?.nombre_completo} estado={s.firma_2_estado} />
+                                    <ChipFirmaDetalle rolLabel="RH" nombre={s.firmante3?.nombre_completo} estado={s.firma_3_estado} />
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* PAGINACIÓN */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: `1px solid ${c.border}`, background: c.surface }}>
-            <span style={{ fontSize: '13px', color: textSecundario, fontWeight: '600' }}>
-              Mostrando {solicitudesPaginadas.length} de {solicitudesProcesadas.length} registros (Haz clic en cualquier fila para ver motivo y firmas)
+          {/* =========================================================
+              B) VISTA MÓVIL (< 768PX): TARJETAS COMPACTAS Y PLEGABLES
+              ========================================================= */}
+          <div className="th-mobile-cards-view">
+            {solicitudesPaginadas.map(s => {
+              const u = s.usuarios || {};
+              const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
+              const seRegresoCasa = (s.pago || '').toLowerCase().includes('regresa');
+              const seleccionado = seleccionados.includes(s.id);
+              const expandido = expandidos.includes(s.id);
+              const estiloTipo = getEstiloTipo(s.tipo_permiso);
+
+              const {
+                horarioSolicitado,
+                horaSalidaCaseta,
+                horaEntradaCaseta,
+                horaRegresadoCaseta,
+                supervisorSubarea,
+                motivoRechazo,
+                notasFlujo
+              } = parsearDatosObservaciones(s.observaciones);
+              const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
+
+              const horarioCorto = String(horarioSolicitado || '')
+                .replace(/^Llegada estimada:\s*/i, 'Llegada: ')
+                .replace(/^Salida definitiva:\s*/i, 'Salida: ');
+
+              return (
+                <div
+                  key={s.id}
+                  style={{
+                    background: c.surfaceCard,
+                    border: `1.5px solid ${seleccionado ? c.accent : c.border}`,
+                    borderLeft: `5px solid ${estiloTipo.color}`,
+                    borderRadius: '14px',
+                    padding: '13px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  {/* RENGLÓN 1: CHECKBOX + FOLIO + TIPO <---> DICTAMEN + FLECHA */}
+                  <div
+                    onClick={() => toggleExpandir(s.id)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {esControlRH && (
+                        <div onClick={(e) => toggleSeleccion(s.id, e)} style={{ display: 'flex', alignItems: 'center', paddingRight: '2px' }}>
+                          {seleccionado
+                            ? <CheckSquare size={17} color={c.accent} />
+                            : <Square size={17} color={textSecundario} />}
+                        </div>
+                      )}
+                      <span style={{
+                        fontFamily: 'ui-monospace, monospace', fontSize: '11px', fontWeight: '800',
+                        color: c.text, background: c.bg, border: `1px solid ${c.border}`,
+                        padding: '2px 7px', borderRadius: '5px'
+                      }}>
+                        {s.folio}
+                      </span>
+                      <span style={{
+                        fontSize: '10.5px', fontWeight: '800', textTransform: 'uppercase',
+                        padding: '2px 8px', borderRadius: '5px',
+                        background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
+                      }}>
+                        {estiloTipo.label}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{
+                        fontSize: '10.5px', fontWeight: '800', padding: '3px 8px', borderRadius: '5px', textTransform: 'uppercase',
+                        backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : seRegresoCasa ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
+                        color: !esAut ? '#ef4444' : seRegresoCasa ? '#d97706' : '#16a34a',
+                        border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : seRegresoCasa ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
+                      }}>
+                        {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
+                      </span>
+                      {expandido ? <ChevronUp size={17} color={textSecundario} /> : <ChevronDown size={17} color={textSecundario} />}
+                    </div>
+                  </div>
+
+                  {/* RENGLÓN 2: NOMBRE DEL COLABORADOR + BOTÓN PAPELETA */}
+                  <div
+                    onClick={() => toggleExpandir(s.id)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer' }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {u.nombre_completo || 'Colaborador'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: textSecundario, fontWeight: '600', marginTop: '2px' }}>
+                        #{u.numero_empleado} • {u.departamentos?.nombre || 'General'}
+                      </div>
+                    </div>
+
+                    {esControlRH && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onSeleccionarPapeleta && onSeleccionarPapeleta([s]); }}
+                        style={{
+                          padding: '6px 11px', borderRadius: '7px', border: `1px solid ${c.border}`,
+                          background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800',
+                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0
+                        }}
+                      >
+                        <Printer size={13.5} color={textSecundario} /> Papeleta
+                      </button>
+                    )}
+                  </div>
+
+                  {/* RENGLÓN 3: FECHA Y HORARIO */}
+                  <div
+                    onClick={() => toggleExpandir(s.id)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px', color: c.text, fontWeight: '700', cursor: 'pointer' }}
+                  >
+                    <span>
+                      {s.fecha_permiso} <span style={{ color: textSecundario, fontWeight: '600' }}>• {horarioCorto}</span>
+                    </span>
+                    {renderIconoNaturaleza(categoria)}
+                  </div>
+
+                  {/* CAJÓN DESPLEGABLE MÓVIL */}
+                  {expandido && (
+                    <div style={{
+                      paddingTop: '10px', borderTop: `1px dashed ${c.border}`,
+                      display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px'
+                    }}>
+                      <div style={{ background: c.bg, padding: '9px 12px', borderRadius: '8px', border: `1px solid ${c.border}`, color: c.text }}>
+                        <strong style={{ display: 'block', fontSize: '11px', color: textSecundario, textTransform: 'uppercase', marginBottom: '2px' }}>
+                          Motivo:
+                        </strong>
+                        {motivoTexto || 'Sin motivo especificado.'}
+                      </div>
+
+                      {(horaSalidaCaseta || horaEntradaCaseta || horaRegresadoCaseta) && (
+                        <div style={{ fontSize: '12px', fontWeight: '700', color: textSecundario }}>
+                          Caseta: {horaSalidaCaseta ? `Salida ${horaSalidaCaseta}` : ''} {horaEntradaCaseta ? `• Entrada ${horaEntradaCaseta}` : ''} {horaRegresadoCaseta ? `• Regresado ${horaRegresadoCaseta}` : ''}
+                        </div>
+                      )}
+
+                      {notasFlujo && notasFlujo.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {notasFlujo.map((n, idx) => (
+                            <div key={idx} style={{ fontSize: '12.5px', color: c.text }}>
+                              <strong>💬 {n.autor}:</strong> {n.texto}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '2px' }}>
+                        {supervisorSubarea && <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />}
+                        <ChipFirmaDetalle rolLabel="Jefe" nombre={s.firmante1?.nombre_completo} estado={s.firma_1_estado} />
+                        <ChipFirmaDetalle rolLabel="Gerente" nombre={s.firmante2?.nombre_completo} estado={s.firma_2_estado} />
+                        <ChipFirmaDetalle rolLabel="RH" nombre={s.firmante3?.nombre_completo} estado={s.firma_3_estado} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* PAGINACIÓN COMPARTIDA */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px',
+            padding: '12px 16px', borderRadius: '12px', border: `1px solid ${c.border}`, background: c.surfaceCard
+          }}>
+            <span style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600' }}>
+              Mostrando {solicitudesPaginadas.length} de {solicitudesProcesadas.length} registros
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
@@ -911,8 +1206,8 @@ export default function TablaHistorial({
               >
                 <ChevronLeft size={15} />
               </button>
-              <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
-                Página {paginaActual} de {totalPaginas}
+              <span style={{ fontSize: '12.5px', fontWeight: '800', color: c.text }}>
+                Pág {paginaActual} / {totalPaginas}
               </span>
               <button
                 onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
@@ -923,7 +1218,7 @@ export default function TablaHistorial({
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
