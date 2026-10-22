@@ -6,7 +6,7 @@ import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHist
 import {
   Clock, FileText, AlertTriangle, ShieldCheck,
   XCircle, FastForward, MessageSquare, DoorOpen, CornerUpLeft,
-  Calendar, ChevronDown, ChevronUp, User, Stethoscope, Briefcase, ChevronsUpDown
+  Calendar, ChevronDown, ChevronUp, User, Stethoscope, Briefcase
 } from 'lucide-react';
 
 export default function MisPermisos() {
@@ -20,7 +20,6 @@ export default function MisPermisos() {
   const [procesandoEscalamiento, setProcesandoEscalamiento] = useState(false);
   const [horaActual, setHoraActual] = useState(new Date());
 
-  // Control para contraer/expandir meses y tarjetas individuales
   const [mesesContraidos, setMesesContraidos] = useState({});
   const [tarjetasExpandidas, setTarjetasExpandidas] = useState({});
 
@@ -35,7 +34,6 @@ export default function MisPermisos() {
     try {
       const data = await obtenerPermisosUsuario(usuario.id);
       setMisPermisos(data);
-      // Por defecto dejamos expandidas las que están "En Proceso" para ver sus firmas rápido
       const inicial = {};
       (data || []).forEach(p => {
         if (p.estado_general === 'en_firmas') inicial[p.id] = true;
@@ -82,6 +80,13 @@ export default function MisPermisos() {
     return `${String(parseInt(partes[2], 10)).padStart(2, '0')} ${meses[parseInt(partes[1], 10) - 1] || partes[1]} ${partes[0]}`;
   };
 
+  const acortarHorario = (txt = '') => {
+    return String(txt || '')
+      .replace(/^Llegada estimada:\s*/i, 'Llegada: ')
+      .replace(/^Salida definitiva:\s*/i, 'Salida: ')
+      .replace(/^Para el:\s*.*$/i, 'Día completo');
+  };
+
   const enProceso = misPermisos.filter(p => p.estado_general === 'en_firmas');
   const finalizados = misPermisos.filter(p => p.estado_general !== 'en_firmas');
 
@@ -116,22 +121,7 @@ export default function MisPermisos() {
     setTarjetasExpandidas(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const listaVisibleActual = pestaña === 'proceso' ? enProceso : finalizados;
-  const todasExpandidas = listaVisibleActual.length > 0 && listaVisibleActual.every(p => Boolean(tarjetasExpandidas[p.id]));
-
-  const alternarTodasLasTarjetas = () => {
-    const nuevoEstado = !todasExpandidas;
-    const copia = { ...tarjetasExpandidas };
-    listaVisibleActual.forEach(p => {
-      copia[p.id] = nuevoEstado;
-    });
-    if (nuevoEstado && pestaña === 'historial') {
-      setMesesContraidos({});
-    }
-    setTarjetasExpandidas(copia);
-  };
-
-  const renderEtiquetaNaturaleza = (cat = '') => {
+  const renderEtiquetaNaturaleza = (cat = '', extraClass = '') => {
     if (!cat) return null;
     const low = cat.toLowerCase();
     let Icono = User;
@@ -140,7 +130,7 @@ export default function MisPermisos() {
     else if (low.includes('vacaciones')) Icono = Calendar;
 
     return (
-      <span className="mp-naturaleza-tag" style={{ color: c.textMuted }}>
+      <span className={`mp-naturaleza-tag ${extraClass}`} style={{ color: c.textMuted }}>
         <Icono size={14} color={c.textMuted} strokeWidth={2} style={{ flexShrink: 0 }} />
         <span>{cat}</span>
       </span>
@@ -211,15 +201,9 @@ export default function MisPermisos() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 18px;
+          margin-bottom: 20px;
           flex-wrap: wrap;
-          gap: 12px;
-        }
-        .mp-header-controls {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
+          gap: 14px;
         }
         .tabs-mis-permisos {
           display: grid;
@@ -229,12 +213,12 @@ export default function MisPermisos() {
           border-radius: 11px;
           border: 1.5px solid ${c.border};
           gap: 4px;
-          min-width: 290px;
+          min-width: 310px;
           box-sizing: border-box;
         }
         .tab-mp-btn {
           height: 38px;
-          padding: 0 14px;
+          padding: 0 16px;
           border-radius: 8px;
           border: none;
           font-size: 13.5px;
@@ -243,29 +227,25 @@ export default function MisPermisos() {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
+          gap: 7px;
           transition: all 0.15s;
           white-space: nowrap;
         }
-        .btn-toggle-all {
-          height: 46px;
-          padding: 0 14px;
-          border-radius: 11px;
-          border: 1.5px solid ${c.border};
-          background: ${c.surfaceCard};
-          color: ${c.textMuted};
-          font-size: 12.5px;
-          font-weight: 800;
-          cursor: pointer;
-          display: inline-flex;
+        .mp-mes-btn {
+          width: 100%;
+          min-height: 48px;
+          display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 6px;
-          white-space: nowrap;
-          transition: all 0.15s;
-        }
-        .btn-toggle-all:hover {
+          justify-content: space-between;
+          padding: 10px 18px;
+          border-radius: 12px;
+          background: ${c.surfaceCard};
+          border: 1.5px solid ${c.border};
           color: ${c.text};
+          cursor: pointer;
+          text-align: left;
+          box-sizing: border-box;
+          gap: 10px;
         }
         .tarjeta-permiso-uniforme {
           width: 100%;
@@ -277,32 +257,52 @@ export default function MisPermisos() {
           transition: all 0.18s ease;
           box-shadow: ${modoOscuro ? '0 4px 16px rgba(0,0,0,0.22)' : '0 2px 8px rgba(0,0,0,0.03)'};
         }
+
+        /* DISEÑO DE CABECERA DE TARJETA EN LAPTOP 14" (1 SOLA FILA ALINEADA EN COLUMNAS) */
         .mp-card-summary {
           width: 100%;
           min-height: 64px;
           padding: 14px 20px;
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          flex-direction: column;
+          justify-content: center;
+          gap: 8px;
           cursor: pointer;
           user-select: none;
           box-sizing: border-box;
         }
-        .mp-summary-left {
+        .mp-row-desktop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          width: 100%;
+        }
+        .mp-left-badges {
           display: flex;
           align-items: center;
           gap: 10px;
-          flex-wrap: wrap;
           min-width: 0;
-          flex: 1;
         }
-        .mp-summary-right {
+        .mp-datetime-inline {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          white-space: nowrap;
+        }
+        .mp-right-badges {
           display: flex;
           align-items: center;
           gap: 12px;
           flex-shrink: 0;
         }
+        .mp-row-mobile-datetime {
+          display: none;
+        }
+        .mp-only-mobile {
+          display: none !important;
+        }
+
         .mp-card-body {
           padding: 0 20px 18px 20px;
           border-top: 1px dashed ${c.border};
@@ -326,12 +326,13 @@ export default function MisPermisos() {
           border-radius: 6px;
           box-sizing: border-box;
           flex-shrink: 0;
+          white-space: nowrap;
         }
         .badge-tipo-fijo {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 146px;
+          width: 148px;
           height: 28px;
           font-size: 11.5px;
           font-weight: 800;
@@ -340,6 +341,7 @@ export default function MisPermisos() {
           letter-spacing: 0.02em;
           box-sizing: border-box;
           flex-shrink: 0;
+          white-space: nowrap;
         }
         .mp-naturaleza-tag {
           display: inline-flex;
@@ -349,6 +351,7 @@ export default function MisPermisos() {
           min-width: 92px;
           font-size: 13px;
           font-weight: 700;
+          white-space: nowrap;
         }
         .badge-dictamen-fijo {
           display: inline-flex;
@@ -362,6 +365,7 @@ export default function MisPermisos() {
           text-transform: uppercase;
           box-sizing: border-box;
           flex-shrink: 0;
+          white-space: nowrap;
         }
         .sellos-grid-3 {
           display: grid;
@@ -394,58 +398,86 @@ export default function MisPermisos() {
           font-weight: 800;
         }
 
-        /* OPTIMIZACIÓN ESPECÍFICA PARA CELULAR */
+        /* =========================================================
+           DISEÑO LIMPIO Y ORDENADO EN CELULAR (MAX-WIDTH: 680PX)
+           ========================================================= */
         @media (max-width: 680px) {
           .mis-permisos-wrapper {
-            padding: 12px 10px 28px 10px;
+            padding: 12px 12px 28px 12px;
           }
-          .mp-header-controls {
-            width: 100%;
+          .mp-header-bar {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+            margin-bottom: 16px;
           }
           .tabs-mis-permisos {
-            flex: 1;
+            width: 100%;
             min-width: 0;
           }
           .tab-mp-btn {
-            font-size: 12.5px;
-            padding: 0 8px;
-          }
-          .btn-toggle-all {
-            height: 46px;
+            font-size: 13px;
             padding: 0 10px;
-            font-size: 12px;
+          }
+          .mp-mes-btn {
+            padding: 10px 14px;
+            min-height: 44px;
           }
           .mp-card-summary {
-            padding: 12px 14px;
-            min-height: 58px;
-            gap: 8px;
+            padding: 13px 14px;
+            gap: 9px;
           }
-          .mp-card-body {
-            padding: 12px 14px 14px 14px;
+          /* En móvil: Fila 1 tiene Folio + Tipo a la izq | Dictamen + Flecha a la der */
+          .mp-datetime-inline {
+            display: none !important;
+          }
+          .mp-hide-mobile {
+            display: none !important;
+          }
+          .mp-only-mobile {
+            display: inline-flex !important;
+          }
+          /* Fila 2 exclusiva en móvil para Fecha + Horario en 1 sola línea limpia */
+          .mp-row-mobile-datetime {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 13px;
+            width: 100%;
+          }
+          .mp-left-badges {
+            gap: 6px;
+          }
+          .mp-right-badges {
+            gap: 6px;
           }
           .badge-folio-fijo {
             width: auto;
-            padding: 0 8px;
-            height: 25px;
-            font-size: 11.5px;
+            padding: 0 7px;
+            height: 24px;
+            font-size: 11px;
           }
           .badge-tipo-fijo {
             width: auto;
-            padding: 0 9px;
-            height: 25px;
-            font-size: 11px;
+            padding: 0 8px;
+            height: 24px;
+            font-size: 10.5px;
           }
           .badge-dictamen-fijo {
             width: auto;
-            padding: 0 9px;
-            height: 25px;
-            font-size: 11px;
+            padding: 0 8px;
+            height: 24px;
+            font-size: 10.5px;
           }
           .mp-naturaleza-tag {
             min-width: 0;
             font-size: 12px;
+            justify-content: flex-start;
           }
-          /* En celular los 3 sellos van en 3 columnas compactas para no alargar la tarjeta */
+          .mp-card-body {
+            padding: 12px 14px 14px 14px;
+          }
           .sellos-grid-3 {
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 6px;
@@ -467,45 +499,35 @@ export default function MisPermisos() {
       {/* CABECERA */}
       <div className="mp-header-bar">
         <div>
-          <h2 style={{ fontSize: '21px', fontWeight: '800', color: c.text, margin: 0, letterSpacing: '-0.01em' }}>Mis Solicitudes de Pase</h2>
-          <p style={{ fontSize: '13px', color: c.textMuted, margin: '3px 0 0 0', fontWeight: '500' }}>Toca cualquier solicitud para expandir o contraer su detalle.</p>
+          <h2 style={{ fontSize: '21px', fontWeight: '800', color: c.text, margin: 0, letterSpacing: '-0.01em' }}>
+            Mis Solicitudes de Pase
+          </h2>
+          <p style={{ fontSize: '13px', color: c.textMuted, margin: '3px 0 0 0', fontWeight: '500' }}>
+            Toca cualquier solicitud para ver u ocultar su detalle.
+          </p>
         </div>
 
-        <div className="mp-header-controls">
-          <div className="tabs-mis-permisos">
-            <button
-              onClick={() => setPestaña('proceso')}
-              className="tab-mp-btn"
-              style={{
-                background: pestaña === 'proceso' ? (modoOscuro ? '#334155' : '#0f172a') : 'transparent',
-                color: pestaña === 'proceso' ? '#ffffff' : c.textMuted
-              }}
-            >
-              <Clock size={14} /> En Proceso ({enProceso.length})
-            </button>
-            <button
-              onClick={() => setPestaña('historial')}
-              className="tab-mp-btn"
-              style={{
-                background: pestaña === 'historial' ? (modoOscuro ? '#334155' : '#0f172a') : 'transparent',
-                color: pestaña === 'historial' ? '#ffffff' : c.textMuted
-              }}
-            >
-              <FileText size={14} /> Concluidos ({finalizados.length})
-            </button>
-          </div>
-
-          {listaVisibleActual.length > 0 && (
-            <button
-              type="button"
-              onClick={alternarTodasLasTarjetas}
-              className="btn-toggle-all"
-              title={todasExpandidas ? "Contraer todas las tarjetas" : "Expandir todas las tarjetas"}
-            >
-              <ChevronsUpDown size={15} />
-              <span>{todasExpandidas ? 'Contraer' : 'Expandir'}</span>
-            </button>
-          )}
+        <div className="tabs-mis-permisos">
+          <button
+            onClick={() => setPestaña('proceso')}
+            className="tab-mp-btn"
+            style={{
+              background: pestaña === 'proceso' ? (modoOscuro ? '#334155' : '#0f172a') : 'transparent',
+              color: pestaña === 'proceso' ? '#ffffff' : c.textMuted
+            }}
+          >
+            <Clock size={14} /> En Proceso ({enProceso.length})
+          </button>
+          <button
+            onClick={() => setPestaña('historial')}
+            className="tab-mp-btn"
+            style={{
+              background: pestaña === 'historial' ? (modoOscuro ? '#334155' : '#0f172a') : 'transparent',
+              color: pestaña === 'historial' ? '#ffffff' : c.textMuted
+            }}
+          >
+            <FileText size={14} /> Concluidos ({finalizados.length})
+          </button>
         </div>
       </div>
 
@@ -532,6 +554,7 @@ export default function MisPermisos() {
               const fechaTxt = p.fecha_fin && p.fecha_fin !== p.fecha_permiso
                 ? `${formatearFechaCorta(p.fecha_permiso)} al ${formatearFechaCorta(p.fecha_fin)}`
                 : formatearFechaCorta(p.fecha_permiso);
+              const horarioCorto = acortarHorario(horarioSolicitado);
 
               return (
                 <div
@@ -539,31 +562,40 @@ export default function MisPermisos() {
                   className="tarjeta-permiso-uniforme"
                   style={{ borderLeft: `5px solid ${estilo.color}` }}
                 >
-                  {/* CABECERA COMPACTA CLICABLE (SIEMPRE DEL MISMO TAMAÑO) */}
                   <div className="mp-card-summary" onClick={() => toggleTarjeta(p.id)}>
-                    <div className="mp-summary-left">
-                      <span
-                        className="badge-tipo-fijo"
-                        style={{ color: estilo.color, background: estilo.bg, border: `1px solid ${estilo.border}` }}
-                      >
-                        {estilo.label}
-                      </span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '14px', color: c.text, fontWeight: '700' }}>
-                        <Calendar size={14} color={c.textMuted} />
-                        {fechaTxt}
-                      </span>
-                      <span style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600' }}>
-                        • {horarioSolicitado}
-                      </span>
+                    <div className="mp-row-desktop">
+                      <div className="mp-left-badges">
+                        <span
+                          className="badge-tipo-fijo"
+                          style={{ color: estilo.color, background: estilo.bg, border: `1px solid ${estilo.border}` }}
+                        >
+                          {estilo.label}
+                        </span>
+
+                        <div className="mp-datetime-inline">
+                          <span style={{ fontSize: '14px', color: c.text, fontWeight: '700' }}>
+                            {fechaTxt}
+                          </span>
+                          <span style={{ fontSize: '13.5px', color: c.textMuted, fontWeight: '600' }}>
+                            • {horarioCorto}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mp-right-badges">
+                        {renderEtiquetaNaturaleza(categoria)}
+                        {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
+                      </div>
                     </div>
 
-                    <div className="mp-summary-right">
-                      {renderEtiquetaNaturaleza(categoria)}
-                      {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
+                    {/* RENGLÓN 2 EXCLUSIVO EN MÓVIL: FECHA Y HORARIO EN 1 SOLA LÍNEA */}
+                    <div className="mp-row-mobile-datetime">
+                      <span style={{ fontWeight: '700', color: c.text }}>
+                        {fechaTxt} <span style={{ color: c.textMuted, fontWeight: '600' }}>• {horarioCorto}</span>
+                      </span>
                     </div>
                   </div>
 
-                  {/* CUERPO DESPLEGABLE */}
                   {expandida && (
                     <div className="mp-card-body">
                       <div style={{ fontSize: '14px', color: c.text, lineHeight: '1.45', background: c.bg, padding: '11px 14px', borderRadius: '10px', border: `1px solid ${c.border}` }}>
@@ -614,7 +646,7 @@ export default function MisPermisos() {
           </div>
         )
       ) : (
-        /* PESTAÑA CONCLUIDOS: AGRUPADA POR MES + TARJETAS PLEGABLES */
+        /* PESTAÑA CONCLUIDOS */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
           {gruposPorMes.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '52px 24px', background: c.surfaceCard, borderRadius: '16px', border: `1.5px dashed ${c.border}` }}>
@@ -628,41 +660,27 @@ export default function MisPermisos() {
 
               return (
                 <div key={grupo.clave} style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                  {/* CABECERA DEL MES */}
+                  {/* CABECERA DEL MES EN 1 SOLA LÍNEA SIEMPRE */}
                   <button
                     type="button"
                     onClick={() => toggleMes(grupo.clave)}
-                    style={{
-                      width: '100%',
-                      height: '46px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '0 18px',
-                      borderRadius: '12px',
-                      background: c.surfaceCard,
-                      border: `1.5px solid ${c.border}`,
-                      color: c.text,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      boxSizing: 'border-box'
-                    }}
+                    className="mp-mes-btn"
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
-                      <Calendar size={16} color={c.textMuted} />
-                      <span style={{ fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <Calendar size={16} color={c.textMuted} style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: '14px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
                         {grupo.etiqueta}
                       </span>
                       <span style={{
                         fontSize: '11.5px', fontWeight: '700', color: c.textMuted,
                         background: c.bg, border: `1px solid ${c.border}`,
-                        padding: '2px 9px', borderRadius: '999px'
+                        padding: '2px 9px', borderRadius: '999px', whiteSpace: 'nowrap', flexShrink: 0
                       }}>
                         {grupo.items.length} {grupo.items.length === 1 ? 'pase' : 'pases'}
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, whiteSpace: 'nowrap' }}>
                       {autorizadosMes > 0 && (
                         <span style={{ fontSize: '12px', fontWeight: '700', color: '#16a34a' }}>
                           {autorizadosMes} aut.
@@ -677,7 +695,6 @@ export default function MisPermisos() {
                     </div>
                   </button>
 
-                  {/* TARJETAS DEL MES */}
                   {!contraido && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                       {grupo.items.map(p => {
@@ -692,6 +709,7 @@ export default function MisPermisos() {
                         const fechaTxt = p.fecha_fin && p.fecha_fin !== p.fecha_permiso
                           ? `${formatearFechaCorta(p.fecha_permiso)} al ${formatearFechaCorta(p.fecha_fin)}`
                           : formatearFechaCorta(p.fecha_permiso);
+                        const horarioCorto = acortarHorario(horarioSolicitado);
 
                         let colorDictamen = '#16a34a';
                         let bgDictamen = 'rgba(22, 163, 74, 0.1)';
@@ -715,46 +733,59 @@ export default function MisPermisos() {
                             className="tarjeta-permiso-uniforme"
                             style={{ borderLeft: `5px solid ${estilo.color}` }}
                           >
-                            {/* CABECERA COMPACTA Y UNIFORME (CLIC PARA EXPANDIR/CONTRAER) */}
                             <div className="mp-card-summary" onClick={() => toggleTarjeta(p.id)}>
-                              <div className="mp-summary-left">
-                                <span className="badge-folio-fijo">
-                                  {folioLimpio}
-                                </span>
+                              {/* RENGLÓN 1 (EN LAPTOP ES EL ÚNICO RENGLÓN; EN MÓVIL ES EL RENGLÓN DE BADGES) */}
+                              <div className="mp-row-desktop">
+                                <div className="mp-left-badges">
+                                  <span className="badge-folio-fijo">
+                                    {folioLimpio}
+                                  </span>
 
-                                <span
-                                  className="badge-tipo-fijo"
-                                  style={{ color: estilo.color, background: estilo.bg, border: `1px solid ${estilo.border}` }}
-                                >
-                                  {estilo.label}
-                                </span>
+                                  <span
+                                    className="badge-tipo-fijo"
+                                    style={{ color: estilo.color, background: estilo.bg, border: `1px solid ${estilo.border}` }}
+                                  >
+                                    {estilo.label}
+                                  </span>
 
-                                <span style={{ fontSize: '13.5px', color: c.text, fontWeight: '700' }}>
-                                  {fechaTxt}
-                                </span>
-                                <span style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600' }}>
-                                  • {horarioSolicitado}
-                                </span>
+                                  <div className="mp-datetime-inline">
+                                    <span style={{ fontSize: '13.5px', color: c.text, fontWeight: '700' }}>
+                                      {fechaTxt}
+                                    </span>
+                                    <span style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600' }}>
+                                      • {horarioCorto}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="mp-right-badges">
+                                  {renderEtiquetaNaturaleza(categoria, 'mp-hide-mobile')}
+                                  <span
+                                    className="badge-dictamen-fijo"
+                                    style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
+                                  >
+                                    {esAutorizado ? (p.pago || 'AUTORIZADO') : 'RECHAZADO'}
+                                  </span>
+                                  {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
+                                </div>
                               </div>
 
-                              <div className="mp-summary-right">
-                                {renderEtiquetaNaturaleza(categoria)}
-                                <span
-                                  className="badge-dictamen-fijo"
-                                  style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
-                                >
-                                  {esAutorizado ? (p.pago || 'AUTORIZADO') : 'RECHAZADO'}
+                              {/* RENGLÓN 2 EXCLUSIVO EN MÓVIL: FECHA Y HORA EN UNA SOLA LÍNEA + NATURALEZA */}
+                              <div className="mp-row-mobile-datetime">
+                                <span style={{ fontWeight: '700', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {fechaTxt} <span style={{ color: c.textMuted, fontWeight: '600' }}>• {horarioCorto}</span>
                                 </span>
-                                {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
+                                {renderEtiquetaNaturaleza(categoria, 'mp-only-mobile')}
                               </div>
                             </div>
 
-                            {/* DETALLE DESPLEGABLE AL TOCAR LA TARJETA */}
                             {expandida && (
                               <div className="mp-card-body">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                                   <div style={{ fontSize: '14px', color: c.text, lineHeight: '1.45', flex: 1, minWidth: '180px' }}>
-                                    <strong style={{ color: c.textMuted, fontSize: '12px', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>Motivo / Justificación:</strong>
+                                    <strong style={{ color: c.textMuted, fontSize: '11.5px', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>
+                                      Motivo / Justificación:
+                                    </strong>
                                     {motivoLimpio}
                                   </div>
 
