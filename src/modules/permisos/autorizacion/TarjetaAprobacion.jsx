@@ -10,7 +10,6 @@ export default function TarjetaAprobacion({
   const [reincidencias, setReincidencias] = useState(0);
 
   const u = solicitud.usuarios || {};
-  // Avatar neutro en gris pizarra cuando no tiene foto para no saturar de verde la tarjeta
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo || 'U')}&background=334155&color=f8fafc&bold=true`;
 
   const tipo = (solicitud.tipo_permiso || '').toLowerCase();
@@ -48,7 +47,6 @@ export default function TarjetaAprobacion({
     return () => { montado = false; };
   }, [esRetardo, solicitud.usuario_id, solicitud.id, solicitud.created_at]);
 
-  // Convertir "SALUD OCUPACIONAL" -> "Salud Ocupacional" (conservando siglas como CNC o RH)
   const aTitulo = (str = '') => {
     const siglas = ['CNC', 'RH', 'TI', 'IMSS', 'NOM'];
     return String(str)
@@ -83,11 +81,10 @@ export default function TarjetaAprobacion({
   const analizarDatos = (obs = '') => {
     const partes = String(obs).split('|').map(p => p.trim()).filter(Boolean);
     let horarioRaw = (partes[0] || '').replace(/🕒|📅/g, '').trim();
-    // Simplificar textos largos de horario para que quepan en una sola línea con la fecha
     horarioRaw = horarioRaw
       .replace(/^Llegada estimada:\s*/i, 'Llegada: ')
       .replace(/^Llegada en puerta:\s*/i, 'Puerta: ')
-      .replace(/^Para el:\s*.*\$/i, '');
+      .replace(/^Para el:\s*.*$/i, '');
 
     let nombreSubarea = null;
     let nombreJefe = null;
@@ -137,10 +134,10 @@ export default function TarjetaAprobacion({
   const { etiqueta, redaccion } = procesarMotivo(solicitud.asunto_motivo);
 
   const getEstiloTipo = (t) => {
-    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.25)', text: 'Retardo' };
-    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)', border: 'rgba(139, 92, 246, 0.25)', text: 'Falta' };
-    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.25)', text: 'Vacaciones' };
-    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.08)', border: 'rgba(14, 165, 233, 0.25)', text: 'Salida' };
+    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.09)', border: 'rgba(239, 68, 68, 0.28)', text: 'Retardo' };
+    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.09)', border: 'rgba(139, 92, 246, 0.28)', text: 'Falta' };
+    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.09)', border: 'rgba(16, 185, 129, 0.28)', text: 'Vacaciones' };
+    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', text: 'Salida' };
     return { color: c.accent, bg: c.accentSoft, border: c.border, text: aTitulo(t) };
   };
   const estilo = getEstiloTipo(tipo);
@@ -179,63 +176,64 @@ export default function TarjetaAprobacion({
     <div
       style={{
         background: c.surfaceCard,
-        border: `1px solid ${c.border}`,
-        borderLeft: `4px solid ${estilo.color}`,
-        borderRadius: '14px',
-        padding: '16px 16px',
+        border: `1.5px solid ${c.border}`,
+        borderLeft: `5px solid ${estilo.color}`,
+        borderRadius: '16px',
+        padding: '20px 24px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
-        boxShadow: modoOscuro ? '0 2px 8px rgba(0,0,0,0.2)' : '0 1px 3px rgba(0,0,0,0.03)'
+        gap: '14px',
+        boxShadow: modoOscuro ? '0 4px 16px rgba(0,0,0,0.25)' : '0 2px 10px rgba(0,0,0,0.04)'
       }}
     >
-      {/* RENGLÓN 1: CABECERA (AVATAR + NOMBRE/PUESTO A LA IZQUIERDA | BADGE DE TIPO A LA DERECHA) */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '13px', minWidth: 0, flex: 1 }}>
+      {/* RENGLÓN 1: CABECERA (AVATAR 50px + NOMBRE/PUESTO | BADGE DE TIPO) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
           <img
             src={urlFoto}
             alt=""
-            style={{ width: '38px', height: '38px', borderRadius: '9px', objectFit: 'cover', border: `1px solid ${c.border}`, flexShrink: 0 }}
+            style={{ width: '50px', height: '50px', borderRadius: '12px', objectFit: 'cover', border: `1.5px solid ${c.border}`, flexShrink: 0 }}
           />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '15.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
+            <div style={{ fontSize: '17px', fontWeight: '800', color: c.text, lineHeight: 1.25 }}>
               {aTitulo(u.nombre_completo || 'Colaborador')}
             </div>
-            <div style={{ fontSize: '13.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: '14px', color: c.textMuted, fontWeight: '600', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {subtituloFicha}
             </div>
           </div>
         </div>
 
         <span style={{
-          fontSize: '12.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg,
-          border: `1px solid ${estilo.border}`, padding: '3px 9px', borderRadius: '6px', flexShrink: 0
+          fontSize: '13.5px', fontWeight: '800', color: estilo.color, backgroundColor: estilo.bg,
+          border: `1.5px solid ${estilo.border}`, padding: '5px 13px', borderRadius: '8px', flexShrink: 0,
+          textTransform: 'uppercase', letterSpacing: '0.03em'
         }}>
           {estilo.text}
         </span>
       </div>
 
-      {/* RENGLÓN 2: FECHA Y HORARIO UNIDOS EN UNA SOLA LÍNEA + CAJA DE MOTIVO */}
+      {/* RENGLÓN 2: FECHA Y HORARIO + MOTIVO + COMENTARIOS PREVIOS */}
       <div style={{
         background: modoOscuro ? 'rgba(255,255,255,0.03)' : '#f8fafc',
         border: `1px solid ${c.border}`,
-        borderRadius: '9px',
-        padding: '9px 14px',
+        borderRadius: '12px',
+        padding: '13px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '5px'
+        gap: '7px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '14px', fontWeight: '700', color: c.text }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Calendar size={12.5} color={c.textMuted} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', fontSize: '14.5px', fontWeight: '700', color: c.text }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Calendar size={15} color={c.accent} />
               {fechaFormateada}
             </span>
             {horarioRaw && (
               <>
                 <span style={{ color: c.border }}>•</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: c.textSubtle }}>
-                  <Clock size={12.5} color={c.textMuted} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: c.textSubtle }}>
+                  <Clock size={15} color={c.textMuted} />
                   {horarioRaw}
                 </span>
               </>
@@ -244,17 +242,17 @@ export default function TarjetaAprobacion({
 
           {reincidencias > 0 && (
             <span style={{
-              fontSize: '12px', fontWeight: '800', color: '#dc2626', background: 'rgba(239,68,68,0.1)',
-              padding: '2px 6px', borderRadius: '5px', display: 'inline-flex', alignItems: 'center', gap: '3px'
+              fontSize: '13px', fontWeight: '800', color: '#dc2626', background: 'rgba(239,68,68,0.12)',
+              padding: '4px 10px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '5px'
             }}>
-              <AlertTriangle size={11} /> {reincidencias} retardo(s) previo(s)
+              <AlertTriangle size={14} /> {reincidencias} retardo(s) previo(s)
             </span>
           )}
         </div>
 
-        <div style={{ fontSize: '14px', color: c.textSubtle, lineHeight: 1.35 }}>
+        <div style={{ fontSize: '15px', color: c.textSubtle, lineHeight: 1.45 }}>
           {etiqueta && (
-            <span style={{ fontWeight: '700', color: c.textMuted }}>
+            <span style={{ fontWeight: '800', color: c.textMuted }}>
               {etiqueta}:{' '}
             </span>
           )}
@@ -263,11 +261,11 @@ export default function TarjetaAprobacion({
 
         {notasPrevias && notasPrevias.length > 0 && (
           <div style={{
-            marginTop: '4px', paddingTop: '5px', borderTop: `1px dashed ${c.border}`,
-            display: 'flex', flexDirection: 'column', gap: '2px'
+            marginTop: '4px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`,
+            display: 'flex', flexDirection: 'column', gap: '4px'
           }}>
             {notasPrevias.map((n, idx) => (
-              <div key={idx} style={{ fontSize: '13.5px', color: c.textSubtle }}>
+              <div key={idx} style={{ fontSize: '14px', color: c.text }}>
                 <strong style={{ color: c.accent }}>💬 {n.autor}:</strong> {n.texto}
               </div>
             ))}
@@ -275,37 +273,37 @@ export default function TarjetaAprobacion({
         )}
       </div>
 
-      {/* RENGLÓN 3: AVALES PREVIOS (SI LOS HAY) + BOTONES SIMÉTRICOS */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '2px' }}>
+      {/* RENGLÓN 3: AVALES PREVIOS + BOTONES DE ACCIÓN */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', marginTop: '2px' }}>
         {(avalesPrevios.length > 0 || esperandoA) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {avalesPrevios.length > 0 && (
               <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: '4px',
-                fontSize: '13px', fontWeight: '700', color: '#16a34a'
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                fontSize: '14px', fontWeight: '700', color: '#16a34a'
               }}>
-                <CheckCircle2 size={12} /> Avaló: {avalesPrevios.join(', ')}
+                <CheckCircle2 size={15} /> Avaló: {avalesPrevios.join(', ')}
               </span>
             )}
             {esperandoA && (
-              <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706' }}>
+              <span style={{ fontSize: '14px', fontWeight: '700', color: '#d97706' }}>
                 ⏳ Turno de: {formatearNombreCorto(esperandoA)}
               </span>
             )}
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 200px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 220px', justifyContent: 'flex-end' }}>
           {esPendiente && mostrarOverride && (
             <button
               onClick={() => onForzarFirma(solicitud)}
               style={{
-                flex: 1, padding: '8px 14px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
-                backgroundColor: 'rgba(239,68,68,0.06)', color: '#ef4444', fontSize: '14px', fontWeight: '700',
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                flex: 1, maxWidth: '200px', padding: '10px 16px', borderRadius: '10px', border: '1.5px solid rgba(239,68,68,0.4)',
+                backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '14.5px', fontWeight: '800',
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
               }}
             >
-              <LockOpen size={13} /> Saltar Firma
+              <LockOpen size={15} /> Saltar Firma
             </button>
           )}
 
@@ -314,22 +312,22 @@ export default function TarjetaAprobacion({
               <button
                 onClick={() => onRechazar(solicitud)}
                 style={{
-                  flex: 1, maxWidth: '160px', padding: '8px 14px', borderRadius: '8px', border: `1px solid ${c.border}`,
-                  background: 'transparent', color: c.textMuted, fontSize: '14px', fontWeight: '700',
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                  flex: 1, maxWidth: '175px', padding: '10px 18px', borderRadius: '10px', border: `1.5px solid ${c.border}`,
+                  background: 'transparent', color: c.textMuted, fontSize: '14.5px', fontWeight: '700',
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                 }}
               >
-                <X size={14} color={c.danger} /> Rechazar
+                <X size={16} color={c.danger} /> Rechazar
               </button>
               <button
                 onClick={() => onAprobar(solicitud)}
                 style={{
-                  flex: 1.2, maxWidth: '180px', padding: '8px 16px', borderRadius: '8px', border: 'none',
-                  backgroundColor: c.accent, color: '#fff', fontSize: '14px', fontWeight: '800',
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                  flex: 1.2, maxWidth: '195px', padding: '10px 20px', borderRadius: '10px', border: 'none',
+                  backgroundColor: c.accent, color: '#fff', fontSize: '14.5px', fontWeight: '800',
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                 }}
               >
-                <Check size={14} /> Evaluar
+                <Check size={16} /> Evaluar
               </button>
             </>
           )}

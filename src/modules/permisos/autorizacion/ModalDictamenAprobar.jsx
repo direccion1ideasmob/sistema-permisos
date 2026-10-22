@@ -44,81 +44,102 @@ export default function ModalDictamenAprobar({
   ];
 
   const esSeleccionRegreso = dictamenPago === 'Se regresa';
+  const esImpar = opciones.length % 2 !== 0;
 
   return (
     <>
       <style>{`
-        .modal-container {
-          background-color: ${c.surfaceCard}; border: 1px solid ${c.border};
-          border-radius: 20px; width: 100%; max-width: 420px;
-          padding: 24px; box-sizing: border-box;
-          display: flex; flex-direction: column; gap: 18px;
-          box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        .modal-dictamen-container {
+          background-color: ${c.surfaceCard};
+          border: 1.5px solid ${c.border};
+          border-radius: 22px;
+          width: 100%;
+          max-width: 540px;
+          padding: 30px 32px;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          box-shadow: 0 25px 60px rgba(0,0,0,0.55);
           font-family: "Inter", system-ui, -apple-system, sans-serif;
         }
-        .grid-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .botones-accion { display: flex; gap: 12px; margin-top: 4px; }
-
-        @media (max-width: 480px) {
-          .modal-container { padding: 20px !important; border-radius: 16px !important; }
-          .grid-opciones { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-          .botones-accion { flex-direction: column !important; }
-          .botones-accion button { width: 100% !important; padding: 16px 12px !important; }
+        .grid-opciones-dictamen {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .botones-accion-dictamen {
+          display: flex;
+          gap: 12px;
+          margin-top: 4px;
+        }
+        @media (max-width: 520px) {
+          .modal-dictamen-container { padding: 20px !important; border-radius: 16px !important; }
+          .grid-opciones-dictamen { gap: 10px !important; }
+          .botones-accion-dictamen { flex-direction: column !important; }
         }
       `}</style>
 
       <div style={{
         position: 'fixed', inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.72)', backdropFilter: 'blur(5px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 6000, padding: '20px'
       }}>
-        <div className="modal-container">
+        <div className="modal-dictamen-container">
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          {/* CABECERA DEL MODAL */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
             <div>
-              <div style={{ fontSize: '18px', fontWeight: '900', color: c.text, letterSpacing: '-0.02em' }}>
+              <div style={{ fontSize: '21px', fontWeight: '900', color: c.text, letterSpacing: '-0.02em' }}>
                 Resolución de Pase
               </div>
-              <div style={{ fontSize: '15px', color: c.textMuted, marginTop: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                Evaluando a <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo?.split(' ')[0]}</strong>
-                <span style={{ background: c.accentSoft, color: c.accent, padding: '2px 6px', borderRadius: '6px', fontWeight: '800', fontSize: '12.5px', letterSpacing: '0.02em' }}>
+              <div style={{ fontSize: '15px', color: c.textMuted, marginTop: '6px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span>Evaluando a <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo}</strong></span>
+                <span style={{ background: c.accentSoft, color: c.accent, padding: '3px 9px', borderRadius: '6px', fontWeight: '800', fontSize: '12.5px', letterSpacing: '0.03em' }}>
                   {solicitud.tipo_permiso?.toUpperCase()}
                 </span>
               </div>
             </div>
             <button
               onClick={onClose}
-              style={{ background: c.surface, border: `1px solid ${c.border}`, color: c.textMuted, cursor: 'pointer', padding: '6px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                background: c.surface, border: `1.5px solid ${c.border}`, color: c.textMuted,
+                cursor: 'pointer', width: '36px', height: '36px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
+          {/* COMENTARIOS PREVIOS EN EL FLUJO */}
           {notasFlujo && notasFlujo.length > 0 && (
             <div style={{
               background: c.surface, border: `1px solid ${c.border}`, borderRadius: '12px',
-              padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: '4px'
+              padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '5px'
             }}>
-              <span style={{ fontSize: '12px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '12px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Comentarios previos en el flujo:
               </span>
               {notasFlujo.map((n, idx) => (
-                <div key={idx} style={{ fontSize: '14px', color: c.text, lineHeight: 1.35 }}>
+                <div key={idx} style={{ fontSize: '14.5px', color: c.text, lineHeight: 1.4 }}>
                   <strong style={{ color: c.accent }}>{n.autor}:</strong> {n.texto}
                 </div>
               ))}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
-            <div className="grid-opciones">
-              {opciones.map(op => {
+            {/* CUADRÍCULA DE DICTAMEN SIMÉTRICA */}
+            <div className="grid-opciones-dictamen">
+              {opciones.map((op, index) => {
                 const seleccionada = dictamenPago === op.key;
                 const Icono = op.icon;
                 const colorActivo = op.esRegreso ? '#d97706' : c.accent;
-                const bgActivo = op.esRegreso ? 'rgba(245, 158, 11, 0.12)' : c.accentSoft;
+                const bgActivo = op.esRegreso ? 'rgba(245, 158, 11, 0.13)' : c.accentSoft;
+                const expandirUltima = esImpar && index === opciones.length - 1;
 
                 return (
                   <div
@@ -128,24 +149,32 @@ export default function ModalDictamenAprobar({
                       setDictamenPago(op.key);
                     }}
                     style={{
-                      padding: '15px 12px', borderRadius: '14px', textAlign: 'center',
-                      border: seleccionada ? `2px solid ${colorActivo}` : `1px solid ${c.border}`,
+                      gridColumn: expandirUltima ? '1 / -1' : 'auto',
+                      padding: expandirUltima ? '15px 18px' : '18px 14px',
+                      borderRadius: '14px',
+                      textAlign: 'center',
+                      border: seleccionada ? `2px solid ${colorActivo}` : `1.5px solid ${c.border}`,
                       backgroundColor: seleccionada ? bgActivo : c.surface,
                       cursor: (esVacaciones && op.key !== 'Con goce') ? 'not-allowed' : 'pointer',
                       opacity: (esVacaciones && op.key !== 'Con goce') ? 0.5 : 1,
                       transition: 'all 0.15s ease',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px',
-                      position: 'relative', overflow: 'hidden'
+                      display: 'flex',
+                      flexDirection: expandirUltima ? 'row' : 'column',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '9px',
+                      position: 'relative',
+                      overflow: 'hidden'
                     }}
                   >
-                    <Icono size={21} color={seleccionada ? colorActivo : c.textMuted} strokeWidth={seleccionada ? 2.5 : 1.5} />
-                    <span style={{ fontSize: '14px', fontWeight: seleccionada ? '800' : '600', color: seleccionada ? colorActivo : c.text }}>
+                    <Icono size={23} color={seleccionada ? colorActivo : c.textMuted} strokeWidth={seleccionada ? 2.4 : 1.7} />
+                    <span style={{ fontSize: '15px', fontWeight: seleccionada ? '800' : '700', color: seleccionada ? colorActivo : c.text }}>
                       {op.label}
                     </span>
 
                     {seleccionada && (
-                      <div style={{ position: 'absolute', top: '6px', right: '6px' }}>
-                        <Check size={12} color={colorActivo} strokeWidth={4} />
+                      <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                        <Check size={14} color={colorActivo} strokeWidth={3.5} />
                       </div>
                     )}
                   </div>
@@ -155,35 +184,40 @@ export default function ModalDictamenAprobar({
 
             {esSeleccionRegreso && (
               <div style={{
-                fontSize: '13.5px', color: '#b45309', background: 'rgba(245, 158, 11, 0.1)',
-                border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '9px', padding: '8px 13px',
-                fontWeight: '600', lineHeight: 1.35
+                fontSize: '14px', color: '#b45309', background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: '11px', padding: '11px 15px',
+                fontWeight: '600', lineHeight: 1.4
               }}>
                 ↩️ Se generará la papeleta oficial con la leyenda <strong>"SE REGRESA (SIN ACCESO)"</strong> para respaldo de RH y aviso a Vigilancia.
               </div>
             )}
 
+            {/* CAMPO DE COMENTARIO */}
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '16px', left: '14px', color: c.textSubtle }}>
-                <MessageSquare size={16} />
+              <div style={{ position: 'absolute', top: '16px', left: '15px', color: c.textSubtle }}>
+                <MessageSquare size={17} />
               </div>
               <textarea
                 placeholder="Agregar comentario o instrucción para el siguiente nivel / papeleta..."
                 value={comentarios} onChange={e => setComentarios(e.target.value)}
-                rows={2}
+                rows={3}
                 style={{
-                  width: '100%', padding: '14px 14px 14px 38px', borderRadius: '14px',
-                  border: `1px solid ${c.inputBorder}`, backgroundColor: c.inputBg,
+                  width: '100%', padding: '14px 16px 14px 42px', borderRadius: '14px',
+                  border: `1.5px solid ${c.inputBorder}`, backgroundColor: c.inputBg,
                   color: c.text, fontSize: '15px', outline: 'none', boxSizing: 'border-box',
-                  fontWeight: '500', resize: 'none', fontFamily: 'inherit'
+                  fontWeight: '500', resize: 'none', fontFamily: 'inherit', lineHeight: 1.45
                 }}
               />
             </div>
 
-            <div className="botones-accion">
+            {/* BOTONES DE ACCIÓN */}
+            <div className="botones-accion-dictamen">
               <button
                 type="button" onClick={onClose}
-                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted, fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}
+                style={{
+                  flex: 1, padding: '14px', borderRadius: '12px', border: `1.5px solid ${c.border}`,
+                  background: 'transparent', color: c.textMuted, fontSize: '15px', fontWeight: '700', cursor: 'pointer'
+                }}
               >
                 Cancelar
               </button>
@@ -192,11 +226,11 @@ export default function ModalDictamenAprobar({
                 style={{
                   flex: 1.5, padding: '14px', borderRadius: '12px', border: 'none',
                   backgroundColor: esSeleccionRegreso ? '#d97706' : c.accent, color: '#fff',
-                  fontSize: '15px', fontWeight: '800', cursor: 'pointer',
+                  fontSize: '15.5px', fontWeight: '800', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
               >
-                <ShieldCheck size={18} />
+                <ShieldCheck size={19} />
                 {procesando ? 'Guardando...' : (esSeleccionRegreso ? 'Firmar y Regresar' : 'Firmar y Autorizar')}
               </button>
             </div>
