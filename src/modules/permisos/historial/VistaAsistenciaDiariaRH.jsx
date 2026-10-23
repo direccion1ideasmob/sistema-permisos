@@ -9,23 +9,33 @@ import {
 import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import {
   Calendar, Search, RefreshCw, Download,
-  Clock, ShieldCheck, LogOut, CheckCircle2, X, Undo2
+  Clock, CheckCircle2, X, Undo2, ChevronLeft, ChevronRight, Check, LogOut
 } from 'lucide-react';
 
-const formatearFechaBonita = (fechaYYYYMMDD) => {
+const formatearFechaCorta = (fechaYYYYMMDD) => {
   if (!fechaYYYYMMDD) return '';
   const [y, m, d] = fechaYYYYMMDD.split('-').map(Number);
   const fechaObj = new Date(y, m - 1, d);
   const texto = fechaObj.toLocaleDateString('es-MX', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
     year: 'numeric'
   });
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
+  return texto.charAt(0).toUpperCase() + texto.slice(1).replace(/\./g, '');
 };
 
-export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c }) {
+const moverFechaDias = (fechaYYYYMMDD, dias) => {
+  const [y, m, d] = fechaYYYYMMDD.split('-').map(Number);
+  const dt = new Date(y, m - 1, d, 12, 0, 0);
+  dt.setDate(dt.getDate() + dias);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+};
+
+export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c, modoOscuro }) {
   const hoyStr = obtenerFechaLocalHoy();
   const [fecha, setFecha] = useState(hoyStr);
   const [busqueda, setBusqueda] = useState('');
@@ -85,34 +95,37 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
     }
   };
 
-  const termino = busqueda.toLowerCase().trim();
+  // Clasificación coherente de cada colaborador en el día
+  const clasificarEmpleado = (emp) => {
+    const reg = mapaAsistencias[emp.id];
+    const inc = mapaIncidencias[emp.id];
+    if (reg?.hora_entrada) return 'presentes';
+    if (inc?.tipo === 'ausencia_autorizada') return 'justificados';
+    return 'ausentes';
+  };
 
-  const listaProcesada = empleados.filter((emp) => {
+  const basePorDeptoYBusqueda = empleados.filter((emp) => {
     if (deptoFiltro && String(emp.departamento_id) !== String(deptoFiltro)) return false;
+    const termino = busqueda.toLowerCase().trim();
     if (termino) {
       const matchNombre = (emp.nombre_completo || '').toLowerCase().includes(termino);
       const matchNum = String(emp.numero_empleado || '').toLowerCase().includes(termino);
       if (!matchNombre && !matchNum) return false;
     }
-
-    const reg = mapaAsistencias[emp.id];
-    const inc = mapaIncidencias[emp.id];
-    const tieneEntrada = Boolean(reg?.hora_entrada);
-
-    if (estadoFiltro === 'presentes') return tieneEntrada;
-    if (estadoFiltro === 'ausentes') return !tieneEntrada && inc?.tipo !== 'ausencia_autorizada';
-    if (estadoFiltro === 'incidencias') return Boolean(inc);
     return true;
   });
 
-  const totalPresentes = empleados.filter(e => Boolean(mapaAsistencias[e.id]?.hora_entrada)).length;
-  const totalConSalida = empleados.filter(e => Boolean(mapaAsistencias[e.id]?.hora_entrada && mapaAsistencias[e.id]?.hora_salida)).length;
-  const totalConPermiso = empleados.filter(e => !mapaAsistencias[e.id]?.hora_entrada && mapaIncidencias[e.id]?.tipo === 'ausencia_autorizada').length;
-  const totalSinRegistro = empleados.filter(e => !mapaAsistencias[e.id]?.hora_entrada && mapaIncidencias[e.id]?.tipo !== 'ausencia_autorizada').length;
+  const totalPresentes = basePorDeptoYBusqueda.filter(e => clasificarEmpleado(e) === 'presentes').length;
+  const totalJustificados = basePorDeptoYBusqueda.filter(e => clasificarEmpleado(e) === 'justificados').length;
+  const totalAusentes = basePorDeptoYBusqueda.filter(e => clasificarEmpleado(e) === 'ausentes').length;
+  const totalConSalida = basePorDeptoYBusqueda.filter(e => Boolean(mapaAsistencias[e.id]?.hora_entrada && mapaAsistencias[e.id]?.hora_salida)).length;
 
-  // Regla de cierre de día para exportar:
-  // - Cualquier fecha anterior a hoy (fecha < hoyStr) ya está cerrada y se puede exportar siempre.
-  // - Si es hoy (fecha === hoyStr), solo está cerrada cuando ya hubo entradas y todos registraron salida, o después de las 18:00 hrs.
+  const listaProcesada = basePorDeptoYBusqueda.filter((emp) => {
+    if (estadoFiltro === 'todos') return true;
+    return clasificarEmpleado(emp) === estadoFiltro;
+  });
+
+  // Regla de cierre de día para exportar
   const esDiaAnterior = fecha < hoyStr;
   const horaActualNum = new Date().getHours();
   const jornadaHoyCerrada = totalPresentes > 0 && (totalConSalida === totalPresentes || horaActualNum >= 18);
@@ -122,15 +135,15 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
     if (!puedeExportarDia) {
       alert(
         totalPresentes === 0
-          ? '⏳ Aún no hay registros de asistencia cerrados el día de hoy.\n\nPara descargar un reporte completo, selecciona una fecha anterior en el calendario o espera al cierre de la jornada.'
-          : `⏳ La jornada de hoy sigue en curso (${totalConSalida} de ${totalPresentes} colaboradores en planta han registrado su salida).\n\nEl reporte del día de hoy se habilitará al concluir las salidas, o puedes consultar y exportar cualquier día anterior desde el calendario.`
+          ? '⏳ Aún no hay registros de asistencia cerrados el día de hoy.\n\nPara descargar un reporte completo, selecciona una fecha anterior o espera al cierre de la jornada.'
+          : `⏳ La jornada de hoy sigue en curso (${totalConSalida} de ${totalPresentes} en planta han registrado salida).\n\nEl reporte se habilitará al concluir las salidas, o puedes consultar cualquier día anterior con las flechas de fecha.`
       );
       return;
     }
 
     const encabezados = [
       'FECHA', 'NO. EMPLEADO', 'COLABORADOR', 'DEPARTAMENTO', 'PUESTO',
-      'ESTATUS FINAL DEL DIA', 'HORA ENTRADA', 'HORA SALIDA', 'DETALLE INCIDENCIA / PERMISO'
+      'ESTATUS DEL DIA', 'HORA ENTRADA', 'HORA SALIDA', 'INCIDENCIA / PERMISO'
     ];
 
     const filas = listaProcesada.map((emp) => {
@@ -139,15 +152,13 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
       const horaEnt = reg?.hora_entrada || inc?.horaLlegadaPuerta || '';
       const horaSal = reg?.hora_salida || '';
 
-      let estado = 'FALTA / SIN REGISTRO';
+      let estado = 'SIN REGISTRO / FALTA';
       if (reg?.hora_entrada) {
-        estado = reg.hora_entrada > horaLimiteCorte ? 'ASISTIO CON RETARDO' : 'ASISTIO PUNTUAL';
+        estado = reg.hora_entrada > horaLimiteCorte ? 'ASISTIO (RETARDO)' : 'ASISTIO PUNTUAL';
       } else if (inc?.tipo === 'retardo_regresa') {
         estado = 'REGRESADO EN PUERTA';
       } else if (inc?.tipo === 'ausencia_autorizada') {
-        estado = 'PERMISO / VACACIONES';
-      } else if (inc?.tipo === 'retardo_en_espera') {
-        estado = 'DETENIDO EN PUERTA';
+        estado = 'AUSENCIA JUSTIFICADA';
       }
 
       const etiquetaLimpia = (inc?.etiqueta || 'Sin incidencia')
@@ -159,11 +170,11 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         `"${fecha}"`,
         `"${emp.numero_empleado || ''}"`,
         `"${(emp.nombre_completo || '').replace(/"/g, '""')}"`,
-        `"${(emp.departamentos?.nombre || 'Sin departamento').replace(/"/g, '""')}"`,
+        `"${(emp.departamentos?.nombre || 'General').replace(/"/g, '""')}"`,
         `"${(emp.puesto || emp.area || '').replace(/"/g, '""')}"`,
         `"${estado}"`,
-        `"${horaEnt || 'Sin marca'}"`,
-        `"${horaSal || 'Sin marca'}"`,
+        `"${horaEnt || '--:--'}"`,
+        `"${horaSal || '--:--'}"`,
         `"${etiquetaLimpia.replace(/"/g, '""')}"`
       ].join(',');
     });
@@ -173,65 +184,141 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Asistencia_Cerrada_${fecha}.csv`;
+    a.download = `Asistencia_${fecha}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-      {/* CABECERA UNIFICADA: FECHA EN LETRA GRANDE + PÍLDORAS DE RESUMEN + FILTROS Y RELOJ */}
-      <div style={{
-        background: c.surfaceCard,
-        border: `1px solid ${c.border}`,
-        borderRadius: '14px',
-        padding: '14px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px'
-      }}>
-        {/* RENGLÓN 1: FECHA BONITA ("Viernes, 23 de octubre de 2026") + PÍLDORAS DE FILTRO */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          flexWrap: 'wrap'
-        }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+      <style>{`
+        .vad-toolbar-card {
+          background: ${c.surfaceCard};
+          border: 1px solid ${c.border};
+          border-radius: 12px;
+          padding: 10px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .vad-row-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .vad-seg-bar {
+          display: inline-flex;
+          background: ${c.bg};
+          border: 1px solid ${c.border};
+          border-radius: 9px;
+          padding: 3px;
+          gap: 2px;
+          flex-wrap: wrap;
+        }
+        .vad-seg-btn {
+          height: 30px;
+          padding: 0 11px;
+          border-radius: 6px;
+          border: none;
+          background: transparent;
+          color: ${c.textMuted};
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.15s ease;
+        }
+        .vad-seg-btn.active {
+          background: ${c.surfaceCard};
+          color: ${c.text};
+          font-weight: 800;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .vad-table-container {
+          background: ${c.surfaceCard};
+          border: 1px solid ${c.border};
+          border-radius: 12px;
+          overflow: hidden;
+        }
+        .vad-item-row {
+          display: grid;
+          grid-template-columns: minmax(220px, 1.8fr) minmax(130px, 1fr) minmax(180px, 1.3fr) auto;
+          align-items: center;
+          gap: 12px;
+          padding: 9px 16px;
+          border-bottom: 1px solid ${c.border};
+          transition: background 0.12s ease;
+        }
+        .vad-item-row:last-child {
+          border-bottom: none;
+        }
+        .vad-item-row:hover {
+          background: ${modoOscuro ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
+        }
+        @media (max-width: 768px) {
+          .vad-item-row {
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            padding: 10px 12px;
+          }
+          .vad-col-depto {
+            display: none !important;
+          }
+          .vad-col-status {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 4px;
+            border-top: 1px dashed ${c.border};
+          }
+        }
+      `}</style>
+
+      {/* BARRA DE CONTROL EMPAQUETADA EN UN SOLO BLOQUE LIMPIO */}
+      <div className="vad-toolbar-card">
+        {/* FILA 1: NAVEGADOR DE FECHA + SEGMENTOS DE ESTATUS + CORTE Y EXPORTAR */}
+        <div className="vad-row-top">
+          {/* Selector de Fecha con flechas anterior / siguiente */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '9px', padding: '3px' }}>
+            <button
+              type="button"
+              onClick={() => setFecha(moverFechaDias(fecha, -1))}
+              title="Día anterior"
+              style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <ChevronLeft size={15} />
+            </button>
+
             <button
               type="button"
               onClick={() => {
                 if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
                 else inputFechaRef.current?.focus();
               }}
-              title="Cambiar fecha de consulta"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '9px',
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                textAlign: 'left'
-              }}
+              style={{ height: '28px', padding: '0 10px', border: 'none', background: 'transparent', color: c.text, fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                background: c.accentSoft, color: c.accent,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-              }}>
-                <Calendar size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: '17px', fontWeight: '900', color: c.text, letterSpacing: '-0.01em' }}>
-                  {formatearFechaBonita(fecha)}
-                </div>
-                <div style={{ fontSize: '11px', fontWeight: '700', color: c.textMuted }}>
-                  {fecha === hoyStr ? 'Lista de asistencia de hoy (Clic para cambiar día)' : 'Consulta histórica (Clic para cambiar día)'}
-                </div>
-              </div>
+              <Calendar size={13.5} color={c.accent} />
+              <span>{formatearFechaCorta(fecha)}</span>
+              {fecha === hoyStr && (
+                <span style={{ fontSize: '10px', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '1px 6px', borderRadius: '4px' }}>
+                  HOY
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fecha < hoyStr && setFecha(moverFechaDias(fecha, 1))}
+              disabled={fecha >= hoyStr}
+              title="Día siguiente"
+              style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', background: 'transparent', color: c.text, opacity: fecha >= hoyStr ? 0.3 : 1, cursor: fecha >= hoyStr ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <ChevronRight size={15} />
             </button>
 
             <input
@@ -244,285 +331,248 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
             />
           </div>
 
-          {/* PÍLDORAS COMPACTAS DE FILTRO */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {/* Segmentos de Estatus (Contadores 100% coherentes) */}
+          <div className="vad-seg-bar">
             {[
-              { id: 'todos', label: 'Todos', count: empleados.length, color: c.text, activeBg: c.bg },
-              { id: 'presentes', label: 'En Planta', count: totalPresentes, color: '#16a34a', activeBg: 'rgba(22,163,74,0.10)' },
-              { id: 'ausentes', label: 'Sin Registro', count: totalSinRegistro, color: '#ef4444', activeBg: 'rgba(239,68,68,0.10)' },
-              { id: 'incidencias', label: 'Permisos Hoy', count: totalConPermiso, color: '#0284c7', activeBg: 'rgba(2,132,199,0.10)' }
-            ].map((f) => {
-              const activo = estadoFiltro === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setEstadoFiltro(f.id)}
-                  style={{
-                    height: '32px',
-                    padding: '0 11px',
-                    borderRadius: '999px',
-                    border: `1.5px solid ${activo ? f.color : c.border}`,
-                    background: activo ? f.activeBg : 'transparent',
-                    color: activo ? f.color : c.textMuted,
-                    fontSize: '12px',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <span>{f.label}</span>
-                  <span style={{
-                    padding: '1px 6px',
-                    borderRadius: '999px',
-                    background: activo ? f.color : c.bg,
-                    color: activo ? '#fff' : f.color,
-                    fontSize: '11px',
-                    fontWeight: '900'
-                  }}>
-                    {f.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* RENGLÓN 2: BUSCADOR + DEPARTAMENTO + EXPORTAR + RELOJ DE CORTE A LA DERECHA */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '8px',
-          flexWrap: 'wrap',
-          paddingTop: '10px',
-          borderTop: `1px solid ${c.border}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: '210px' }}>
-              <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
-              <input
-                type="text"
-                placeholder="Buscar colaborador o # de nómina..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                style={{
-                  width: '100%', height: '35px', padding: '0 28px 0 32px', borderRadius: '8px',
-                  border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                  fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
-                }}
-              />
-              {busqueda && (
-                <button
-                  type="button"
-                  onClick={() => setBusqueda('')}
-                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            <select
-              value={deptoFiltro}
-              onChange={(e) => setDeptoFiltro(e.target.value)}
-              style={{
-                height: '35px', padding: '0 10px', borderRadius: '8px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                fontSize: '12.5px', fontWeight: '700', outline: 'none'
-              }}
-            >
-              <option value="">Todos los departamentos</option>
-              {departamentos.map((d) => (
-                <option key={d.id} value={d.id}>{d.nombre}</option>
-              ))}
-            </select>
+              { id: 'todos', label: 'Todos', count: basePorDeptoYBusqueda.length, dot: null },
+              { id: 'presentes', label: 'En Planta', count: totalPresentes, dot: '#16a34a' },
+              { id: 'justificados', label: 'Justificados', count: totalJustificados, dot: '#0284c7' },
+              { id: 'ausentes', label: 'Sin Registro', count: totalAusentes, dot: '#ef4444' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setEstadoFiltro(tab.id)}
+                className={`vad-seg-btn ${estadoFiltro === tab.id ? 'active' : ''}`}
+              >
+                {tab.dot && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: tab.dot }} />}
+                <span>{tab.label}</span>
+                <span style={{ fontSize: '11px', opacity: 0.75 }}>({tab.count})</span>
+              </button>
+            ))}
           </div>
 
+          {/* Acciones derechas: Hora Corte + Recargar + Exportar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <button
-              type="button"
-              onClick={exportarCSV}
-              title={puedeExportarDia ? 'Descargar corte de asistencia del día' : 'Disponible al concluir la jornada de hoy o seleccionando un día anterior'}
-              style={{
-                height: '35px', padding: '0 12px', borderRadius: '8px',
-                border: `1px solid ${puedeExportarDia ? c.accent : c.border}`,
-                background: puedeExportarDia ? c.accentSoft : c.bg,
-                color: puedeExportarDia ? c.accent : c.textMuted,
-                opacity: puedeExportarDia ? 1 : 0.75,
-                fontSize: '12px', fontWeight: '800', cursor: puedeExportarDia ? 'pointer' : 'not-allowed',
-                display: 'inline-flex', alignItems: 'center', gap: '6px'
-              }}
-            >
-              <Download size={14} /> {puedeExportarDia ? 'Exportar Corte' : 'Exportar (Al cierre)'}
-            </button>
+            <ControlHoraCorteRH usuario={usuario} c={c} />
 
             <button
               type="button"
               onClick={cargarAsistenciaDia}
-              title="Actualizar lista"
-              style={{
-                width: '35px', height: '35px', borderRadius: '8px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-              }}
+              title="Actualizar"
+              style={{ width: '34px', height: '34px', borderRadius: '8px', border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <RefreshCw size={14} />
             </button>
 
-            <ControlHoraCorteRH usuario={usuario} c={c} />
+            <button
+              type="button"
+              onClick={exportarCSV}
+              title={puedeExportarDia ? 'Descargar corte en Excel' : 'Disponible al concluir la jornada o en días anteriores'}
+              style={{
+                height: '34px', padding: '0 12px', borderRadius: '8px',
+                border: `1px solid ${puedeExportarDia ? c.accent : c.border}`,
+                background: puedeExportarDia ? c.accent : c.bg,
+                color: puedeExportarDia ? '#fff' : c.textMuted,
+                fontSize: '12px', fontWeight: '800', cursor: puedeExportarDia ? 'pointer' : 'not-allowed',
+                display: 'inline-flex', alignItems: 'center', gap: '6px'
+              }}
+            >
+              <Download size={13.5} />
+              <span>{puedeExportarDia ? 'Exportar' : 'Al cierre'}</span>
+            </button>
           </div>
+        </div>
+
+        {/* FILA 2: BUSCADOR + FILTRO DE DEPARTAMENTO */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o # de empleado..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              style={{
+                width: '100%', height: '34px', padding: '0 28px 0 32px', borderRadius: '8px',
+                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
+              }}
+            />
+            {busqueda && (
+              <button
+                type="button"
+                onClick={() => setBusqueda('')}
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <select
+            value={deptoFiltro}
+            onChange={(e) => setDeptoFiltro(e.target.value)}
+            style={{
+              height: '34px', padding: '0 10px', borderRadius: '8px',
+              border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+              fontSize: '12.5px', fontWeight: '600', outline: 'none'
+            }}
+          >
+            <option value="">Todos los departamentos</option>
+            {departamentos.map((d) => (
+              <option key={d.id} value={d.id}>{d.nombre}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* LISTA DE COLABORADORES */}
+      {/* LISTA EMPAQUETADA EN TABLA COMPACTA */}
       {cargando ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontWeight: '600' }}>
-          Cargando registros de asistencia...
+        <div style={{ textAlign: 'center', padding: '36px', color: c.textMuted, fontSize: '13.5px', fontWeight: '600' }}>
+          Cargando asistencia...
         </div>
       ) : listaProcesada.length === 0 ? (
         <div style={{
           background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-          padding: '34px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
+          padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13px', fontWeight: '600'
         }}>
-          No se encontraron colaboradores con los filtros seleccionados.
+          No hay colaboradores en este filtro.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div className="vad-table-container">
           {listaProcesada.map((emp) => {
             const reg = mapaAsistencias[emp.id];
             const inc = mapaIncidencias[emp.id];
             const tieneEntrada = Boolean(reg?.hora_entrada);
             const tieneSalida = Boolean(reg?.hora_salida);
-            const avatarUrl = emp?.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp?.nombre_completo || 'C')}&background=16a34a&color=fff&bold=true`;
+            const esTarde = tieneEntrada && reg.hora_entrada > horaLimiteCorte;
+            const avatarUrl = emp?.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp?.nombre_completo || 'C')}&background=334155&color=fff&bold=true`;
+
+            const etiquetaIncLimpia = inc?.etiqueta
+              ? inc.etiqueta.replace(/[✅🚫⏳↩️🕒📅]/g, '').trim()
+              : null;
 
             return (
-              <div
-                key={emp.id}
-                style={{
-                  background: c.surfaceCard,
-                  border: `1px solid ${c.border}`,
-                  borderLeft: `4px solid ${tieneEntrada ? '#16a34a' : (inc?.tipo === 'ausencia_autorizada' ? '#0284c7' : '#ef4444')}`,
-                  borderRadius: '10px',
-                  padding: '9px 13px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  flexWrap: 'wrap'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: 1 }}>
+              <div key={emp.id} className="vad-item-row">
+                {/* COLUMNA 1: COLABORADOR */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                   <img
                     src={avatarUrl}
                     alt=""
-                    style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover', border: `1px solid ${c.border}` }}
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `1px solid ${c.border}` }}
                   />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>
+                    <div style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {emp.nombre_completo}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
+                    <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>#{emp.numero_empleado}</span>
-                      {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
-                      {inc && (
-                        <span style={{
-                          fontSize: '10.5px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px',
-                          color: inc.color, background: inc.bg
-                        }}>
-                          {inc.etiqueta}
+                      {etiquetaIncLimpia && (
+                        <span style={{ color: inc.color, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          · {etiquetaIncLimpia}
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {/* COLUMNA 2: DEPARTAMENTO */}
+                <div className="vad-col-depto" style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {emp.departamentos?.nombre || 'General'}
+                </div>
+
+                {/* COLUMNA 3: RELOJ / ESTATUS */}
+                <div className="vad-col-status" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   {tieneEntrada ? (
                     <>
-                      {(() => {
-                        const esTarde = reg.hora_entrada > horaLimiteCorte;
-                        const col = esTarde ? '#d97706' : '#16a34a';
-                        const bg = esTarde ? 'rgba(245,158,11,0.12)' : 'rgba(22,163,74,0.10)';
-                        const bd = esTarde ? 'rgba(245,158,11,0.32)' : 'rgba(22,163,74,0.25)';
-                        return (
-                          <span style={{
-                            fontSize: '11.5px', fontWeight: '800', color: col,
-                            background: bg, border: `1px solid ${bd}`,
-                            padding: '4px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                          }}>
-                            <Clock size={12} /> {esTarde ? `Retardo: ${reg.hora_entrada}` : `Entrada: ${reg.hora_entrada}`}
-                          </span>
-                        );
-                      })()}
+                      <span style={{
+                        fontSize: '11.5px', fontWeight: '700',
+                        color: esTarde ? '#d97706' : '#16a34a',
+                        background: esTarde ? 'rgba(245,158,11,0.10)' : 'rgba(22,163,74,0.10)',
+                        padding: '3px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                      }}>
+                        <Clock size={11.5} /> {reg.hora_entrada}
+                      </span>
 
-                      {tieneSalida ? (
+                      {tieneSalida && (
                         <span style={{
-                          fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
-                          background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.25)',
-                          padding: '4px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                          fontSize: '11.5px', fontWeight: '700', color: '#0284c7',
+                          background: 'rgba(2,132,199,0.10)', padding: '3px 8px', borderRadius: '6px',
+                          display: 'inline-flex', alignItems: 'center', gap: '4px'
                         }}>
-                          <CheckCircle2 size={12} /> Salida: {reg.hora_salida}
+                          <CheckCircle2 size={11.5} /> {reg.hora_salida}
                         </span>
-                      ) : fecha === hoyStr && (
+                      )}
+                    </>
+                  ) : inc?.tipo === 'ausencia_autorizada' ? (
+                    <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#0284c7', background: 'rgba(2,132,199,0.10)', padding: '3px 8px', borderRadius: '6px' }}>
+                      Justificado
+                    </span>
+                  ) : inc?.tipo === 'retardo_regresa' ? (
+                    <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#ef4444', background: 'rgba(239,68,68,0.10)', padding: '3px 8px', borderRadius: '6px' }}>
+                      Se retiró
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '11.5px', fontWeight: '600', color: c.textMuted }}>
+                      Sin entrada
+                    </span>
+                  )}
+                </div>
+
+                {/* COLUMNA 4: ACCIONES RÁPIDAS RH (Solo para el día de hoy) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px' }}>
+                  {fecha === hoyStr && (
+                    tieneEntrada ? (
+                      !tieneSalida && (
                         <>
                           <button
                             type="button"
                             onClick={() => handleMarcarDesdeRH(emp.id, 'salida')}
                             disabled={procesandoId === `${emp.id}-salida`}
+                            title="Registrar salida"
                             style={{
-                              height: '30px', padding: '0 10px', borderRadius: '7px',
+                              height: '28px', padding: '0 9px', borderRadius: '6px',
                               border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                              fontSize: '11px', fontWeight: '800', cursor: 'pointer',
+                              fontSize: '11px', fontWeight: '700', cursor: 'pointer',
                               display: 'inline-flex', alignItems: 'center', gap: '4px'
                             }}
                           >
-                            <LogOut size={12} /> Marcar Salida
+                            <LogOut size={11.5} /> Salida
                           </button>
                           <button
                             type="button"
                             onClick={() => handleQuitarEntradaRH(emp.id, emp.nombre_completo)}
                             disabled={procesandoId === `${emp.id}-borrar`}
-                            title="Quitar entrada si fue marcada por error"
+                            title="Deshacer entrada"
                             style={{
-                              height: '30px', padding: '0 7px', borderRadius: '7px',
+                              width: '28px', height: '28px', borderRadius: '6px',
                               border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted,
-                              fontSize: '11px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center'
+                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
                             }}
                           >
                             <Undo2 size={12} />
                           </button>
                         </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span style={{
-                        fontSize: '11px', fontWeight: '700',
-                        color: inc?.tipo === 'ausencia_autorizada' ? '#0284c7' : '#ef4444'
-                      }}>
-                        {inc?.tipo === 'ausencia_autorizada' ? 'Ausencia justificada' : 'Sin marca de entrada'}
-                      </span>
-
-                      {fecha === hoyStr && (
+                      )
+                    ) : (
+                      inc?.tipo !== 'ausencia_autorizada' && (
                         <button
                           type="button"
                           onClick={() => handleMarcarDesdeRH(emp.id, 'entrada')}
                           disabled={procesandoId === `${emp.id}-entrada`}
-                          title="Validar que el colaborador sí está en planta"
+                          title="Marcar asistencia en planta"
                           style={{
-                            height: '32px', padding: '0 11px', borderRadius: '8px',
-                            border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
-                            fontSize: '11.5px', fontWeight: '800', cursor: 'pointer',
-                            display: 'inline-flex', alignItems: 'center', gap: '5px'
+                            height: '28px', padding: '0 10px', borderRadius: '6px',
+                            border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                            fontSize: '11px', fontWeight: '700', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: '4px'
                           }}
                         >
-                          <ShieldCheck size={13} /> Validar en Planta
+                          <Check size={12} color={c.accent} strokeWidth={2.5} /> Entrada
                         </button>
-                      )}
-                    </>
+                      )
+                    )
                   )}
                 </div>
               </div>
