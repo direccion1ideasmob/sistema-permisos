@@ -652,11 +652,12 @@ export default function Caseta() {
 
   const recientesEnPlanta = todosEnPlanta.filter((emp) => mapaIncidenciasHoy[emp.id]?.tipo === 'salida_fuera');
 
-  const coincidenciasEnPlanta = tieneMinimo3Letras
-    ? todosEnPlanta.filter((emp) => (emp.nombre_completo || '').toLowerCase().includes(termino))
-    : [];
-
-  const demasiadasCoincidenciasSalida = tieneMinimo3Letras && coincidenciasEnPlanta.length > 3;
+  const coincidenciasEnPlanta = termino
+    ? todosEnPlanta.filter((emp) =>
+        (emp.nombre_completo || '').toLowerCase().includes(termino) ||
+        String(emp.numero_empleado || '').toLowerCase().includes(termino)
+      )
+    : todosEnPlanta;
 
   return (
     <div className="caseta-wrap">
@@ -1120,114 +1121,19 @@ export default function Caseta() {
       {/* PESTAÑA 2: EN PLANTA / SALIDAS */}
       {subTabAsistencia === 'en_planta' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          {!tieneMinimo3Letras && recientesEnPlanta.map((emp) => {
-            const reg = mapaAsistencias[emp.id];
-            const inc = mapaIncidenciasHoy[emp.id];
-            const tieneSalida = Boolean(reg?.hora_salida);
-            const tsEntrada = marcasEntradaRecientes[emp.id];
-            const puedeDeshacerEntrada = false;
-            const tsSalida = marcasSalidaRecientes[emp.id];
-            const puedeDeshacerSalida = false;
-
-            return (
-              <div
-                key={emp.id}
-                style={{
-                  background: c.surfaceCard,
-                  border: `1px solid ${c.border}`,
-                  borderRadius: '11px',
-                  padding: '10px 13px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  flexWrap: 'wrap'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                  <AvatarColaborador u={emp} size={38} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{emp.nombre_completo}</div>
-                    <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700' }}>#{emp.numero_empleado}</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {puedeDeshacerEntrada && (
-                    <button
-                      onClick={() => handleDeshacerEntrada(emp.id)}
-                      disabled={Boolean(procesandoId)}
-                      style={{
-                        height: '36px', padding: '0 12px', borderRadius: '8px',
-                        border: '1px solid rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.12)',
-                        color: '#d97706', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: '4px'
-                      }}
-                    >
-                      <Undo2 size={13} /> Deshacer Entrada
-                    </button>
-                  )}
-                  {inc?.tipo === 'salida_fuera' && (
-                    <button
-                      onClick={() => handleSellarPase(inc.paseId, 'reingreso')}
-                      disabled={Boolean(procesandoId)}
-                      style={{
-                        height: '36px', padding: '0 12px', borderRadius: '8px', border: 'none',
-                        background: '#2563eb', color: '#fff', fontSize: '11.5px', fontWeight: '800',
-                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                      }}
-                    >
-                      <Check size={15} strokeWidth={3} /> Reingreso
-                    </button>
-                  )}
-                  {puedeDeshacerSalida && (
-                    <button
-                      onClick={() => handleDeshacerSalida(emp.id)}
-                      disabled={Boolean(procesandoId)}
-                      style={{
-                        height: '36px', padding: '0 12px', borderRadius: '8px',
-                        border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)',
-                        color: '#ef4444', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: '4px'
-                      }}
-                    >
-                      <Undo2 size={13} /> Deshacer Salida
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {!tieneMinimo3Letras ? (
+          {todosEnPlanta.length === 0 ? (
             <div style={{
               background: c.surfaceCard, border: `1px dashed ${c.border}`, borderRadius: '12px',
               padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
             }}>
-              Escribe al menos <strong style={{ color: c.text }}>3 letras</strong> del nombre o apellido del colaborador que se retira.
-            </div>
-          ) : demasiadasCoincidenciasSalida ? (
-            <div style={{
-              background: 'rgba(245, 158, 11, 0.10)',
-              border: '1.5px solid rgba(245, 158, 11, 0.4)',
-              borderRadius: '12px',
-              padding: '24px 18px',
-              textAlign: 'center',
-              color: '#d97706',
-              fontSize: '14px',
-              fontWeight: '800'
-            }}>
-              Hay {coincidenciasEnPlanta.length} personas en planta que coinciden con "{busquedaTexto}".<br />
-              <span style={{ fontSize: '12.5px', fontWeight: '600', color: c.textMuted }}>
-                Escribe una o dos letras más para que queden <strong>máximo 3 resultados</strong> y puedas registrar su salida.
-              </span>
+              Aún no hay colaboradores registrados en planta el día de hoy.
             </div>
           ) : coincidenciasEnPlanta.length === 0 ? (
             <div style={{
               background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
               padding: '28px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
             }}>
-              No se encontró personal en planta con "{busquedaTexto}".
+              No se encontró personal en planta que coincida con "{busquedaTexto}".
             </div>
           ) : (
             coincidenciasEnPlanta.map((emp) => {
@@ -1235,18 +1141,13 @@ export default function Caseta() {
               const inc = mapaIncidenciasHoy[emp.id];
               const tieneSalida = Boolean(reg?.hora_salida);
 
-              const tsEntrada = marcasEntradaRecientes[emp.id];
-              const puedeDeshacerEntrada = false;
-
-              const tsSalida = marcasSalidaRecientes[emp.id];
-              const puedeDeshacerSalida = false;
-
               return (
                 <div
                   key={emp.id}
                   style={{
                     background: c.surfaceCard,
                     border: `1.5px solid ${c.border}`,
+                    borderLeft: `4px solid ${tieneSalida ? '#64748b' : '#16a34a'}`,
                     borderRadius: '11px',
                     padding: '10px 13px',
                     display: 'flex',
@@ -1264,6 +1165,15 @@ export default function Caseta() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
+                        {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
+                        {reg?.hora_entrada && (
+                          <span style={{
+                            fontSize: '10.5px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px',
+                            color: '#16a34a', background: 'rgba(22,163,74,0.12)'
+                          }}>
+                            Entrada: {reg.hora_entrada}
+                          </span>
+                        )}
                         {inc && (
                           <span style={{
                             fontSize: '10px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px',
@@ -1277,21 +1187,6 @@ export default function Caseta() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
-                    {puedeDeshacerEntrada && (
-                      <button
-                        onClick={() => handleDeshacerEntrada(emp.id)}
-                        disabled={Boolean(procesandoId)}
-                        style={{
-                          height: '36px', padding: '0 10px', borderRadius: '8px',
-                          border: '1px solid rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.12)',
-                          color: '#d97706', fontSize: '11px', fontWeight: '800', cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', gap: '4px'
-                        }}
-                      >
-                        <Undo2 size={13} /> Deshacer Entrada
-                      </button>
-                    )}
-
                     {inc?.tipo === 'salida_fuera' ? (
                       <button
                         onClick={() => handleSellarPase(inc.paseId, 'reingreso')}
@@ -1305,29 +1200,13 @@ export default function Caseta() {
                         <Check size={15} strokeWidth={3} /> Reingreso
                       </button>
                     ) : tieneSalida ? (
-                      <>
-                        <span style={{
-                          fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
-                          background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
-                          padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                        }}>
-                          <CheckCircle2 size={13} /> Salida registrada
-                        </span>
-                        {puedeDeshacerSalida && (
-                          <button
-                            onClick={() => handleDeshacerSalida(emp.id)}
-                            disabled={Boolean(procesandoId)}
-                            style={{
-                              height: '36px', padding: '0 10px', borderRadius: '8px',
-                              border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)',
-                              color: '#ef4444', fontSize: '11px', fontWeight: '800', cursor: 'pointer',
-                              display: 'inline-flex', alignItems: 'center', gap: '4px'
-                            }}
-                          >
-                            <Undo2 size={13} /> Deshacer
-                          </button>
-                        )}
-                      </>
+                      <span style={{
+                        fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
+                        background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
+                        padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                      }}>
+                        <CheckCircle2 size={13} /> Salida: {reg.hora_salida}
+                      </span>
                     ) : (
                       <button
                         type="button"
