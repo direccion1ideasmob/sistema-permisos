@@ -650,12 +650,7 @@ export default function Caseta() {
 
   const demasiadasCoincidenciasEntrada = tieneMinimo3Letras && coincidenciasEntrada.length > 3;
 
-  const recientesEnPlanta = todosEnPlanta.filter((emp) => {
-    const recE = marcasEntradaRecientes[emp.id] && (ahoraMs - marcasEntradaRecientes[emp.id] < 60000);
-    const recS = marcasSalidaRecientes[emp.id] && (ahoraMs - marcasSalidaRecientes[emp.id] < 60000);
-    const fueraTemp = mapaIncidenciasHoy[emp.id]?.tipo === 'salida_fuera';
-    return Boolean(recE || recS || fueraTemp);
-  });
+  const recientesEnPlanta = todosEnPlanta.filter((emp) => mapaIncidenciasHoy[emp.id]?.tipo === 'salida_fuera');
 
   const coincidenciasEnPlanta = tieneMinimo3Letras
     ? todosEnPlanta.filter((emp) => (emp.nombre_completo || '').toLowerCase().includes(termino))
@@ -1130,9 +1125,9 @@ export default function Caseta() {
             const inc = mapaIncidenciasHoy[emp.id];
             const tieneSalida = Boolean(reg?.hora_salida);
             const tsEntrada = marcasEntradaRecientes[emp.id];
-            const puedeDeshacerEntrada = Boolean(tsEntrada && !tieneSalida && (ahoraMs - tsEntrada < 60000));
+            const puedeDeshacerEntrada = false;
             const tsSalida = marcasSalidaRecientes[emp.id];
-            const puedeDeshacerSalida = Boolean(tsSalida && tieneSalida && (ahoraMs - tsSalida < 60000));
+            const puedeDeshacerSalida = false;
 
             return (
               <div
@@ -1241,10 +1236,10 @@ export default function Caseta() {
               const tieneSalida = Boolean(reg?.hora_salida);
 
               const tsEntrada = marcasEntradaRecientes[emp.id];
-              const puedeDeshacerEntrada = Boolean(tsEntrada && !tieneSalida && (ahoraMs - tsEntrada < 60000));
+              const puedeDeshacerEntrada = false;
 
               const tsSalida = marcasSalidaRecientes[emp.id];
-              const puedeDeshacerSalida = Boolean(tsSalida && tieneSalida && (ahoraMs - tsSalida < 60000));
+              const puedeDeshacerSalida = false;
 
               return (
                 <div
