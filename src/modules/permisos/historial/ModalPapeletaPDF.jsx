@@ -389,8 +389,8 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                   }}>
                     <div>
                       <span style={{ fontSize: '9px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>TIPO Y HORARIO SOLICITADO</span>
-                      <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '11.5px', display: 'block' }}>{p.tipo_permiso}</strong>
-                      {(tipo === 'salida' || tipo === 'retardo') && horarioSolicitado && (
+                      <strong style={{ textTransform: 'uppercase', color: '#0f172a', fontSize: '11.5px', display: 'block' }}>{tipo === 'falta' && seRegresaTrabajador ? 'FALTA (POR RETARDO)' : p.tipo_permiso}</strong>
+                      {(tipo === 'salida' || tipo === 'retardo' || seRegresaTrabajador) && horarioSolicitado && (
                         <span style={{ fontSize: '10px', color: '#475569', fontWeight: '700', display: 'block', marginTop: '1px' }}>
                           {horarioSolicitado}
                         </span>
@@ -409,7 +409,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                         <ShieldCheck size={11} strokeWidth={2.5} color="#0f172a" />
                         SELLO CASETA
                       </span>
-                      {(tipo === 'falta' || tipo === 'vacaciones') ? (
+                      {((tipo === 'falta' && !seRegresaTrabajador) || tipo === 'vacaciones') ? (
                         <strong style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>N/A</strong>
                       ) : seRegresaTrabajador ? (
                         <strong style={{ color: '#b45309', fontSize: '11px', display: 'block' }}>

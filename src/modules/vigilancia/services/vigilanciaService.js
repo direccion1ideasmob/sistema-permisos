@@ -145,15 +145,15 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           color: '#10b981',
           bg: 'rgba(16,185,129,0.12)'
         };
-      } else if (tipo === 'falta' && !esRechazado) {
+      } else if (tipo === 'falta' && !esRechazado && !seRegresaACasa) {
         mapaIncidenciasHoy[rawPase.usuario_id] = {
           tipo: 'ausencia_autorizada',
           paseId: rawPase.id,
-          etiqueta: '📋 Falta Justificada',
+          etiqueta: '📋 Falta',
           color: '#8b5cf6',
           bg: 'rgba(139,92,246,0.12)'
         };
-      } else if (tipo === 'retardo') {
+      } else if (tipo === 'retardo' || seRegresaACasa) {
         if (seRegresaACasa) {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_regresa',
@@ -199,13 +199,12 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     // Los pases de puerta solo aplican para hoy y para Salida o Retardo
     if (fechaTarget !== hoy) return;
-    if (tipo !== 'salida' && tipo !== 'retardo') return;
+    if (tipo !== 'salida' && tipo !== 'retardo' && !seRegresaACasa) return;
 
     // Si es una salida rechazada o cancelada, o si el empleado ya fue regresado a casa hoy en un retardo, no cruza puerta como salida
     if (tipo === 'salida' && (esRechazado || pagoLower === 'cancelado')) return;
     const fueRegresadoHoy = pasesDelDia.some(otro =>
       otro.usuario_id === rawPase.usuario_id &&
-      (otro.tipo_permiso || '').toLowerCase() === 'retardo' &&
       ((otro.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(otro.observaciones || ''))
     );
     if (tipo === 'salida' && fueRegresadoHoy) return;
@@ -243,7 +242,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     if (
       rawPase.estado_general === 'completado_caseta' ||
       (tipo === 'retardo' && !seRegresaACasa && yaRegreso) ||
-      (tipo === 'retardo' && seRegresaACasa && yaSeRetiro) ||
+      (seRegresaACasa && yaSeRetiro) ||
       (tipo === 'salida' && yaSalio && (!requiereRegreso || yaRegreso))
     ) {
       crucesCompletadosHoy.push(p);

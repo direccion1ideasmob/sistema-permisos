@@ -154,7 +154,11 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const esGerente = solicitud.firma_2_id === usuario.id && solicitud.firma_2_estado === 'pendiente';
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
-  const updates = { pago: dictamenPago };
+  const esRetardoRegresaAprob = (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && String(dictamenPago || '').toLowerCase().includes('regresa');
+  const updates = {
+    pago: esRetardoRegresaAprob ? 'Sin goce (Se regresa)' : dictamenPago,
+    ...(esRetardoRegresaAprob ? { tipo_permiso: 'falta', total_horas: 8 } : {})
+  };
   let siguientesEnFirmar = [];
   let nuevoFolioGenerado = null;
   let huboRelevoSubareaADepto = false;
@@ -225,7 +229,17 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
   const puedeCerrarFirma3EnEsteClic = usuario.rol === 'gerente_rh' || firma1EstabaListaAntes;
 
-  if (esRH && firma1Lista && firma2Lista && puedeCerrarFirma3EnEsteClic) {
+  if (esRetardoRegresaAprob && !esRH) {
+    updates.estado_general = 'autorizado';
+    if (updates.firma_2_estado !== 'autorizado' && solicitud.firma_2_estado === 'pendiente') updates.firma_2_estado = 'omitido';
+    if (solicitud.firma_3_estado === 'pendiente') updates.firma_3_estado = 'omitido';
+    siguientesEnFirmar = [];
+    const nominaEmpleado = (solicitud.usuarios?.tipo_personal || solicitud.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
+    let letra = nominaEmpleado.includes('admin') ? 'A' : (nominaEmpleado.includes('obra') ? 'O' : 'P');
+    const anio = new Date().getFullYear().toString().slice(-2);
+    nuevoFolioGenerado = await generarFolioOficial(letra, anio);
+    updates.folio = nuevoFolioGenerado;
+  } else if (esRH && firma1Lista && firma2Lista && puedeCerrarFirma3EnEsteClic) {
     updates.firma_3_estado = 'autorizado';
     updates.estado_general = 'autorizado';
     updates.firma_3_id = usuario.id;
@@ -354,8 +368,12 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     : `RECHAZO (${nomCortoRech}): ${motivoLimpioRech}`;
 
   const updates = {
-    estado_general: 'rechazado',
-    ...(esRetardoRech ? { pago: 'Se regresa' } : {}),
+    estado_general: esRetardoRech ? 'autorizado' : 'rechazado',
+    ...(esRetardoRech ? {
+      tipo_permiso: 'falta',
+      pago: 'Sin goce (Se regresa)',
+      total_horas: 8
+    } : {}),
     observaciones: `${solicitud.observaciones || ''} | ${etiquetaBitacora}`
   };
 
@@ -447,57 +465,68 @@ export const crearNuevaSolicitudPermiso = async ({
   tipoPermiso, naturaleza, fechaHoy, fechaPermiso, fechaFinVacaciones,
   horaSalida, regresaMismoDia, horaRegreso, horaLlegadaRetardo, motivo, totalHoras, esRetardoUrgente
 }) => {
-  // === VALIDACIÓN DE COHERENCIA DIARIA DEL COLABORADOR ===
-  const { data: pasesMismaFecha } = await supabase
-    .from('permisos')
-    .select('id, folio, tipo_permiso, estado_general, pago, observaciones')
-    .eq('usuario_id', userId)
-    .eq('fecha_permiso', fechaPermiso);
+  // === VALIDACIÓN ESTRICTA DE COHERENCIA DIARIA DEL COLABORADOR ===
+  const fechaInicioNueva = fechaPermiso;
+  const fechaFinNueva = tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : fechaPermiso;
 
-  const activosMismaFecha = (pasesMismaFecha || []).filter(p => {
+  const { data: pasesUsuario } = await supabase
+    .from('permisos')
+    .select('id, folio, fecha_permiso, fecha_fin, tipo_permiso, estado_general, pago, observaciones')
+    .eq('usuario_id', userId)
+    .lte('fecha_permiso', fechaFinNueva);
+
+  const activosMismaFecha = (pasesUsuario || []).filter(p => {
+    const finPase = p.fecha_fin || p.fecha_permiso;
+    const seTraslapa = p.fecha_permiso <= fechaFinNueva && finPase >= fechaInicioNueva;
+    if (!seTraslapa) return false;
+
     const pagoL = String(p.pago || '').toLowerCase();
     const obsL = String(p.observaciones || '');
     const esCancelado = pagoL === 'cancelado' || /CANCELADO por/i.test(obsL);
-    return !esCancelado;
+    if (esCancelado) return false;
+
+    const esRegresoCasa = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
+    if (p.estado_general === 'rechazado' && !esRegresoCasa) return false;
+
+    return true;
   });
 
-  const retardoPrevio = activosMismaFecha.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
-  const fueRegresadoACasa = activosMismaFecha.some(p =>
+  const paseRegresadoACasa = activosMismaFecha.find(p =>
     (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '')
   );
-  const tieneAusenciaCompleta = activosMismaFecha.some(p =>
-    ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase()) && p.estado_general !== 'rechazado'
+  const paseAusenciaCompleta = activosMismaFecha.find(p =>
+    ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase())
   );
+  const retardoPrevio = activosMismaFecha.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
 
-  if (tipoPermiso === 'retardo') {
-    if (retardoPrevio) {
+  if (paseRegresadoACasa) {
+    throw new Error(`No es posible generar otro permiso para esta fecha porque ya existe un dictamen de retiro de planta (Falta por retardo • Folio ${paseRegresadoACasa.folio}).`);
+  }
+
+  if (paseAusenciaCompleta) {
+    const etiquetaExistente = (paseAusenciaCompleta.tipo_permiso || '').toUpperCase();
+    throw new Error(`No es posible registrar este permiso porque ya existe un registro de ${etiquetaExistente} (${paseAusenciaCompleta.folio}) para esta fecha.`);
+  }
+
+  if (retardoPrevio) {
+    if (tipoPermiso === 'retardo') {
       throw new Error(`Ya existe un registro de retardo (${retardoPrevio.folio}) para esta fecha. No es posible generar dos retardos el mismo día.`);
     }
-    if (tieneAusenciaCompleta) {
-      throw new Error('Ya tienes una Falta o Vacaciones registradas para esta fecha.');
+    if ((tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') && tieneSelloFisicoCaseta(retardoPrevio)) {
+      throw new Error(`No es posible registrar una ${tipoPermiso} para hoy porque ya tienes un registro de llegada en Caseta (${retardoPrevio.folio}).`);
+    }
+    if (tipoPermiso === 'falta' && !tieneSelloFisicoCaseta(retardoPrevio)) {
+      await supabase
+        .from('permisos')
+        .update({
+          estado_general: 'rechazado',
+          pago: 'Cancelado',
+          observaciones: `${retardoPrevio.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de Falta del mismo día`
+        })
+        .eq('id', retardoPrevio.id);
     }
   }
 
-  if (tipoPermiso === 'salida') {
-    if (fueRegresadoACasa) {
-      throw new Error('No es posible solicitar un pase de Salida hoy porque existe un dictamen de retiro de planta (Se regresa a casa) en este turno.');
-    }
-    if (tieneAusenciaCompleta) {
-      throw new Error('No es posible solicitar un pase de Salida en una fecha donde tienes Falta o Vacaciones registradas.');
-    }
-  }
-
-  // Si solicita una FALTA pero tenía un RETARDO previo ese día que jamás cruzó caseta, cancelar automáticamente el retardo previo
-  if (tipoPermiso === 'falta' && retardoPrevio && !tieneSelloFisicoCaseta(retardoPrevio)) {
-    await supabase
-      .from('permisos')
-      .update({
-        estado_general: 'rechazado',
-        pago: 'Cancelado',
-        observaciones: `${retardoPrevio.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de Falta del mismo día`
-      })
-      .eq('id', retardoPrevio.id);
-  }
   const [{ data: depto, error: errD }, { data: usuarioSolicitante }, { data: todosEmpDepto }] = await Promise.all([
     supabase.from('departamentos').select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id').eq('id', deptoId).single(),
     supabase.from('usuarios').select('area, reporta_a_id, tipo_personal').eq('id', userId).maybeSingle(),
@@ -836,8 +865,8 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
       firma_1_estado: (permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? 'autorizado' : 'rechazado',
       firma_2_estado: permiso.firma_2_estado === 'pendiente' ? 'omitido' : permiso.firma_2_estado,
       firma_3_estado: permiso.firma_3_estado === 'pendiente' ? 'omitido' : permiso.firma_3_estado,
-      estado_general: 'rechazado',
-      ...((permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? { pago: 'Se regresa' } : {}),
+      estado_general: (permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? 'autorizado' : 'rechazado',
+      ...((permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? { tipo_permiso: 'falta', pago: 'Sin goce (Se regresa)', total_horas: 8 } : {}),
       observaciones: `${permiso.observaciones || ''} | Rechazado por Jefatura: ${motivoRechazo.trim()}`
     })
     .eq('id', permiso.id);

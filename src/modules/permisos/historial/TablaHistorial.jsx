@@ -13,7 +13,6 @@ export const parsearDatosObservaciones = (obs = '') => {
 
   const segHorario = segmentos.find(s =>
     !/^\[.*\]$/.test(s) &&
-    !/llegada en puerta:/i.test(s) &&
     !/VoBo /i.test(s) &&
     !/^Nota /i.test(s) &&
     !/^Res:/i.test(s) &&
@@ -22,7 +21,10 @@ export const parsearDatosObservaciones = (obs = '') => {
     !/Rechazado por/i.test(s)
   ) || '';
 
-  const horarioSolicitado = segHorario.replace(/🕒|📅/g, '').trim();
+  const limpioHorario = segHorario.replace(/🕒|📅/g, '').trim();
+  const horarioSolicitado = /^Para el:\s*\d{4}-\d{2}-\d{2}$/i.test(limpioHorario)
+    ? 'Jornada completa'
+    : (limpioHorario || 'Jornada completa');
 
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
   const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
