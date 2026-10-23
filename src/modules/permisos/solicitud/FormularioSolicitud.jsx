@@ -40,6 +40,12 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   };
 
   useEffect(() => {
+    obtenerHoraLimiteTolerancia().then((h) => {
+      if (h) setHoraLimiteRH(h);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (tipoPermiso === 'vacaciones') {
       setNaturaleza('Vacaciones');
     } else if (naturaleza === 'Vacaciones' && tipoPermiso !== 'vacaciones') {
@@ -69,7 +75,15 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     }
   }, [tipoPermiso, userId, naturaleza]);
 
-  const esRetardoUrgente = tipoPermiso === 'retardo' && fechaPermiso === fechaHoy && hoy.getHours() >= 6;
+  const esRetardoUrgente = (() => {
+    if (tipoPermiso !== 'retardo' || fechaPermiso !== fechaHoy) return false;
+    if (naturaleza === 'Asunto de Trabajo') return false;
+    const [hLim, mLim] = (horaLimiteRH || '07:15').split(':').map(Number);
+    const minLimiteRH = (isNaN(hLim) ? 7 : hLim) * 60 + (isNaN(mLim) ? 15 : mLim);
+    const minCorteAnticipado = Math.max(0, minLimiteRH - 90); // 1 hora y media antes de la tolerancia de RH
+    const minActuales = hoy.getHours() * 60 + hoy.getMinutes();
+    return minActuales >= minCorteAnticipado;
+  })();
   const tieneSegundoCampoHorario = ['vacaciones', 'retardo', 'salida'].includes(tipoPermiso);
 
   const calcularHoras = () => {
@@ -410,7 +424,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           {esRetardoUrgente && (
             <div style={{ padding: '13px 15px', borderRadius: '11px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
               <ShieldAlert size={19} color={t.danger} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span><strong>ALERTA DE ACCESO:</strong> Estás registrando un aviso de retardo de último momento. Al enviar, el Gerente recibirá una notificación urgente para dictaminar tu acceso o si debes regresar a casa.</span>
+              <span><strong>AVISO DE RETARDO DEL DÍA:</strong> Estás registrando un retardo con menos de 1 hora y media de anticipación al límite de entrada ({horaLimiteRH} hrs). Tu Jefatura y Recursos Humanos recibirán la notificación para autorizar tu acceso.</span>
             </div>
           )}
 
