@@ -102,32 +102,12 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     const seRegresaPorDictamen = pagoLower.includes('regresa');
     const seRegresaACasa = seRegresaPorDictamen || (tipo === 'retardo' && esRechazado);
 
-    // Guardar en mapaIncidenciasHoy para mostrar badges informativos en el Pase de Lista
-    if (!mapaIncidenciasHoy[rawPase.usuario_id]) {
-      if (tipo === 'vacaciones' && !esRechazado) {
-        mapaIncidenciasHoy[rawPase.usuario_id] = { etiqueta: '🌴 Vacaciones', color: '#10b981', bg: 'rgba(16,185,129,0.12)' };
-      } else if (tipo === 'falta' && !esRechazado) {
-        mapaIncidenciasHoy[rawPase.usuario_id] = { etiqueta: '📅 Falta Justificada', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
-      } else if (tipo === 'retardo' && seRegresaACasa) {
-        mapaIncidenciasHoy[rawPase.usuario_id] = { etiqueta: '↩️ Se regresó a casa', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
-      } else if (tipo === 'salida' && !esRechazado) {
-        mapaIncidenciasHoy[rawPase.usuario_id] = { etiqueta: '🚪 Pase de Salida', color: '#0284c7', bg: 'rgba(2,132,199,0.12)' };
-      }
-    }
-
-    // Los pases de puerta solo aplican para hoy y para Salida o Retardo
-    if (fechaTarget !== hoy) return;
-    if (tipo !== 'salida' && tipo !== 'retardo') return;
-
-    // Si es una salida rechazada, no cruza puerta
-    if (tipo === 'salida' && esRechazado) return;
-
+    // Calcular estado de firmas y quién tiene el turno o quién autorizó
     const yaSalio = Boolean(horaSalidaCaseta);
     const yaRegreso = Boolean(horaEntradaCaseta);
     const yaSeRetiro = Boolean(horaRetiroCaseta);
     const requiereRegreso = obs.toLowerCase().includes('regresa:');
 
-    // En retardos: basta con que el Supervisor de Subárea haya dado VoBo, o Firma 1 esté resuelta, o ya se haya dictaminado/rechazado
     const tieneVoBoSubarea = /VoBo Sub[áa]rea:/i.test(obs);
     const f1Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido'].includes(rawPase.firma_1_estado) || tieneVoBoSubarea;
     const f2Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido'].includes(rawPase.firma_2_estado);
@@ -146,7 +126,6 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       esperandoFirmaDe = 'Recursos Humanos';
     }
 
-    // Extraer quién dio la instrucción para mostrárselo al guardia
     let autorizadoPor = null;
     const mGer = obs.match(/VoBo Gerencia:\s*([^|]+)/i);
     const mJefe = obs.match(/VoBo Jefe:\s*([^|]+)/i);
@@ -155,6 +134,73 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     else if (mJefe) autorizadoPor = mJefe[1].trim();
     else if (mSub) autorizadoPor = mSub[1].trim();
     else if (rawPase.firmante1?.nombre_completo && f1Resuelta) autorizadoPor = rawPase.firmante1.nombre_completo;
+
+    // Guardar en mapaIncidenciasHoy con su 'tipo' exacto para que Caseta.jsx lo muestre siempre
+    if (!mapaIncidenciasHoy[rawPase.usuario_id]) {
+      if (tipo === 'vacaciones' && !esRechazado) {
+        mapaIncidenciasHoy[rawPase.usuario_id] = {
+          tipo: 'ausencia_autorizada',
+          paseId: rawPase.id,
+          etiqueta: '🏖️ Vacaciones',
+          color: '#10b981',
+          bg: 'rgba(16,185,129,0.12)'
+        };
+      } else if (tipo === 'falta' && !esRechazado) {
+        mapaIncidenciasHoy[rawPase.usuario_id] = {
+          tipo: 'ausencia_autorizada',
+          paseId: rawPase.id,
+          etiqueta: '📋 Falta Justificada',
+          color: '#8b5cf6',
+          bg: 'rgba(139,92,246,0.12)'
+        };
+      } else if (tipo === 'retardo') {
+        if (seRegresaACasa) {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: 'retardo_regresa',
+            paseId: rawPase.id,
+            yaSeRetiroACasa: yaSeRetiro,
+            etiqueta: yaSeRetiro ? '↩️ Se retiró a casa' : '🚫 ORDEN: SE REGRESA A CASA',
+            color: '#ef4444',
+            bg: 'rgba(239,68,68,0.14)'
+          };
+        } else if (!jefeYaDecidioRetardo) {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: 'retardo_en_espera',
+            paseId: rawPase.id,
+            esperandoFirmaDe,
+            horaLlegadaPuerta,
+            etiqueta: `⏳ Esperando a: ${esperandoFirmaDe}`,
+            color: '#d97706',
+            bg: 'rgba(245,158,11,0.14)'
+          };
+        } else {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: 'retardo_autorizado',
+            paseId: rawPase.id,
+            autorizadoPor,
+            etiqueta: `🟢 Retardo Autorizado (${rawPase.pago || 'Autorizado'})`,
+            color: '#16a34a',
+            bg: 'rgba(22,163,74,0.12)'
+          };
+        }
+      } else if (tipo === 'salida' && !esRechazado) {
+        const estaFuera = yaSalio && requiereRegreso && !yaRegreso;
+        mapaIncidenciasHoy[rawPase.usuario_id] = {
+          tipo: estaFuera ? 'salida_fuera' : 'salida_autorizada',
+          paseId: rawPase.id,
+          etiqueta: estaFuera ? '🔵 Fuera (Pendiente reingreso)' : '🔵 Pase de Salida',
+          color: '#0284c7',
+          bg: 'rgba(2,132,199,0.12)'
+        };
+      }
+    }
+
+    // Los pases de puerta solo aplican para hoy y para Salida o Retardo
+    if (fechaTarget !== hoy) return;
+    if (tipo !== 'salida' && tipo !== 'retardo') return;
+
+    // Si es una salida rechazada, no cruza puerta
+    if (tipo === 'salida' && esRechazado) return;
 
     const p = {
       id: rawPase.id,
@@ -446,6 +492,21 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
       const nuevaObs = `${obsPrev} | [LLEGADA EN PUERTA: ${horaActual} hrs]`.replace(/^\s*\|\s*/, '');
       await supabase.from('permisos').update({ observaciones: nuevaObs }).eq('id', paseActual.id);
     }
+    // Enviar push recordatorio al firmante en turno indicando que ya está en puerta
+    const destExistente = [];
+    if (paseActual.firma_1_estado === 'pendiente' && paseActual.firma_1_id) destExistente.push(paseActual.firma_1_id);
+    else if (paseActual.firma_2_estado === 'pendiente' && paseActual.firma_2_id) destExistente.push(paseActual.firma_2_id);
+    else if (paseActual.firma_3_estado === 'pendiente' && paseActual.firma_3_id) destExistente.push(paseActual.firma_3_id);
+    if (destExistente.length > 0) {
+      try {
+        await enviarNotificacionPushUsuarios([...new Set(destExistente)], {
+          titulo: '🚨 EN PUERTA ESPERANDO ACCESO: RETARDO',
+          mensaje: `👤 ${emp.nombre_completo}\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando tu autorización.`,
+          fotoUrl: emp.foto_url || null,
+          urlDestino: '/aprobaciones'
+        });
+      } catch (_) {}
+    }
     return { resultado: 'en_espera_rh', data: paseActual };
   }
 
@@ -554,6 +615,31 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
     .single();
 
   if (errInsert) throw errInsert;
+
+  // Determinar a quién enviarle la Notificación Push al celular (idéntico a crearNuevaSolicitudPermiso)
+  let notificarA = [];
+  if (estadoFirma1 === 'pendiente' && jefeFinalId) {
+    notificarA = [jefeFinalId];
+  } else if (estadoFirma2 === 'pendiente' && gerenteFinalId) {
+    notificarA = [gerenteFinalId];
+  } else if (estadoFirma3 === 'pendiente') {
+    const destinatariosRH = listaRH.filter(u => u.id !== emp.id).map(u => u.id);
+    notificarA = destinatariosRH.length > 0 ? destinatariosRH : [rhFinalId].filter(Boolean);
+  }
+
+  if (notificarA.length > 0) {
+    try {
+      await enviarNotificacionPushUsuarios([...new Set(notificarA.filter(Boolean))], {
+        titulo: '🚨 URGENTE EN PUERTA: RETARDO',
+        mensaje: `👤 ${emp.nombre_completo}\n🏠 PERSONAL / FAMILIAR\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando tu autorización.`,
+        fotoUrl: emp.foto_url || null,
+        urlDestino: '/aprobaciones'
+      });
+    } catch (ePush) {
+      console.warn('Error enviando push de retardo en puerta:', ePush);
+    }
+  }
+
   return { resultado: 'en_espera_rh', data: creado };
 };
 

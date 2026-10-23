@@ -254,6 +254,18 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
   if (error) throw error;
 
+  // Si es un retardo con el colaborador esperando en puerta y el Jefe ya autorizó (y no lo regresó a casa),
+  // registrar su entrada en caseta automáticamente para que el guardia vea la resolución al instante
+  const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
+  if (
+    !seRegresaDictamen &&
+    (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' &&
+    /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '') &&
+    (updates.firma_1_estado === 'autorizado' || updates.estado_general === 'autorizado' || huboRelevoSubareaADepto)
+  ) {
+    try { await registrarCheckCaseta(solicitud.id, 'entrada'); } catch (_) {}
+  }
+
   if (updates.estado_general === 'autorizado') {
     const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
     const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
