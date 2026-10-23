@@ -114,8 +114,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     const jefeYaDecidioRetardo =
       ['autorizado', 'aprobado', 'completado_caseta', 'rechazado'].includes(rawPase.estado_general) ||
-      seRegresaPorDictamen ||
-      (tipo === 'retardo' && f1Resuelta && (rawPase.firma_1_id ? true : f2Resuelta));
+      seRegresaPorDictamen;
 
     let esperandoFirmaDe = 'Jefatura / RH';
     if (rawPase.firma_1_estado === 'pendiente' && rawPase.firmante1?.nombre_completo) {

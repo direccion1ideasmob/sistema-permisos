@@ -261,9 +261,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
   if (tipoLower === 'retardo' && estaEnPuerta) {
     const yaResolvioJefeORH =
-      updates.firma_1_estado === 'autorizado' ||
       updates.estado_general === 'autorizado' ||
-      huboRelevoSubareaADepto ||
       seRegresaDictamen;
 
     if (yaResolvioJefeORH) {
@@ -718,21 +716,23 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
     });
   }
 
-  // AVISO CORTO CASETA LINK RAPIDO
+  // AVISO CORTO CASETA LINK RAPIDO (Solo si desde Firma 1 se dictaminó regreso a casa)
   if ((permiso.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(permiso.observaciones || '')) {
-    try {
-      const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
-      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
-      if (guardias && guardias.length > 0) {
-        const nomTrab = permiso.usuarios?.nombre_completo || 'Colaborador';
-        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
-          titulo: seRegresa ? '🚫 ACCESO DENEGADO' : '🟢 ACCESO AUTORIZADO',
-          mensaje: seRegresa ? `👤 ${nomTrab} • Se retira de planta.` : `👤 ${nomTrab} • Dar paso a planta.`,
-          fotoUrl: permiso.usuarios?.foto_url || null,
-          urlDestino: '/caseta/asistencia'
-        });
-      }
-    } catch (_) {}
+    const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
+    if (seRegresa) {
+      try {
+        const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+        if (guardias && guardias.length > 0) {
+          const nomTrab = permiso.usuarios?.nombre_completo || 'Colaborador';
+          await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+            titulo: '🚫 ACCESO DENEGADO',
+            mensaje: `👤 ${nomTrab} • Se retira de planta.`,
+            fotoUrl: permiso.usuarios?.foto_url || null,
+            urlDestino: '/caseta/asistencia'
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   return etiquetaNotificacion;
