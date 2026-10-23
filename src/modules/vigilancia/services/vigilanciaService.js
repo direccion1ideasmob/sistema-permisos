@@ -407,92 +407,107 @@ export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancel
   return data;
 };
 
-export const registrarRetardoEnPuerta = async (empleadoId) => {
+export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
   const hoyStr = obtenerFechaLocalHoy();
   const ahora = new Date();
-  const horaCongelada = ahora.toTimeString().slice(0, 5);
-
-  const { data: existentes } = await supabase
-    .from('permisos')
-    .select('id, estado_general, observaciones')
-    .eq('usuario_id', empleadoId)
-    .eq('tipo_permiso', 'retardo')
-    .gte('fecha_inicio', `${hoyStr}T00:00:00`)
-    .lte('fecha_inicio', `${hoyStr}T23:59:59`)
-    .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
-
-  if (existentes && existentes.length > 0) {
-    const existente = existentes[0];
-    if (existente.estado_general === 'en_firmas') {
-      await registrarCheckCaseta(existente.id, 'congelar_llegada');
-      return { modo: 'en_espera_rh', id: existente.id };
-    }
-    if (existente.estado_general === 'autorizado' || existente.estado_general === 'aprobado') {
-      const seRegresa = String(existente.observaciones || '').toLowerCase().includes('se regresa');
-      if (seRegresa) {
-        return { modo: 'se_regresa', id: existente.id };
-      }
-      await registrarCheckCaseta(existente.id, 'entrada');
-      return { modo: 'entrada_registrada', id: existente.id };
-    }
-  }
+  const horaActual = ahora.toTimeString().slice(0, 5);
 
   const { data: emp, error: errEmp } = await supabase
     .from('usuarios')
     .select('*')
-    .eq('id', empleadoId)
-    .single();
+    .eq('id', usuarioId)
+    .maybeSingle();
 
   if (errEmp || !emp) throw new Error('No se encontró la información del colaborador.');
 
-  const { data: candidatos } = await supabase
-    .from('usuarios')
-    .select('id, rol, sede_id, departamento_id, area_id, subarea_id')
-    .eq('activo', true);
+  // Verificar si ya tiene un permiso de retardo hoy (usando la columna real fecha_permiso)
+  const { data: existentes } = await supabase
+    .from('permisos')
+    .select('*')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha_permiso', hoyStr)
+    .eq('tipo_permiso', 'retardo')
+    .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
 
-  const todos = candidatos || [];
+  if (existentes && existentes.length > 0) {
+    const paseActual = existentes[0];
+
+    // Si ya estaba autorizado, sellar su entrada y meterlo a asistencias_caseta
+    if (paseActual.estado_general === 'autorizado' || paseActual.estado_general === 'aprobado') {
+      const seRegresa = (paseActual.pago || '').toLowerCase().includes('regresa');
+      if (!seRegresa) {
+        await registrarCheckCaseta(paseActual.id, 'entrada');
+        return { resultado: 'entrada_registrada', data: paseActual };
+      }
+      return { resultado: 'se_regresa', data: paseActual };
+    }
+
+    // Si sigue en_firmas, estampar que ya está físicamente en la puerta esperando a RH
+    const obsPrev = paseActual.observaciones || '';
+    if (!/\[LLEGADA EN PUERTA:/i.test(obsPrev)) {
+      const nuevaObs = `${obsPrev} | [LLEGADA EN PUERTA: ${horaActual} hrs]`.replace(/^\s*\|\s*/, '');
+      await supabase.from('permisos').update({ observaciones: nuevaObs }).eq('id', paseActual.id);
+    }
+    return { resultado: 'en_espera_rh', data: paseActual };
+  }
+
+  // Buscar cadena de mando igual que permisosService.js
+  const { data: todosUsuarios } = await supabase
+    .from('usuarios')
+    .select('id, rol, sede_id, departamento_id, area_id, subarea_id, estado')
+    .eq('estado', 'activo');
+
+  const activos = todosUsuarios || [];
+  const esMismaSede = (u) => !emp.sede_id || !u.sede_id || String(u.sede_id) === String(emp.sede_id);
+
+  const jefeSubarea = emp.subarea_id ? activos.find(u => u.rol === 'jefe_subarea' && String(u.subarea_id) === String(emp.subarea_id) && u.id !== emp.id) : null;
+  const jefeArea = emp.area_id ? activos.find(u => u.rol === 'jefe_area' && String(u.area_id) === String(emp.area_id) && u.id !== emp.id) : null;
+  const gerenteDepto = emp.departamento_id ? activos.find(u => u.rol === 'gerente_depto' && String(u.departamento_id) === String(emp.departamento_id) && esMismaSede(u) && u.id !== emp.id) : null;
+  const directorSede = activos.find(u => u.rol === 'director_sede' && esMismaSede(u) && u.id !== emp.id) || null;
+  const rhEncargado = activos.find(u => u.rol === 'gerente_rh' && esMismaSede(u))
+    || activos.find(u => u.rol === 'rh_nominas' && esMismaSede(u))
+    || activos.find(u => u.rol === 'gerente_rh')
+    || activos.find(u => u.rol === 'rh_nominas')
+    || null;
+
   let firma1 = null;
   let firma2 = null;
-  let firmaRH = null;
 
-  if (emp.subarea_id) {
-    const sup = todos.find(u => u.rol === 'supervisor_subarea' && String(u.subarea_id) === String(emp.subarea_id));
-    if (sup && sup.id !== emp.id) firma1 = sup.id;
-  }
-  if (!firma1 && emp.area_id) {
-    const jefe = todos.find(u => u.rol === 'jefe_area' && String(u.area_id) === String(emp.area_id));
-    if (jefe && jefe.id !== emp.id) firma1 = jefe.id;
-  }
-  if (emp.departamento_id) {
-    const ger = todos.find(u => u.rol === 'gerente_division' && String(u.departamento_id) === String(emp.departamento_id));
-    if (ger && ger.id !== emp.id) {
-      if (!firma1) firma1 = ger.id;
-      else if (ger.id !== firma1) firma2 = ger.id;
+  if (emp.rol === 'colaborador') {
+    firma1 = jefeSubarea?.id || jefeArea?.id || gerenteDepto?.id || directorSede?.id || null;
+    firma2 = gerenteDepto?.id || directorSede?.id || null;
+    if (firma1 && firma2 && String(firma1) === String(firma2)) {
+      firma2 = directorSede?.id && String(directorSede.id) !== String(firma1) ? directorSede.id : null;
     }
+  } else if (emp.rol === 'jefe_subarea' || emp.rol === 'jefe_area') {
+    firma1 = gerenteDepto?.id || directorSede?.id || null;
+  } else if (emp.rol === 'gerente_depto') {
+    firma1 = directorSede?.id || null;
   }
 
-  const rhSede = todos.find(u => (u.rol === 'gerente_rh' || u.rol === 'rh_nominas') && String(u.sede_id) === String(emp.sede_id));
-  const rhGlobal = todos.find(u => u.rol === 'gerente_rh' || u.rol === 'rh_nominas');
-  firmaRH = rhSede?.id || rhGlobal?.id || null;
+  const firmaRH = rhEncargado?.id || null;
+  const folio = `RET-${ Math.floor(100000 + Math.random() * 900000) }`;
+  const observaciones = `🕒 Llegada en puerta: ${horaActual} hrs | [LLEGADA EN PUERTA: ${horaActual} hrs]`;
 
-  if (!firma1 && firmaRH) {
-    firma1 = firmaRH;
-  }
+  // calcular horas de retardo respecto a 07:00
+  const [hAct, mAct] = horaActual.split(':').map(Number);
+  const diffHoras = Math.max(0, parseFloat((((hAct * 60 + mAct) - (7 * 60)) / 60).toFixed(2)));
 
-  const folio = `RET-${Math.floor(100000 + Math.random() * 900000)}`;
-  const observaciones = `🕒 Llegada en puerta: ${horaCongelada} hrs | [LLEGADA EN PUERTA: ${horaCongelada} hrs] | Registro automático en caseta`;
-
+  // PAYLOAD CON LAS COLUMNAS 100% REALES DE PUBLIC.PERMISOS
   const payload = {
     folio,
     usuario_id: emp.id,
+    departamento_id: emp.departamento_id || null,
+    sede_id: emp.sede_id || null,
     tipo_permiso: 'retardo',
-    naturaleza: 'Solicitado en Caseta',
-    motivo: 'Llegada posterior al cierre de entrada. En espera de veredicto de RH / Jefatura.',
+    naturaleza: 'Personal',
+    fecha_permiso: hoyStr,
+    fecha_fin: hoyStr,
+    total_horas: diffHoras,
+    motivo: 'Llegada posterior al límite de tolerancia registrada en caseta. En espera de veredicto de RH / Jefatura.',
     observaciones,
-    fecha_inicio: `${hoyStr}T${horaCongelada}:00`,
-    fecha_fin: `${hoyStr}T${horaCongelada}:00`,
-    dias_solicitados: 0,
-    con_goce: false,
+    pago: 'Pendiente RH',
+    requiere_caseta: true,
     estado_general: 'en_firmas',
     firma_1_id: firma1,
     firma_1_estado: firma1 ? 'pendiente' : 'no_requerida',
@@ -509,56 +524,7 @@ export const registrarRetardoEnPuerta = async (empleadoId) => {
     .single();
 
   if (errInsert) throw errInsert;
-
-  const destinatariosSet = new Set();
-  if (firma1) destinatariosSet.add(firma1);
-  if (firma2) destinatariosSet.add(firma2);
-  if (firmaRH) destinatariosSet.add(firmaRH);
-  todos
-    .filter(u => (u.rol === 'gerente_rh' || u.rol === 'rh_nominas') && (!emp.sede_id || String(u.sede_id) === String(emp.sede_id)))
-    .forEach(u => destinatariosSet.add(u.id));
-
-  for (const destId of destinatariosSet) {
-    await enviarNotificacion({
-      usuario_id: destId,
-      titulo: '⏳ En puerta esperando veredicto',
-      mensaje: `${emp.nombre_completo} se encuentra en caseta (${horaCongelada} hrs). Autoriza su entrada o indica si se regresa.`,
-      tipo: 'solicitud',
-      permiso_id: creado.id
-    });
-  }
-
-  return { modo: 'en_espera_rh', permiso: creado };
-};
-
-export const deshacerSalidaReciente = async (usuarioId) => {
-  const hoyStr = obtenerFechaLocalHoy();
-  const { data: reg } = await supabase
-    .from('asistencias_caseta')
-    .select('id')
-    .eq('usuario_id', usuarioId)
-    .eq('fecha', hoyStr)
-    .maybeSingle();
-
-  if (reg) {
-    await supabase.from('asistencias_caseta').update({ hora_salida: null }).eq('id', reg.id);
-  }
-  return { ok: true };
-};
-
-export const deshacerEntradaReciente = async (usuarioId) => {
-  const hoyStr = obtenerFechaLocalHoy();
-  const { data: reg } = await supabase
-    .from('asistencias_caseta')
-    .select('id, hora_salida')
-    .eq('usuario_id', usuarioId)
-    .eq('fecha', hoyStr)
-    .maybeSingle();
-
-  if (reg && !reg.hora_salida) {
-    await supabase.from('asistencias_caseta').delete().eq('id', reg.id);
-  }
-  return { ok: true };
+  return { resultado: 'en_espera_rh', data: creado };
 };
 
 export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada', guardiaId = null, forzarDirectoRH = false) => {
@@ -567,43 +533,48 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
   const horaActual = ahora.toTimeString().slice(0, 5);
   const minutosDelDia = ahora.getHours() * 60 + ahora.getMinutes();
 
-  // Hora límite configurada por RH (por defecto 07:15)
   const horaLimiteStr = await obtenerHoraLimiteTolerancia();
   const [hLim, mLim] = (horaLimiteStr || '07:15').split(':').map(Number);
   const LIMITE_TOLERANCIA_MINUTOS = (isNaN(hLim) ? 7 : hLim) * 60 + (isNaN(mLim) ? 15 : mLim);
 
-  // 1. Revisar si el trabajador ya tenía un permiso tramitado para hoy (usando fecha_permiso real)
-  try {
-    const { data: pasesHoy } = await supabase
-      .from('permisos')
-      .select('id, tipo_permiso, estado_general, observaciones')
-      .eq('usuario_id', usuarioId)
-      .eq('fecha_permiso', hoyStr)
-      .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
+  // 1. Revisar si el colaborador ya tenía un permiso hoy
+  const { data: pasesHoy } = await supabase
+    .from('permisos')
+    .select('id, tipo_permiso, estado_general, pago, observaciones')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha_permiso', hoyStr)
+    .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
 
-    if (tipoMarca === 'entrada' && pasesHoy && pasesHoy.length > 0) {
-      const retardoHoy = pasesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
-      const faltaHoy = pasesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'falta');
+  const retardoHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+  const faltaHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'falta');
 
-      // Si llegó en tiempo (<= hora límite de RH) y tenía pedido un retardo o falta, se cancela por asistir a tiempo
-      if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {
-        if (retardoHoy && retardoHoy.estado_general !== 'completado_caseta') {
-          await cancelarPasePorInasistenciaOCambio(retardoHoy.id, `Asistió en horario normal (${horaActual} hrs)`);
-        }
-        if (faltaHoy) {
-          await cancelarPasePorInasistenciaOCambio(faltaHoy.id, `Asistió a laborar (${horaActual} hrs)`);
-        }
-      } else if (retardoHoy && (retardoHoy.estado_general === 'autorizado' || retardoHoy.estado_general === 'aprobado')) {
-        // Si ya tenía retardo autorizado, sellar también su papeleta
-        await registrarCheckCaseta(retardoHoy.id, 'entrada');
+  if (tipoMarca === 'entrada') {
+    // CASO A: Llega en tiempo (<= hora límite de RH) o RH lo valida directamente desde su panel
+    if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {
+      if (retardoHoy && retardoHoy.estado_general !== 'completado_caseta') {
+        await cancelarPasePorInasistenciaOCambio(retardoHoy.id, `Asistió en horario normal (${horaActual} hrs)`);
       }
+      if (faltaHoy) {
+        await cancelarPasePorInasistenciaOCambio(faltaHoy.id, `Asistió a laborar (${horaActual} hrs)`);
+      }
+    } else {
+      // CASO B: Llega DESPUÉS del límite de tolerancia de RH (> 07:15) marcado por Caseta
+      if (retardoHoy && (retardoHoy.estado_general === 'autorizado' || retardoHoy.estado_general === 'aprobado')) {
+        const seRegresa = (retardoHoy.pago || '').toLowerCase().includes('regresa');
+        if (seRegresa) {
+          return { resultado: 'se_regresa', data: retardoHoy };
+        }
+        // Ya tenía su retardo autorizado -> sella el pase y registra en asistencias_caseta
+        await registrarCheckCaseta(retardoHoy.id, 'entrada');
+        return { resultado: 'entrada_registrada', data: retardoHoy };
+      }
+
+      // NO tiene retardo autorizado aún -> Se detiene en puerta y manda el Retardo a Aprobaciones de RH/Jefe
+      return await registrarRetardoEnPuerta(usuarioId, guardiaId);
     }
-  } catch (e) {
-    console.warn('Aviso al sincronizar pase previo:', e.message);
   }
 
-  // 2. Guardar SIEMPRE en la tabla public.asistencias_caseta
-  // Columnas exactas: id, usuario_id, fecha, hora_entrada, hora_salida, registrado_por
+  // 2. Guardar en public.asistencias_caseta
   const { data: existente, error: errBusqueda } = await supabase
     .from('asistencias_caseta')
     .select('id, usuario_id, fecha, hora_entrada, hora_salida, registrado_por')
@@ -615,15 +586,9 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
 
   if (existente) {
     const cambios = {};
-    if (tipoMarca === 'entrada' && !existente.hora_entrada) {
-      cambios.hora_entrada = horaActual;
-    }
-    if (tipoMarca === 'salida') {
-      cambios.hora_salida = horaActual;
-    }
-    if (guardiaId) {
-      cambios.registrado_por = guardiaId;
-    }
+    if (tipoMarca === 'entrada' && !existente.hora_entrada) cambios.hora_entrada = horaActual;
+    if (tipoMarca === 'salida') cambios.hora_salida = horaActual;
+    if (guardiaId) cambios.registrado_por = guardiaId;
 
     const { data, error } = await supabase
       .from('asistencias_caseta')
@@ -652,4 +617,35 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
     if (error) throw error;
     return { resultado: 'ok', data };
   }
+};
+
+
+export const deshacerSalidaReciente = async (usuarioId) => {
+  const hoyStr = obtenerFechaLocalHoy();
+  const { data: reg } = await supabase
+    .from("asistencias_caseta")
+    .select("id")
+    .eq("usuario_id", usuarioId)
+    .eq("fecha", hoyStr)
+    .maybeSingle();
+
+  if (reg) {
+    await supabase.from("asistencias_caseta").update({ hora_salida: null }).eq("id", reg.id);
+  }
+  return { ok: true };
+};
+
+export const deshacerEntradaReciente = async (usuarioId) => {
+  const hoyStr = obtenerFechaLocalHoy();
+  const { data: reg } = await supabase
+    .from("asistencias_caseta")
+    .select("id")
+    .eq("usuario_id", usuarioId)
+    .eq("fecha", hoyStr)
+    .maybeSingle();
+
+  if (reg) {
+    await supabase.from("asistencias_caseta").delete().eq("id", reg.id);
+  }
+  return { ok: true };
 };

@@ -3,7 +3,8 @@ import {
   obtenerDatosCaseta,
   registrarAsistenciaLista,
   deshacerEntradaReciente,
-  obtenerFechaLocalHoy
+  obtenerFechaLocalHoy,
+  obtenerHoraLimiteTolerancia
 } from '../../vigilancia/services/vigilanciaService';
 import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import {
@@ -37,11 +38,13 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   const [mapaIncidencias, setMapaIncidencias] = useState({});
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState(null);
+  const [horaLimiteCorte, setHoraLimiteCorte] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
 
   const cargarAsistenciaDia = useCallback(async () => {
     setCargando(true);
     try {
       const sedeFiltro = usuario?.rol === 'superadmin' ? null : (usuario?.sede_id || null);
+      obtenerHoraLimiteTolerancia().then(h => h && setHoraLimiteCorte(h));
       const data = await obtenerDatosCaseta(sedeFiltro, fecha);
       setEmpleados(data.empleadosSede || []);
       setMapaAsistencias(data.mapaAsistencias || {});
@@ -397,13 +400,21 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   {tieneEntrada ? (
                     <>
-                      <span style={{
-                        fontSize: '11.5px', fontWeight: '800', color: '#16a34a',
-                        background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.25)',
-                        padding: '4px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                      }}>
-                        <Clock size={12} /> Entrada: {reg.hora_entrada}
-                      </span>
+                      {(() => {
+                        const esTarde = reg.hora_entrada > horaLimiteCorte;
+                        const col = esTarde ? '#d97706' : '#16a34a';
+                        const bg = esTarde ? 'rgba(245,158,11,0.12)' : 'rgba(22,163,74,0.10)';
+                        const bd = esTarde ? 'rgba(245,158,11,0.32)' : 'rgba(22,163,74,0.25)';
+                        return (
+                          <span style={{
+                            fontSize: '11.5px', fontWeight: '800', color: col,
+                            background: bg, border: `1px solid ${bd}`,
+                            padding: '4px 9px', borderRadius: '7px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                          }}>
+                            <Clock size={12} /> {esTarde ? `Retardo: ${reg.hora_entrada}` : `Entrada: ${reg.hora_entrada}`}
+                          </span>
+                        );
+                      })()}
 
                       {tieneSalida ? (
                         <span style={{
