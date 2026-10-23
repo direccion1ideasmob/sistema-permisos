@@ -20,16 +20,16 @@ export default defineConfig({
         description: 'Sistema de Permisos y Pases de Salida',
         theme_color: '#000000',
         background_color: '#ffffff',
-        display: 'standalone',
+        display: 'minimal-ui',
         orientation: 'portrait',
         icons: [
           {
-            src: 'https://cdn-icons-png.flaticon.com/512/552/552848.png',
+            src: '/LogoVerde-removebg-preview.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'https://cdn-icons-png.flaticon.com/512/552/552848.png',
+            src: '/LogoVerde-removebg-preview.png',
             sizes: '512x512',
             type: 'image/png'
           }
