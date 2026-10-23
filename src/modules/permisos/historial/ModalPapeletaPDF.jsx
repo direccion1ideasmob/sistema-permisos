@@ -107,9 +107,10 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
   };
 
   const getDictamenPago = (p) => {
-    if (p.estado_general === 'rechazado') return 'RECHAZADO';
     const pago = (p.pago || '').toLowerCase();
-    if (pago.includes('regresa')) return 'SE REGRESA (SIN ACCESO)';
+    if (pago === 'cancelado' || /CANCELADO por/i.test(p.observaciones || '')) return 'PASE CANCELADO';
+    if (pago.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '')) return 'SE REGRESA (SIN ACCESO)';
+    if (p.estado_general === 'rechazado') return 'NO AUTORIZADO';
     if (pago.includes('con goce')) return 'CON GOCE DE SUELDO';
     if (pago.includes('sin goce')) return 'SIN GOCE DE SUELDO';
     if (pago.includes('tiempo')) return 'REPOSICIÓN DE TIEMPO';
@@ -118,13 +119,12 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
 
   const renderFirmaTradicional = (cargo, nombre, firmaUrl, estado, esSolicitante = false) => {
     const est = (estado || '').toLowerCase();
-    const firmado = esSolicitante || ['autorizado', 'aprobado', 'auto_aprobado'].includes(est);
-    const rechazado = est === 'rechazado';
+    const intervino = esSolicitante || ['autorizado', 'aprobado', 'auto_aprobado', 'rechazado'].includes(est);
 
     return (
       <div className="papeleta-firma-item" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', textAlign: 'center', height: '100px', minWidth: 0 }}>
         <div style={{ height: '60px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%', paddingBottom: '4px' }}>
-          {firmado && firmaUrl ? (
+          {intervino && firmaUrl ? (
             <img
               src={firmaUrl}
               alt="Firma"
@@ -136,10 +136,8 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                 mixBlendMode: 'multiply'
               }}
             />
-          ) : firmado ? (
-            <span style={{ fontSize: '10px', fontWeight: '800', color: '#15803d', paddingBottom: '6px' }}>✓ AUTORIZADO DIGITAL</span>
-          ) : rechazado ? (
-            <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626', paddingBottom: '6px' }}>✗ RECHAZADO</span>
+          ) : intervino ? (
+            <span style={{ fontSize: '10px', fontWeight: '800', color: '#0f172a', paddingBottom: '6px' }}>✓ FIRMA DIGITAL</span>
           ) : (
             <span style={{ fontSize: '10px', color: '#64748b', paddingBottom: '6px' }}>—</span>
           )}
@@ -156,7 +154,15 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
     );
   };
 
-  const debeOcultarFirma = (estado) => ['escalado', 'auto_aprobado', 'omitido'].includes((estado || '').toLowerCase());
+  const debeOcultarFirma = (estado, estadoGeneral = '') => {
+    const est = (estado || '').toLowerCase();
+    if (['escalado', 'auto_aprobado', 'omitido'].includes(est)) return true;
+    // Si el permiso ya concluyó (autorizado o rechazado) y una firma quedó en 'pendiente', significa que esa etapa no intervino
+    if (est === 'pendiente' && ['autorizado', 'aprobado', 'completado_caseta', 'rechazado'].includes((estadoGeneral || '').toLowerCase())) {
+      return true;
+    }
+    return false;
+  };
 
   return (
     <div style={{
@@ -460,7 +466,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                           ))}
                           {motivoRechazo && (
                             <div style={{ fontSize: '11px', color: '#dc2626', lineHeight: 1.35, fontWeight: '700' }}>
-                              <strong>Rechazo:</strong> {motivoRechazo}
+                              <strong>{seRegresaTrabajador ? 'Dictamen:' : 'Motivo:'}</strong> {motivoRechazo}
                             </div>
                           )}
                         </div>
@@ -476,13 +482,15 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                   <div className="papeleta-firmas-row">
                     {renderFirmaTradicional('Solicitante', p.usuarios?.nombre_completo, p.usuarios?.firma_url, 'autorizado', true)}
                     {supervisorSubarea && renderFirmaTradicional('Supervisor Subárea', supervisorSubarea, firmaUrlSubarea, 'autorizado')}
-                    {!debeOcultarFirma(p.firma_1_estado) && firmanteJefe?.nombre_completo && (
+                    {!debeOcultarFirma(p.firma_1_estado, p.estado_general) && firmanteJefe?.nombre_completo && (
                       renderFirmaTradicional('Jefe de Área', firmanteJefe.nombre_completo, firmanteJefe.firma_url, p.firma_1_estado)
                     )}
-                    {!debeOcultarFirma(p.firma_2_estado) && firmanteGerente?.nombre_completo && (
+                    {!debeOcultarFirma(p.firma_2_estado, p.estado_general) && firmanteGerente?.nombre_completo && (
                       renderFirmaTradicional('Gerencia', firmanteGerente.nombre_completo, firmanteGerente.firma_url, p.firma_2_estado)
                     )}
-                    {renderFirmaTradicional('Recursos Humanos', firmanteRH?.nombre_completo, firmanteRH?.firma_url, p.firma_3_estado)}
+                    {!debeOcultarFirma(p.firma_3_estado, p.estado_general) && firmanteRH?.nombre_completo && (
+                      renderFirmaTradicional('Recursos Humanos', firmanteRH.nombre_completo, firmanteRH.firma_url, p.firma_3_estado)
+                    )}
                   </div>
                 </div>
               );

@@ -304,9 +304,9 @@ export default function TablaHistorial({
     );
   };
 
-  const ChipFirmaDetalle = ({ rolLabel, nombre, estado }) => {
+  const ChipFirmaDetalle = ({ rolLabel, nombre, estado, cerrado = true }) => {
     const est = (estado || 'pendiente').toLowerCase();
-    if (est === 'omitido' || (!nombre && est !== 'rechazado')) return null;
+    if (est === 'omitido' || (cerrado && est === 'pendiente') || (!nombre && est !== 'rechazado')) return null;
 
     const ok = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado'].includes(est);
     const rech = est === 'rechazado';
@@ -831,11 +831,11 @@ export default function TablaHistorial({
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
                               fontSize: '12px', fontWeight: '700', padding: '3px 9px', borderRadius: '6px',
-                              backgroundColor: esCancelado ? c.bg : !esAut ? 'rgba(239,68,68,0.10)' : esAlertaPago ? 'rgba(245,158,11,0.12)' : 'rgba(22,163,74,0.10)',
-                              color: esCancelado ? textSecundario : !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
-                              border: `1px solid ${esCancelado ? c.border : !esAut ? 'rgba(239,68,68,0.22)' : esAlertaPago ? 'rgba(245,158,11,0.28)' : 'rgba(22,163,74,0.22)'}`
+                              backgroundColor: esCancelado ? c.bg : seRegresoCasa ? 'rgba(245,158,11,0.12)' : !esAut ? 'rgba(239,68,68,0.10)' : esAlertaPago ? 'rgba(245,158,11,0.12)' : 'rgba(22,163,74,0.10)',
+                              color: esCancelado ? textSecundario : seRegresoCasa ? '#d97706' : !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
+                              border: `1px solid ${esCancelado ? c.border : seRegresoCasa ? 'rgba(245,158,11,0.28)' : !esAut ? 'rgba(239,68,68,0.22)' : esAlertaPago ? 'rgba(245,158,11,0.28)' : 'rgba(22,163,74,0.22)'}`
                             }}>
-                              {esCancelado ? 'Cancelado' : esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : (seRegresoCasa ? 'Se regresó' : 'Rechazado')}
+                              {esCancelado ? 'Cancelado' : seRegresoCasa ? 'Se regresa' : esAut ? (s.pago || 'Autorizado') : 'No autorizado'}
                             </span>
                           </td>
 
