@@ -92,9 +92,9 @@ export default function TarjetaAprobacion({
     const notasPrevias = [];
 
     for (const s of partes.slice(1)) {
-      const mNota = s.match(/^Nota\s+([^:]+):\s*(.+)$/i);
+      const mNota = s.replace(/^[💬📝\s]+/, '').trim().match(/^Nota\s+([^:]+):\s*([\s\S]+)$/i);
       if (mNota) notasPrevias.push({ autor: mNota[1].trim(), texto: mNota[2].trim() });
-      const mRes = s.match(/^Res:\s*(.+)$/i);
+      const mRes = s.replace(/^[💬📝\s]+/, '').trim().match(/^Res:\s*([\s\S]+)$/i);
       if (mRes) notasPrevias.push({ autor: 'Nota', texto: mRes[1].trim() });
       const mSub = s.match(/VoBo Sub[áa]rea:\s*(.*)/i);
       if (mSub) nombreSubarea = mSub[1].trim();

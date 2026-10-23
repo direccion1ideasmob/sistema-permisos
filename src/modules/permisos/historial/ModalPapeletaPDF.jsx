@@ -278,6 +278,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                 horaRegresadoCaseta,
                 horaLlegadaPuerta,
                 supervisorSubarea,
+                motivoRechazo,
                 notasFlujo
               } = parsearDatosObservaciones(p.observaciones);
               const { categoria, texto: motivoCrudo } = limpiarMotivo(p.asunto_motivo);
@@ -450,13 +451,18 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                       <span style={{ fontSize: '9px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
                         COMENTARIOS DE AUTORIZACIÓN
                       </span>
-                      {notasFlujo && notasFlujo.length > 0 ? (
+                      {(notasFlujo && notasFlujo.length > 0) || motivoRechazo ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {notasFlujo.map((n, idx) => (
+                          {notasFlujo && notasFlujo.map((n, idx) => (
                             <div key={idx} style={{ fontSize: '11px', color: '#0f172a', lineHeight: 1.35 }}>
                               <strong style={{ color: '#334155' }}>{n.autor}:</strong> {n.texto}
                             </div>
                           ))}
+                          {motivoRechazo && (
+                            <div style={{ fontSize: '11px', color: '#dc2626', lineHeight: 1.35, fontWeight: '700' }}>
+                              <strong>Rechazo:</strong> {motivoRechazo}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '4px' }}>

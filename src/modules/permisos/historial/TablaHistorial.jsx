@@ -37,14 +37,20 @@ export const parsearDatosObservaciones = (obs = '') => {
 
   const notasFlujo = [];
   segmentos.forEach(seg => {
-    const mNota = seg.match(/^Nota\s+([^:]+):\s*(.+)$/i);
+    const limpioSeg = seg.replace(/^[💬📝\s]+/, '').trim();
+    const mNota = limpioSeg.match(/^Nota\s+([^:]+):\s*([\s\S]+)$/i);
     if (mNota) {
-      notasFlujo.push({ autor: mNota[1].trim(), texto: mNota[2].trim() });
+      notasFlujo.push({ autor: mNota[1].trim(), texto: mNota[2].replace(/\s+/g, ' ').trim() });
       return;
     }
-    const mRes = seg.match(/^Res:\s*(.+)$/i);
+    const mComentario = limpioSeg.match(/^Comentario\s*([^:]*):\s*([\s\S]+)$/i);
+    if (mComentario) {
+      notasFlujo.push({ autor: (mComentario[1] || 'Autorización').trim(), texto: mComentario[2].replace(/\s+/g, ' ').trim() });
+      return;
+    }
+    const mRes = limpioSeg.match(/^Res:\s*([\s\S]+)$/i);
     if (mRes) {
-      notasFlujo.push({ autor: 'Autorización', texto: mRes[1].trim() });
+      notasFlujo.push({ autor: 'Autorización', texto: mRes[1].replace(/\s+/g, ' ').trim() });
     }
   });
 

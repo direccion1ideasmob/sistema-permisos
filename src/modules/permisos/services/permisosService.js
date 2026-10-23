@@ -240,15 +240,16 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     updates.folio = nuevoFolioGenerado;
   }
 
-  if (comentarios && comentarios.trim()) {
+  if (comentarios && String(comentarios).trim()) {
     const partesNom = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
     const nomCorto = partesNom.length > 2 ? `${partesNom[0]} ${partesNom[partesNom.length - 2]}` : partesNom.join(' ');
     let etiquetaRolNota = 'Jefe';
     if (usuario.rol === 'encargado') etiquetaRolNota = 'Subárea';
-    else if (esRH && (!esFirmante1Actual || firma1EstabaListaAntes)) etiquetaRolNota = 'RH';
+    else if ((esRH || usuario.rol === 'superadmin') && (!esFirmante1Actual || firma1EstabaListaAntes)) etiquetaRolNota = 'RH';
     else if (esGerente) etiquetaRolNota = 'Gerencia';
+    const comentarioLimpio = String(comentarios).replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
     const baseObsNota = updates.observaciones || solicitud.observaciones || '';
-    updates.observaciones = `${baseObsNota} | Nota ${etiquetaRolNota} (${nomCorto}): ${comentarios.trim().replace(/\|/g, '/')}`;
+    updates.observaciones = `${baseObsNota} | Nota ${etiquetaRolNota} (${nomCorto}): ${comentarioLimpio}`;
   }
 
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
