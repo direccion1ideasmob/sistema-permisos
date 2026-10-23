@@ -640,7 +640,9 @@ export default function Caseta() {
   const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
 
   const retenidosActivosPuerta = todosSinEntrada.filter((emp) => {
-    const t = mapaIncidenciasHoy[emp.id]?.tipo || 'normal';
+    const inc = mapaIncidenciasHoy[emp.id];
+    const t = inc?.tipo || 'normal';
+    if (t === 'retardo_regresa' && inc?.yaSeRetiroACasa) return false;
     return t === 'retardo_en_espera' || t === 'retardo_regresa' || t === 'retardo_autorizado';
   });
 
@@ -917,77 +919,115 @@ export default function Caseta() {
       {/* PESTAÑA 1: ENTRADA */}
       {subTabAsistencia === 'por_llegar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          {!tieneMinimo3Letras && retenidosActivosPuerta.map((emp) => {
-            const inc = mapaIncidenciasHoy[emp.id];
-            const tipoInc = inc?.tipo || 'normal';
-            return (
-              <div
-                key={emp.id}
-                style={{
-                  background: c.surfaceCard,
-                  border: `1.5px solid ${tipoInc === 'retardo_en_espera' ? '#f59e0b' : (tipoInc === 'retardo_regresa' ? '#ef4444' : '#16a34a')}`,
-                  borderRadius: '11px',
-                  padding: '10px 13px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                  <AvatarColaborador u={emp} size={38} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{emp.nombre_completo}</div>
-                    {inc && (
-                      <span style={{
-                        fontSize: '10.5px', fontWeight: '800', padding: '1.5px 7px', borderRadius: '5px',
-                        color: inc.color, background: inc.bg, display: 'inline-block', marginTop: '3px'
-                      }}>
-                        {inc.etiqueta}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {tipoInc === 'retardo_en_espera' ? (
-                    <span style={{
-                      fontSize: '11.5px', fontWeight: '800', color: '#d97706',
-                      background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.32)',
-                      padding: '6px 11px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                    }}>
-                      <Hourglass size={13} /> En espera de RH
-                    </span>
-                  ) : tipoInc === 'retardo_regresa' && !inc.yaSeRetiroACasa ? (
-                    <button
-                      onClick={() => handleSellarPase(inc.paseId, 'retiro')}
-                      disabled={Boolean(procesandoId)}
-                      style={{
-                        height: '38px', padding: '0 14px', borderRadius: '9px', border: 'none',
-                        background: '#ef4444', color: '#fff', fontSize: '12px', fontWeight: '800',
-                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                      }}
-                    >
-                      <CornerUpLeft size={15} /> Confirmar Retiro
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
-                      disabled={Boolean(procesandoId)}
-                      style={{
-                        minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
-                        background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '900',
-                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                      }}
-                    >
-                      <Check size={20} strokeWidth={3} />
-                    </button>
-                  )}
-                </div>
+          {retenidosActivosPuerta.length > 0 && (
+            <div style={{
+              background: c.surfaceCard,
+              border: `2px solid ${c.border}`,
+              borderRadius: '14px',
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{
+                fontSize: '11.5px',
+                fontWeight: '900',
+                color: c.textMuted,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span>🔔 En puerta (En espera y Resoluciones)</span>
+                <span>{retenidosActivosPuerta.length}</span>
               </div>
-            );
-          })}
+
+              {retenidosActivosPuerta.map((emp) => {
+                const inc = mapaIncidenciasHoy[emp.id];
+                const tipoInc = inc?.tipo || 'normal';
+                const esAutorizado = tipoInc === 'retardo_autorizado';
+                const esRegresa = tipoInc === 'retardo_regresa';
+
+                return (
+                  <div
+                    key={emp.id}
+                    style={{
+                      background: esAutorizado
+                        ? (modoOscuro ? 'rgba(22,163,74,0.14)' : '#f0fdf4')
+                        : esRegresa
+                        ? (modoOscuro ? 'rgba(239,68,68,0.14)' : '#fef2f2')
+                        : c.bg,
+                      border: `2px solid ${esAutorizado ? '#16a34a' : (esRegresa ? '#ef4444' : '#f59e0b')}`,
+                      borderRadius: '11px',
+                      padding: '10px 13px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      <AvatarColaborador u={emp} size={40} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '14.5px', fontWeight: '900', color: c.text }}>
+                          {emp.nombre_completo}
+                        </div>
+                        {inc && (
+                          <span style={{
+                            fontSize: '11px', fontWeight: '900', padding: '2px 8px', borderRadius: '6px',
+                            color: inc.color, background: inc.bg, display: 'inline-block', marginTop: '3px'
+                          }}>
+                            {inc.etiqueta}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {tipoInc === 'retardo_en_espera' ? (
+                        <span style={{
+                          fontSize: '11.5px', fontWeight: '800', color: '#d97706',
+                          background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.32)',
+                          padding: '6px 11px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                        }}>
+                          <Hourglass size={13} /> En espera...
+                        </span>
+                      ) : esRegresa ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSellarPase(inc.paseId, 'retiro')}
+                          disabled={Boolean(procesandoId)}
+                          style={{
+                            height: '40px', padding: '0 14px', borderRadius: '9px', border: 'none',
+                            background: '#ef4444', color: '#fff', fontSize: '12.5px', fontWeight: '900',
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                          }}
+                        >
+                          <CornerUpLeft size={15} /> Confirmar Retiro
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSellarPase(inc.paseId, 'entrada')}
+                          disabled={Boolean(procesandoId)}
+                          style={{
+                            height: '42px', padding: '0 16px', borderRadius: '10px', border: 'none',
+                            background: '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '900',
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                            boxShadow: '0 4px 12px rgba(22,163,74,0.28)'
+                          }}
+                        >
+                          <Check size={18} strokeWidth={3} /> Dar Paso a Planta
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {!tieneMinimo3Letras ? (
             <div style={{

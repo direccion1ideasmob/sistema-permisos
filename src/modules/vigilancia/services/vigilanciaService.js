@@ -159,7 +159,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             tipo: 'retardo_regresa',
             paseId: rawPase.id,
             yaSeRetiroACasa: yaSeRetiro,
-            etiqueta: yaSeRetiro ? '↩️ Se retiró a casa' : '🚫 ORDEN: SE REGRESA A CASA',
+            etiqueta: yaSeRetiro ? '↩️ Se retiró' : '🚫 ACCESO DENEGADO — SE RETIRA',
             color: '#ef4444',
             bg: 'rgba(239,68,68,0.14)'
           };
@@ -177,10 +177,12 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_autorizado',
             paseId: rawPase.id,
-            autorizadoPor,
-            etiqueta: `🟢 Retardo Autorizado (${rawPase.pago || 'Autorizado'})`,
+            autorizadoPor: autorizadoPor || 'Jefatura / RH',
+            dictamen: rawPase.pago || 'Autorizado',
+            yaEntro: yaRegreso,
+            etiqueta: '✅ ACCESO AUTORIZADO — DAR PASO',
             color: '#16a34a',
-            bg: 'rgba(22,163,74,0.12)'
+            bg: 'rgba(22,163,74,0.16)'
           };
         }
       } else if (tipo === 'salida' && !esRechazado) {

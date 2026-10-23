@@ -254,16 +254,41 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
   if (error) throw error;
 
-  // Si es un retardo con el colaborador esperando en puerta y el Jefe ya autorizó (y no lo regresó a casa),
-  // registrar su entrada en caseta automáticamente para que el guardia vea la resolución al instante
-  const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
-  if (
-    !seRegresaDictamen &&
-    (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' &&
-    /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '') &&
-    (updates.firma_1_estado === 'autorizado' || updates.estado_general === 'autorizado' || huboRelevoSubareaADepto)
-  ) {
-    try { await registrarCheckCaseta(solicitud.id, 'entrada'); } catch (_) {}
+  if ((solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
+    try {
+      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+      if (guardias && guardias.length > 0) {
+        const nomTrab = solicitud.usuarios?.nombre_completo || 'Colaborador';
+        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+          titulo: '🚫 ACCESO DENEGADO',
+          mensaje: `👤 ${nomTrab} • Se retira de planta.`,
+          fotoUrl: solicitud.usuarios?.foto_url || null,
+          urlDestino: '/caseta/asistencia'
+        });
+      }
+    } catch (_) {}
+  }
+
+  // Notificar a Caseta si el colaborador estaba esperando resolución en puerta
+  if ((solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
+    const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
+    const yaResolvioJefeORH = updates.firma_1_estado === 'autorizado' || updates.estado_general === 'autorizado' || seRegresaDictamen;
+    if (yaResolvioJefeORH) {
+      try {
+        const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+        if (guardias && guardias.length > 0) {
+          const nomTrab = solicitud.usuarios?.nombre_completo || 'Colaborador';
+          await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+            titulo: seRegresaDictamen ? '🚫 ACCESO DENEGADO' : '🟢 ACCESO AUTORIZADO',
+            mensaje: seRegresaDictamen
+              ? `👤 ${nomTrab} • Se retira de planta.`
+              : `👤 ${nomTrab} • Dar paso a planta.`,
+            fotoUrl: solicitud.usuarios?.foto_url || null,
+            urlDestino: '/caseta/asistencia'
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   if (updates.estado_general === 'autorizado') {
@@ -272,10 +297,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
       titulo: seRegresa ? `↩️ Retardo Dictaminado: Se Regresa` : `✅ ${tipoPase} Autorizado`,
         });
-        // AUTO-SELLO EN PUERTA AL AUTORIZAR: Si el colaborador ya estaba esperando en la reja y fue autorizado para pasar, sellar su entrada automáticamente
-        if (!seRegresa && (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
-          try { await registrarCheckCaseta(solicitud.id, 'entrada'); } catch (_) {}
-        }
+        
         if (false) await enviarNotificacion({
       mensaje: seRegresa
         ? `Folio de respaldo: ${nuevoFolioGenerado}\nDictamen: Se regresa al trabajador (Sin acceso en planta)`
@@ -672,6 +694,23 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
       mensaje: `👤 ${nombreSolicitante}\n${etiquetaNaturaleza}\n${horarioLimpio}\n💬 ${motClean}`,
       urlDestino: '/aprobaciones'
     });
+  }
+
+  // AVISO CORTO CASETA LINK RAPIDO
+  if ((permiso.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(permiso.observaciones || '')) {
+    try {
+      const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
+      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+      if (guardias && guardias.length > 0) {
+        const nomTrab = permiso.usuarios?.nombre_completo || 'Colaborador';
+        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+          titulo: seRegresa ? '🚫 ACCESO DENEGADO' : '🟢 ACCESO AUTORIZADO',
+          mensaje: seRegresa ? `👤 ${nomTrab} • Se retira de planta.` : `👤 ${nomTrab} • Dar paso a planta.`,
+          fotoUrl: permiso.usuarios?.foto_url || null,
+          urlDestino: '/caseta/asistencia'
+        });
+      }
+    } catch (_) {}
   }
 
   return etiquetaNotificacion;
