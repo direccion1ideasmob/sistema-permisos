@@ -55,6 +55,7 @@ export default function Caseta() {
   const [marcasSalidaRecientes, setMarcasSalidaRecientes] = useState({});
   const [ahoraMs, setAhoraMs] = useState(Date.now());
 
+  const [confirmandoEntradaId, setConfirmandoEntradaId] = useState(null);
   const [confirmandoSalidaId, setConfirmandoSalidaId] = useState(null);
   const [ultimoRegistradoTexto, setUltimoRegistradoTexto] = useState('');
 
@@ -141,7 +142,7 @@ export default function Caseta() {
 
       if (tipoMarca === 'salida') {
         setMarcasSalidaRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
-        setConfirmandoSalidaId(null);
+        setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
         setBusquedaTexto('');
         setUltimoRegistradoTexto(`✓ Salida registrada: ${nombreColaborador}`);
         setTimeout(() => {
@@ -676,7 +677,7 @@ export default function Caseta() {
           className={`tab-btn ${subTabAsistencia === 'por_llegar' ? 'active' : ''}`}
           onClick={() => {
             setSubTabAsistencia('por_llegar');
-            setConfirmandoSalidaId(null);
+            setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
           }}
         >
           <Users size={15} />
@@ -690,7 +691,7 @@ export default function Caseta() {
           className={`tab-btn ${subTabAsistencia === 'en_planta' ? 'active' : ''}`}
           onClick={() => {
             setSubTabAsistencia('en_planta');
-            setConfirmandoSalidaId(null);
+            setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
           }}
         >
           <UserCheck size={15} />
@@ -731,7 +732,7 @@ export default function Caseta() {
               value={busquedaTexto}
               onChange={(e) => {
                 setBusquedaTexto(e.target.value);
-                setConfirmandoSalidaId(null);
+                setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
               }}
               style={{
                 width: '100%',
@@ -752,7 +753,7 @@ export default function Caseta() {
                 type="button"
                 onClick={() => {
                   setBusquedaTexto('');
-                  setConfirmandoSalidaId(null);
+                  setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
                   if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
                 }}
                 style={{
@@ -871,19 +872,52 @@ export default function Caseta() {
                     >
                       <CornerUpLeft size={15} /> Confirmar Retiro
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
-                      disabled={Boolean(procesandoId)}
-                      style={{
-                        minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
-                        background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '900',
-                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                      }}
-                    >
-                      <Check size={20} strokeWidth={3} />
-                    </button>
-                  )}
+                  ) : confirmandoEntradaId === emp.id ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
+                            disabled={Boolean(procesandoId)}
+                            style={{
+                              height: '44px', padding: '0 16px', borderRadius: '10px', border: 'none',
+                              background: c.accent, color: '#fff', fontSize: '13px',
+                              fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: '6px',
+                              boxShadow: '0 4px 12px rgba(22,163,74,0.28)'
+                            }}
+                          >
+                            <Check size={18} strokeWidth={3} />
+                            <span>{procesandoId === `${emp.id}-entrada` ? ' Procesando...' : 'Confirmar'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmandoEntradaId(null)}
+                            disabled={Boolean(procesandoId)}
+                            style={{
+                              width: '38px', height: '44px', borderRadius: '10px',
+                              border: `1.5px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmandoEntradaId(emp.id)}
+                          disabled={Boolean(procesandoId)}
+                          title="Seleccionar para confirmar entrada"
+                          style={{
+                            minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px',
+                            border: `2px solid ${c.accent}`,
+                            background: c.accentSoft, color: c.accent, fontSize: '13px',
+                            fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          }}
+                        >
+                          <Check size={20} strokeWidth={3} />
+                        </button>
+                      )}
                 </div>
               </div>
             );
@@ -994,21 +1028,52 @@ export default function Caseta() {
                           <CornerUpLeft size={15} /> Confirmar Retiro
                         </button>
                       )
-                    ) : (
-                      <button
-                        onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
-                        disabled={Boolean(procesandoId)}
-                        title="Registrar entrada"
-                        style={{
-                          minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
-                          background: c.accent, color: '#fff', fontSize: '13px',
-                          fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                        }}
-                      >
-                        <Check size={20} strokeWidth={3} />
-                      </button>
-                    )}
+                    ) : confirmandoEntradaId === emp.id ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
+                            disabled={Boolean(procesandoId)}
+                            style={{
+                              height: '44px', padding: '0 16px', borderRadius: '10px', border: 'none',
+                              background: c.accent, color: '#fff', fontSize: '13px',
+                              fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: '6px',
+                              boxShadow: '0 4px 12px rgba(22,163,74,0.28)'
+                            }}
+                          >
+                            <Check size={18} strokeWidth={3} />
+                            <span>{procesandoId === `${emp.id}-entrada` ? ' Procesando...' : 'Confirmar'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmandoEntradaId(null)}
+                            disabled={Boolean(procesandoId)}
+                            style={{
+                              width: '38px', height: '44px', borderRadius: '10px',
+                              border: `1.5px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmandoEntradaId(emp.id)}
+                          disabled={Boolean(procesandoId)}
+                          title="Seleccionar para confirmar entrada"
+                          style={{
+                            minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px',
+                            border: `2px solid ${c.accent}`,
+                            background: c.accentSoft, color: c.accent, fontSize: '13px',
+                            fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          }}
+                        >
+                          <Check size={20} strokeWidth={3} />
+                        </button>
+                      )}
                   </div>
                 </div>
               );

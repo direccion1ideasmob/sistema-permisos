@@ -462,7 +462,7 @@ export const registrarRetardoEnPuerta = async (empleadoId) => {
 
   const { data: emp, error: errEmp } = await supabase
     .from('usuarios')
-    .select('id, nombre_completo, rol, sede_id, departamento_id, area_id, subarea_id, sin_celular')
+    .select('*')
     .eq('id', empleadoId)
     .single();
 
