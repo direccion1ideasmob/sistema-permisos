@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase } from 'lucide-react';
 import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
-import { obtenerHoraLimiteTolerancia } from '../../vigilancia/services/vigilanciaService';
+import { obtenerHoraLimiteTolerancia, obtenerHoraSalidaOficial } from '../../vigilancia/services/vigilanciaService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
 
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOscuro }) {
@@ -27,6 +27,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [regresaMismoDia, setRegresaMismoDia] = useState(false);
   const [horaRegreso, setHoraRegreso] = useState('16:00');
   const [horaLimiteRH, setHoraLimiteRH] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
+  const [horaSalidaOficialRH, setHoraSalidaOficialRH] = useState(() => localStorage.getItem('hora_salida_oficial_rh') || '17:00');
   const [horaLlegadaRetardo, setHoraLlegadaRetardo] = useState('07:30');
 
   const [motivo, setMotivo] = useState('');
@@ -42,6 +43,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   useEffect(() => {
     obtenerHoraLimiteTolerancia().then((h) => {
       if (h) setHoraLimiteRH(h);
+    }).catch(() => {});
+    obtenerHoraSalidaOficial().then((hSal) => {
+      if (hSal) setHoraSalidaOficialRH(hSal);
     }).catch(() => {});
   }, []);
 
@@ -110,7 +114,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         const diff = (d2 - d1) / 3600000;
         return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
       } else {
-        const dFinTurno = new Date(2000, 0, 1, 17, 0);
+        const [hFin, mFin] = (horaSalidaOficialRH || '17:00').split(':').map(Number);
+        const dFinTurno = new Date(2000, 0, 1, isNaN(hFin) ? 17 : hFin, isNaN(mFin) ? 0 : mFin);
         const diff = (dFinTurno - d1) / 3600000;
         return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;
       }
@@ -133,11 +138,33 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       }
     }
 
-    if (tipoPermiso === 'salida' && regresaMismoDia) {
+    if (tipoPermiso === 'salida') {
       const [hSalida, mSalida] = horaSalida.split(':').map(Number);
-      const [hRegreso, mRegreso] = horaRegreso.split(':').map(Number);
-      if ((hRegreso * 60 + mRegreso) <= (hSalida * 60 + mSalida)) {
-        return alert("Incongruencia detectada: La hora de regreso debe ser posterior a tu hora de salida.");
+      const [hFinOf, mFinOf] = (horaSalidaOficialRH || '17:00').split(':').map(Number);
+      const minSalida = hSalida * 60 + mSalida;
+      const minFinOficial = (isNaN(hFinOf) ? 17 : hFinOf) * 60 + (isNaN(mFinOf) ? 0 : mFinOf);
+
+      if (minSalida >= minFinOficial) {
+        return alert(`Incongruencia detectada: La hora de salida oficial es a las ${horaSalidaOficialRH} hrs. Un pase de salida anticipada debe ser previo a las ${horaSalidaOficialRH} hrs.`);
+      }
+
+      if (fechaPermiso === fechaHoy && !['gerente_rh', 'rh_nominas', 'superadmin'].includes(rolUsuario)) {
+        const ahoraReal = new Date();
+        const minAhora = ahoraReal.getHours() * 60 + ahoraReal.getMinutes();
+        if (minSalida < minAhora - 15) {
+          return alert(`Incongruencia de horario: No puedes solicitar un pase de salida para hoy a las ${horaSalida} hrs porque esa hora ya pasó.`);
+        }
+      }
+
+      if (regresaMismoDia) {
+        const [hRegreso, mRegreso] = horaRegreso.split(':').map(Number);
+        const minRegreso = hRegreso * 60 + mRegreso;
+        if (minRegreso <= minSalida) {
+          return alert("Incongruencia detectada: La hora de regreso debe ser posterior a tu hora de salida.");
+        }
+        if (minRegreso > minFinOficial) {
+          return alert(`Incongruencia detectada: La hora de regreso (${horaRegreso} hrs) no puede ser posterior al cierre del turno (${horaSalidaOficialRH} hrs).`);
+        }
       }
     }
 

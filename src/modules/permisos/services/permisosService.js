@@ -1,4 +1,4 @@
-import { registrarCheckCaseta } from '../../vigilancia/services/vigilanciaService';
+import { registrarCheckCaseta, sincronizarCierreTurnoAutomatico } from '../../vigilancia/services/vigilanciaService';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 
@@ -60,6 +60,7 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
 
 // 4. OBTENER TODAS LAS SOLICITUDES PARA BANDEJA DE APROBACIONES
 export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuarioId = null, rol = null } = {}) => {
+  await sincronizarCierreTurnoAutomatico();
   let query = supabase
     .from("permisos")
     .select(`
@@ -446,6 +447,57 @@ export const crearNuevaSolicitudPermiso = async ({
   tipoPermiso, naturaleza, fechaHoy, fechaPermiso, fechaFinVacaciones,
   horaSalida, regresaMismoDia, horaRegreso, horaLlegadaRetardo, motivo, totalHoras, esRetardoUrgente
 }) => {
+  // === VALIDACIÓN DE COHERENCIA DIARIA DEL COLABORADOR ===
+  const { data: pasesMismaFecha } = await supabase
+    .from('permisos')
+    .select('id, folio, tipo_permiso, estado_general, pago, observaciones')
+    .eq('usuario_id', userId)
+    .eq('fecha_permiso', fechaPermiso);
+
+  const activosMismaFecha = (pasesMismaFecha || []).filter(p => {
+    const pagoL = String(p.pago || '').toLowerCase();
+    const obsL = String(p.observaciones || '');
+    const esCancelado = pagoL === 'cancelado' || /CANCELADO por/i.test(obsL);
+    return !esCancelado;
+  });
+
+  const retardoPrevio = activosMismaFecha.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+  const fueRegresadoACasa = activosMismaFecha.some(p =>
+    (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '')
+  );
+  const tieneAusenciaCompleta = activosMismaFecha.some(p =>
+    ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase()) && p.estado_general !== 'rechazado'
+  );
+
+  if (tipoPermiso === 'retardo') {
+    if (retardoPrevio) {
+      throw new Error(`Ya existe un registro de retardo (${retardoPrevio.folio}) para esta fecha. No es posible generar dos retardos el mismo día.`);
+    }
+    if (tieneAusenciaCompleta) {
+      throw new Error('Ya tienes una Falta o Vacaciones registradas para esta fecha.');
+    }
+  }
+
+  if (tipoPermiso === 'salida') {
+    if (fueRegresadoACasa) {
+      throw new Error('No es posible solicitar un pase de Salida hoy porque existe un dictamen de retiro de planta (Se regresa a casa) en este turno.');
+    }
+    if (tieneAusenciaCompleta) {
+      throw new Error('No es posible solicitar un pase de Salida en una fecha donde tienes Falta o Vacaciones registradas.');
+    }
+  }
+
+  // Si solicita una FALTA pero tenía un RETARDO previo ese día que jamás cruzó caseta, cancelar automáticamente el retardo previo
+  if (tipoPermiso === 'falta' && retardoPrevio && !tieneSelloFisicoCaseta(retardoPrevio)) {
+    await supabase
+      .from('permisos')
+      .update({
+        estado_general: 'rechazado',
+        pago: 'Cancelado',
+        observaciones: `${retardoPrevio.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de Falta del mismo día`
+      })
+      .eq('id', retardoPrevio.id);
+  }
   const [{ data: depto, error: errD }, { data: usuarioSolicitante }, { data: todosEmpDepto }] = await Promise.all([
     supabase.from('departamentos').select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id').eq('id', deptoId).single(),
     supabase.from('usuarios').select('area, reporta_a_id, tipo_personal').eq('id', userId).maybeSingle(),
@@ -625,6 +677,7 @@ export const obtenerCatalogoDepartamentosSimple = async () => {
 
 // 11. HISTORIAL GENERAL CON FILTROS PARA RH (ControlHistorial)
 export const obtenerHistorialGeneralPermisos = async ({ deptoFiltro = 'todos', tipoFiltro = 'todos', fechaInicio = '', fechaFin = '' } = {}) => {
+  await sincronizarCierreTurnoAutomatico();
   let query = supabase
     .from('permisos')
     .select(`

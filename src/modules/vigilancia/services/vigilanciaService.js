@@ -32,6 +32,7 @@ const extraerHorarioProgramado = (obs = '') => {
 
 // 1. OBTENER DATOS DE CASETA (CON TODAS LAS VARIANTES DE RETARDO, RETIRO, SALIDA Y LISTA)
 export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
+  await sincronizarCierreTurnoAutomatico();
   const hoy = obtenerFechaLocalHoy();
   const fechaTarget = fechaConsulta || hoy;
 
@@ -200,8 +201,14 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     if (fechaTarget !== hoy) return;
     if (tipo !== 'salida' && tipo !== 'retardo') return;
 
-    // Si es una salida rechazada, no cruza puerta
-    if (tipo === 'salida' && esRechazado) return;
+    // Si es una salida rechazada o cancelada, o si el empleado ya fue regresado a casa hoy en un retardo, no cruza puerta como salida
+    if (tipo === 'salida' && (esRechazado || pagoLower === 'cancelado')) return;
+    const fueRegresadoHoy = pasesDelDia.some(otro =>
+      otro.usuario_id === rawPase.usuario_id &&
+      (otro.tipo_permiso || '').toLowerCase() === 'retardo' &&
+      ((otro.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(otro.observaciones || ''))
+    );
+    if (tipo === 'salida' && fueRegresadoHoy) return;
 
     const p = {
       id: rawPase.id,
@@ -422,6 +429,145 @@ export const guardarHoraLimiteTolerancia = async (nuevaHora) => {
       .upsert([{ clave: 'hora_limite_tolerancia', valor: limpia, updated_at: new Date().toISOString() }], { onConflict: 'clave' });
   } catch (_) {}
   return limpia;
+};
+
+export const obtenerHoraSalidaOficial = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('configuracion_caseta')
+      .select('valor')
+      .eq('clave', 'hora_salida_oficial')
+      .maybeSingle();
+
+    if (!error && data?.valor && /^\d{2}:\d{2}$/.test(data.valor.trim())) {
+      localStorage.setItem('hora_salida_oficial_rh', data.valor.trim());
+      return data.valor.trim();
+    }
+  } catch (_) {}
+  return localStorage.getItem('hora_salida_oficial_rh') || '17:00';
+};
+
+export const guardarHoraSalidaOficial = async (nuevaHora) => {
+  const limpia = (nuevaHora || '17:00').trim();
+  localStorage.setItem('hora_salida_oficial_rh', limpia);
+  try {
+    await supabase
+      .from('configuracion_caseta')
+      .upsert([{ clave: 'hora_salida_oficial', valor: limpia, updated_at: new Date().toISOString() }], { onConflict: 'clave' });
+  } catch (_) {}
+  return limpia;
+};
+
+export const sincronizarCierreTurnoAutomatico = async () => {
+  try {
+    const hoy = obtenerFechaLocalHoy();
+    const ahora = new Date();
+    const minActuales = ahora.getHours() * 60 + ahora.getMinutes();
+
+    const horaSalidaStr = await obtenerHoraSalidaOficial();
+    const [hSal, mSal] = (horaSalidaStr || '17:00').split(':').map(Number);
+    const minSalidaOficial = (isNaN(hSal) ? 17 : hSal) * 60 + (isNaN(mSal) ? 0 : mSal);
+    const turnoHoyConcluido = minActuales >= minSalidaOficial;
+
+    // Consultar permisos de retardo y salida de los últimos 10 días que ya debieron concluir
+    const hace10 = new Date(ahora);
+    hace10.setDate(ahora.getDate() - 10);
+    const fechaMin = hace10.toISOString().split('T')[0];
+
+    const [{ data: pases }, { data: asistencias }] = await Promise.all([
+      supabase
+        .from('permisos')
+        .select('id, usuario_id, fecha_permiso, tipo_permiso, estado_general, pago, observaciones, total_horas')
+        .gte('fecha_permiso', fechaMin)
+        .lte('fecha_permiso', hoy)
+        .in('tipo_permiso', ['retardo', 'salida'])
+        .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']),
+      supabase
+        .from('asistencias_caseta')
+        .select('usuario_id, fecha, hora_entrada, hora_salida')
+        .gte('fecha', fechaMin)
+        .lte('fecha', hoy)
+    ]);
+
+    if (!pases || pases.length === 0) return;
+
+    const mapaAsist = new Map();
+    (asistencias || []).forEach(a => {
+      mapaAsist.set(`${a.usuario_id}_${a.fecha}`, a);
+    });
+
+    for (const p of pases) {
+      const fPase = String(p.fecha_permiso || '').slice(0, 10);
+      const diaCerrado = fPase < hoy || (fPase === hoy && turnoHoyConcluido);
+      if (!diaCerrado) continue;
+
+      const obs = String(p.observaciones || '');
+      const pagoLow = String(p.pago || '').toLowerCase();
+      if (pagoLow === 'cancelado' || /CANCELADO por/i.test(obs)) continue;
+
+      const tipo = (p.tipo_permiso || '').toLowerCase();
+      const regAsist = mapaAsist.get(`${p.usuario_id}_${fPase}`);
+      const { horaSalidaCaseta, horaEntradaCaseta, horaLlegadaPuerta, horaRetiroCaseta } = extraerHorasCaseta(obs);
+
+      // CASO 1 (OPCIÓN B): Pidió RETARDO pero terminó el turno y NUNCA llegó a planta -> Convertir a FALTA (Sin goce)
+      if (tipo === 'retardo') {
+        const seRegreso = pagoLow.includes('regresa') || Boolean(horaRetiroCaseta);
+        const siLlego = Boolean(horaEntradaCaseta || horaLlegadaPuerta || regAsist?.hora_entrada);
+        if (!seRegreso && !siLlego) {
+          const nuevaObs = `${obs} | [Convertido a Falta: Solicitó retardo pero no se presentó en todo el turno]`.replace(/^\s*\|\s*/, '');
+          await supabase
+            .from('permisos')
+            .update({
+              tipo_permiso: 'falta',
+              pago: 'Sin goce de sueldo',
+              total_horas: 8,
+              estado_general: ['autorizado', 'aprobado', 'completado_caseta'].includes(p.estado_general) ? 'autorizado' : p.estado_general,
+              observaciones: nuevaObs
+            })
+            .eq('id', p.id);
+        }
+      }
+
+      // CASO 2: Pidió SALIDA CON REGRESO, sí salió por caseta, pero terminó el turno y NUNCA regresó -> Cerrar como Salida Definitiva
+      if (tipo === 'salida') {
+        const pediaRegreso = obs.toLowerCase().includes('regresa:');
+        if (pediaRegreso && horaSalidaCaseta && !horaEntradaCaseta && !/\[No reingres[óo] a planta/i.test(obs)) {
+          const mHoraSal = horaSalidaCaseta.replace(/\s*hrs/i, '').trim();
+          const [hS, mS] = mHoraSal.split(':').map(Number);
+          let nuevasHoras = p.total_horas || 0;
+          if (!isNaN(hS) && !isNaN(mS)) {
+            const diff = (minSalidaOficial - (hS * 60 + mS)) / 60;
+            if (diff > 0) nuevasHoras = parseFloat(diff.toFixed(2));
+          }
+          const obsSinRegresa = obs.replace(/\(Regresa:\s*[^)]+\)/ig, '(Sin reingreso — Fin de turno)');
+          const nuevaObs = `${obsSinRegresa} | [No reingresó a planta — Salida definitiva: ${mHoraSal} hrs]`;
+
+          await supabase
+            .from('permisos')
+            .update({
+              total_horas: nuevasHoras,
+              estado_general: 'completado_caseta',
+              observaciones: nuevaObs
+            })
+            .eq('id', p.id);
+
+          // Asegurar que su hora de salida quede asentada en asistencias_caseta de ese día
+          if (!regAsist) {
+            await supabase.from('asistencias_caseta').insert([{
+              usuario_id: p.usuario_id,
+              fecha: fPase,
+              hora_entrada: null,
+              hora_salida: mHoraSal
+            }]);
+          } else if (!regAsist.hora_salida) {
+            await supabase.from('asistencias_caseta').update({ hora_salida: mHoraSal }).eq('usuario_id', p.usuario_id).eq('fecha', fPase);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Aviso en sincronización automática de fin de turno:', err);
+  }
 };
 
 export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancelacion = 'El colaborador no utilizó el pase o nunca se presentó en caseta') => {
