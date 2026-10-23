@@ -106,27 +106,65 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   });
 
   const totalPresentes = empleados.filter(e => Boolean(mapaAsistencias[e.id]?.hora_entrada)).length;
+  const totalConSalida = empleados.filter(e => Boolean(mapaAsistencias[e.id]?.hora_entrada && mapaAsistencias[e.id]?.hora_salida)).length;
   const totalConPermiso = empleados.filter(e => !mapaAsistencias[e.id]?.hora_entrada && mapaIncidencias[e.id]?.tipo === 'ausencia_autorizada').length;
   const totalSinRegistro = empleados.filter(e => !mapaAsistencias[e.id]?.hora_entrada && mapaIncidencias[e.id]?.tipo !== 'ausencia_autorizada').length;
 
+  // Regla de cierre de día para exportar:
+  // - Cualquier fecha anterior a hoy (fecha < hoyStr) ya está cerrada y se puede exportar siempre.
+  // - Si es hoy (fecha === hoyStr), solo está cerrada cuando ya hubo entradas y todos registraron salida, o después de las 18:00 hrs.
+  const esDiaAnterior = fecha < hoyStr;
+  const horaActualNum = new Date().getHours();
+  const jornadaHoyCerrada = totalPresentes > 0 && (totalConSalida === totalPresentes || horaActualNum >= 18);
+  const puedeExportarDia = esDiaAnterior || jornadaHoyCerrada;
+
   const exportarCSV = () => {
-    const encabezados = ['FECHA', 'NO. EMPLEADO', 'COLABORADOR', 'DEPARTAMENTO', 'ESTADO ASISTENCIA', 'HORA ENTRADA', 'HORA SALIDA', 'INCIDENCIA / PERMISO'];
+    if (!puedeExportarDia) {
+      alert(
+        totalPresentes === 0
+          ? '⏳ Aún no hay registros de asistencia cerrados el día de hoy.\n\nPara descargar un reporte completo, selecciona una fecha anterior en el calendario o espera al cierre de la jornada.'
+          : `⏳ La jornada de hoy sigue en curso (${totalConSalida} de ${totalPresentes} colaboradores en planta han registrado su salida).\n\nEl reporte del día de hoy se habilitará al concluir las salidas, o puedes consultar y exportar cualquier día anterior desde el calendario.`
+      );
+      return;
+    }
+
+    const encabezados = [
+      'FECHA', 'NO. EMPLEADO', 'COLABORADOR', 'DEPARTAMENTO', 'PUESTO',
+      'ESTATUS FINAL DEL DIA', 'HORA ENTRADA', 'HORA SALIDA', 'DETALLE INCIDENCIA / PERMISO'
+    ];
+
     const filas = listaProcesada.map((emp) => {
       const reg = mapaAsistencias[emp.id];
       const inc = mapaIncidencias[emp.id];
-      const estado = reg?.hora_entrada
-        ? 'ASISTIO'
-        : (inc?.tipo === 'ausencia_autorizada' ? 'PERMISO / VACACIONES' : 'SIN REGISTRO');
+      const horaEnt = reg?.hora_entrada || inc?.horaLlegadaPuerta || '';
+      const horaSal = reg?.hora_salida || '';
+
+      let estado = 'FALTA / SIN REGISTRO';
+      if (reg?.hora_entrada) {
+        estado = reg.hora_entrada > horaLimiteCorte ? 'ASISTIO CON RETARDO' : 'ASISTIO PUNTUAL';
+      } else if (inc?.tipo === 'retardo_regresa') {
+        estado = 'REGRESADO EN PUERTA';
+      } else if (inc?.tipo === 'ausencia_autorizada') {
+        estado = 'PERMISO / VACACIONES';
+      } else if (inc?.tipo === 'retardo_en_espera') {
+        estado = 'DETENIDO EN PUERTA';
+      }
+
+      const etiquetaLimpia = (inc?.etiqueta || 'Sin incidencia')
+        .replace(/[✅🚫⏳↩️🕒📅•]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 
       return [
         `"${fecha}"`,
         `"${emp.numero_empleado || ''}"`,
         `"${(emp.nombre_completo || '').replace(/"/g, '""')}"`,
         `"${(emp.departamentos?.nombre || 'Sin departamento').replace(/"/g, '""')}"`,
+        `"${(emp.puesto || emp.area || '').replace(/"/g, '""')}"`,
         `"${estado}"`,
-        `"${reg?.hora_entrada || '--:--'}"`,
-        `"${reg?.hora_salida || '--:--'}"`,
-        `"${(inc?.etiqueta || 'Ninguna').replace(/"/g, '""')}"`
+        `"${horaEnt || 'Sin marca'}"`,
+        `"${horaSal || 'Sin marca'}"`,
+        `"${etiquetaLimpia.replace(/"/g, '""')}"`
       ].join(',');
     });
 
@@ -135,7 +173,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Asistencia_Planta_${fecha}.csv`;
+    a.download = `Asistencia_Cerrada_${fecha}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -307,14 +345,18 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
             <button
               type="button"
               onClick={exportarCSV}
+              title={puedeExportarDia ? 'Descargar corte de asistencia del día' : 'Disponible al concluir la jornada de hoy o seleccionando un día anterior'}
               style={{
                 height: '35px', padding: '0 12px', borderRadius: '8px',
-                border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
-                fontSize: '12px', fontWeight: '800', cursor: 'pointer',
+                border: `1px solid ${puedeExportarDia ? c.accent : c.border}`,
+                background: puedeExportarDia ? c.accentSoft : c.bg,
+                color: puedeExportarDia ? c.accent : c.textMuted,
+                opacity: puedeExportarDia ? 1 : 0.75,
+                fontSize: '12px', fontWeight: '800', cursor: puedeExportarDia ? 'pointer' : 'not-allowed',
                 display: 'inline-flex', alignItems: 'center', gap: '6px'
               }}
             >
-              <Download size={14} /> Exportar Excel
+              <Download size={14} /> {puedeExportarDia ? 'Exportar Corte' : 'Exportar (Al cierre)'}
             </button>
 
             <button
