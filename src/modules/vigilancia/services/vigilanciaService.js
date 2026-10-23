@@ -352,51 +352,28 @@ const registrarAsistenciaListaConHora = async (usuarioId, tipoMarca, horaEspecif
 // =========================================================================
 export const obtenerHoraLimiteTolerancia = async () => {
   try {
-    const { data } = await supabase
-      .from('notificaciones')
-      .select('mensaje')
-      .eq('titulo', '__CONFIG_TOLERANCIA_CASETA__')
-      .order('created_at', { ascending: false })
-      .limit(1)
+    const { data, error } = await supabase
+      .from('configuracion_caseta')
+      .select('valor')
+      .eq('clave', 'hora_limite_tolerancia')
       .maybeSingle();
 
-    if (data?.mensaje && /^\d{2}:\d{2}$/.test(data.mensaje.trim())) {
-      const h = data.mensaje.trim();
-      localStorage.setItem('hora_limite_retardo_rh', h);
-      return h;
+    if (!error && data?.valor && /^\d{2}:\d{2}$/.test(data.valor.trim())) {
+      localStorage.setItem('hora_limite_retardo_rh', data.valor.trim());
+      return data.valor.trim();
     }
   } catch (_) {}
-
-  const local = localStorage.getItem('hora_limite_retardo_rh');
-  if (local && /^\d{2}:\d{2}$/.test(local)) return local;
-  return '07:15';
+  return localStorage.getItem('hora_limite_retardo_rh') || '07:15';
 };
 
-export const guardarHoraLimiteTolerancia = async (nuevaHora, usuarioId) => {
+export const guardarHoraLimiteTolerancia = async (nuevaHora) => {
   const limpia = (nuevaHora || '07:15').trim();
   localStorage.setItem('hora_limite_retardo_rh', limpia);
-
   try {
-    // Limpiar configuraciones previas y guardar la nueva para todos los dispositivos
     await supabase
-      .from('notificaciones')
-      .delete()
-      .eq('titulo', '__CONFIG_TOLERANCIA_CASETA__');
-
-    if (usuarioId) {
-      await supabase
-        .from('notificaciones')
-        .insert([{
-          usuario_id: usuarioId,
-          titulo: '__CONFIG_TOLERANCIA_CASETA__',
-          mensaje: limpia,
-          tipo: 'sistema',
-          leida: true
-        }]);
-    }
-  } catch (e) {
-    console.warn('Guardado en modo local:', e.message);
-  }
+      .from('configuracion_caseta')
+      .upsert([{ clave: 'hora_limite_tolerancia', valor: limpia, updated_at: new Date().toISOString() }], { onConflict: 'clave' });
+  } catch (_) {}
   return limpia;
 };
 

@@ -1,21 +1,36 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   obtenerDatosCaseta,
   registrarAsistenciaLista,
   deshacerEntradaReciente,
   obtenerFechaLocalHoy
 } from '../../vigilancia/services/vigilanciaService';
+import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import {
-  Calendar, Search, RefreshCw, Download, UserCheck, UserX,
+  Calendar, Search, RefreshCw, Download,
   Clock, ShieldCheck, LogOut, CheckCircle2, X, Undo2
 } from 'lucide-react';
 
-export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c, modoOscuro }) {
+const formatearFechaBonita = (fechaYYYYMMDD) => {
+  if (!fechaYYYYMMDD) return '';
+  const [y, m, d] = fechaYYYYMMDD.split('-').map(Number);
+  const fechaObj = new Date(y, m - 1, d);
+  const texto = fechaObj.toLocaleDateString('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+};
+
+export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c }) {
   const hoyStr = obtenerFechaLocalHoy();
   const [fecha, setFecha] = useState(hoyStr);
   const [busqueda, setBusqueda] = useState('');
   const [deptoFiltro, setDeptoFiltro] = useState('');
-  const [estadoFiltro, setEstadoFiltro] = useState('todos'); // 'todos' | 'presentes' | 'ausentes' | 'incidencias'
+  const [estadoFiltro, setEstadoFiltro] = useState('todos');
+  const inputFechaRef = useRef(null);
 
   const [empleados, setEmpleados] = useState([]);
   const [mapaAsistencias, setMapaAsistencias] = useState({});
@@ -55,7 +70,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   };
 
   const handleQuitarEntradaRH = async (empId, nombre) => {
-    if (!window.confirm(`¿Deseas eliminar el registro de entrada de hoy de ${nombre}?`)) return;
+    if (!window.confirm(`¿Deseas eliminar el registro de entrada de ${nombre}?`)) return;
     setProcesandoId(`${empId}-borrar`);
     try {
       await deshacerEntradaReciente(empId);
@@ -124,172 +139,203 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-      {/* TARJETAS DE RESUMEN DEL DÍA */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-        gap: '10px'
-      }}>
-        <div
-          onClick={() => setEstadoFiltro('todos')}
-          style={{
-            background: c.surfaceCard,
-            border: `1.5px solid ${estadoFiltro === 'todos' ? c.accent : c.border}`,
-            borderRadius: '11px',
-            padding: '10px 14px',
-            cursor: 'pointer'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase' }}>Plantilla Total</div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: c.text, marginTop: '2px' }}>{empleados.length}</div>
-        </div>
-
-        <div
-          onClick={() => setEstadoFiltro('presentes')}
-          style={{
-            background: c.surfaceCard,
-            border: `1.5px solid ${estadoFiltro === 'presentes' ? '#16a34a' : c.border}`,
-            borderRadius: '11px',
-            padding: '10px 14px',
-            cursor: 'pointer'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: '800', color: '#16a34a', textTransform: 'uppercase' }}>En Planta / Con Entrada</div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: '#16a34a', marginTop: '2px' }}>{totalPresentes}</div>
-        </div>
-
-        <div
-          onClick={() => setEstadoFiltro('ausentes')}
-          style={{
-            background: c.surfaceCard,
-            border: `1.5px solid ${estadoFiltro === 'ausentes' ? '#ef4444' : c.border}`,
-            borderRadius: '11px',
-            padding: '10px 14px',
-            cursor: 'pointer'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: '800', color: '#ef4444', textTransform: 'uppercase' }}>Sin Registro en Caseta</div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: '#ef4444', marginTop: '2px' }}>{totalSinRegistro}</div>
-        </div>
-
-        <div
-          onClick={() => setEstadoFiltro('incidencias')}
-          style={{
-            background: c.surfaceCard,
-            border: `1.5px solid ${estadoFiltro === 'incidencias' ? '#0284c7' : c.border}`,
-            borderRadius: '11px',
-            padding: '10px 14px',
-            cursor: 'pointer'
-          }}
-        >
-          <div style={{ fontSize: '11px', fontWeight: '800', color: '#0284c7', textTransform: 'uppercase' }}>Permisos / Vacaciones Hoy</div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: '#0284c7', marginTop: '2px' }}>{totalConPermiso}</div>
-        </div>
-      </div>
-
-      {/* BARRA DE FILTROS Y EXPORTACIÓN */}
+      {/* CABECERA UNIFICADA: FECHA EN LETRA GRANDE + PÍLDORAS DE RESUMEN + FILTROS Y RELOJ */}
       <div style={{
         background: c.surfaceCard,
         border: `1px solid ${c.border}`,
-        borderRadius: '12px',
-        padding: '10px 12px',
+        borderRadius: '14px',
+        padding: '14px 16px',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '8px',
-        flexWrap: 'wrap'
+        flexDirection: 'column',
+        gap: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, flexWrap: 'wrap' }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '0 10px', height: '35px'
-          }}>
-            <Calendar size={14} color={c.accent} />
+        {/* RENGLÓN 1: FECHA BONITA ("Viernes, 23 de octubre de 2026") + PÍLDORAS DE FILTRO */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
+                else inputFechaRef.current?.focus();
+              }}
+              title="Cambiar fecha de consulta"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '9px',
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: c.accentSoft, color: c.accent,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <Calendar size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: '17px', fontWeight: '900', color: c.text, letterSpacing: '-0.01em' }}>
+                  {formatearFechaBonita(fecha)}
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: '700', color: c.textMuted }}>
+                  {fecha === hoyStr ? 'Lista de asistencia de hoy (Clic para cambiar día)' : 'Consulta histórica (Clic para cambiar día)'}
+                </div>
+              </div>
+            </button>
+
             <input
+              ref={inputFechaRef}
               type="date"
               value={fecha}
               max={hoyStr}
-              onChange={(e) => setFecha(e.target.value)}
-              style={{
-                border: 'none', background: 'transparent', color: c.text,
-                fontSize: '12.5px', fontWeight: '800', outline: 'none', cursor: 'pointer'
-              }}
+              onChange={(e) => e.target.value && setFecha(e.target.value)}
+              style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
             />
           </div>
 
-          <select
-            value={deptoFiltro}
-            onChange={(e) => setDeptoFiltro(e.target.value)}
-            style={{
-              height: '35px', padding: '0 10px', borderRadius: '8px',
-              border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-              fontSize: '12.5px', fontWeight: '700', outline: 'none'
-            }}
-          >
-            <option value="">Todos los departamentos</option>
-            {departamentos.map((d) => (
-              <option key={d.id} value={d.id}>{d.nombre}</option>
-            ))}
-          </select>
-
-          <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
-            <input
-              type="text"
-              placeholder="Buscar colaborador o # de nómina..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{
-                width: '100%', height: '35px', padding: '0 28px 0 32px', borderRadius: '8px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
-              }}
-            />
-            {busqueda && (
-              <button
-                type="button"
-                onClick={() => setBusqueda('')}
-                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
-              >
-                <X size={14} />
-              </button>
-            )}
+          {/* PÍLDORAS COMPACTAS DE FILTRO */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {[
+              { id: 'todos', label: 'Todos', count: empleados.length, color: c.text, activeBg: c.bg },
+              { id: 'presentes', label: 'En Planta', count: totalPresentes, color: '#16a34a', activeBg: 'rgba(22,163,74,0.10)' },
+              { id: 'ausentes', label: 'Sin Registro', count: totalSinRegistro, color: '#ef4444', activeBg: 'rgba(239,68,68,0.10)' },
+              { id: 'incidencias', label: 'Permisos Hoy', count: totalConPermiso, color: '#0284c7', activeBg: 'rgba(2,132,199,0.10)' }
+            ].map((f) => {
+              const activo = estadoFiltro === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setEstadoFiltro(f.id)}
+                  style={{
+                    height: '32px',
+                    padding: '0 11px',
+                    borderRadius: '999px',
+                    border: `1.5px solid ${activo ? f.color : c.border}`,
+                    background: activo ? f.activeBg : 'transparent',
+                    color: activo ? f.color : c.textMuted,
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>{f.label}</span>
+                  <span style={{
+                    padding: '1px 6px',
+                    borderRadius: '999px',
+                    background: activo ? f.color : c.bg,
+                    color: activo ? '#fff' : f.color,
+                    fontSize: '11px',
+                    fontWeight: '900'
+                  }}>
+                    {f.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            type="button"
-            onClick={exportarCSV}
-            style={{
-              height: '35px', padding: '0 12px', borderRadius: '8px',
-              border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
-              fontSize: '12px', fontWeight: '800', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: '6px'
-            }}
-          >
-            <Download size={14} /> Exportar Excel
-          </button>
+        {/* RENGLÓN 2: BUSCADOR + DEPARTAMENTO + EXPORTAR + RELOJ DE CORTE A LA DERECHA */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          flexWrap: 'wrap',
+          paddingTop: '10px',
+          borderTop: `1px solid ${c.border}`
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '210px' }}>
+              <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
+              <input
+                type="text"
+                placeholder="Buscar colaborador o # de nómina..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                style={{
+                  width: '100%', height: '35px', padding: '0 28px 0 32px', borderRadius: '8px',
+                  border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                  fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
+                }}
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda('')}
+                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
-          <button
-            type="button"
-            onClick={cargarAsistenciaDia}
-            title="Actualizar"
-            style={{
-              width: '35px', height: '35px', borderRadius: '8px',
-              border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-            }}
-          >
-            <RefreshCw size={14} />
-          </button>
+            <select
+              value={deptoFiltro}
+              onChange={(e) => setDeptoFiltro(e.target.value)}
+              style={{
+                height: '35px', padding: '0 10px', borderRadius: '8px',
+                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                fontSize: '12.5px', fontWeight: '700', outline: 'none'
+              }}
+            >
+              <option value="">Todos los departamentos</option>
+              {departamentos.map((d) => (
+                <option key={d.id} value={d.id}>{d.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              type="button"
+              onClick={exportarCSV}
+              style={{
+                height: '35px', padding: '0 12px', borderRadius: '8px',
+                border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,
+                fontSize: '12px', fontWeight: '800', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: '6px'
+              }}
+            >
+              <Download size={14} /> Exportar Excel
+            </button>
+
+            <button
+              type="button"
+              onClick={cargarAsistenciaDia}
+              title="Actualizar lista"
+              style={{
+                width: '35px', height: '35px', borderRadius: '8px',
+                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >
+              <RefreshCw size={14} />
+            </button>
+
+            <ControlHoraCorteRH usuario={usuario} c={c} />
+          </div>
         </div>
       </div>
 
-      {/* LISTA DE ASISTENCIA DIARIA PARA RH */}
+      {/* LISTA DE COLABORADORES */}
       {cargando ? (
         <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontWeight: '600' }}>
-          Cargando registros de asistencia del día...
+          Cargando registros de asistencia...
         </div>
       ) : listaProcesada.length === 0 ? (
         <div style={{
@@ -348,7 +394,6 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                   </div>
                 </div>
 
-                {/* HORARIOS REALES REGISTRADOS + ACCIONES DE RESCATE RH */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   {tieneEntrada ? (
                     <>
@@ -413,7 +458,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                           type="button"
                           onClick={() => handleMarcarDesdeRH(emp.id, 'entrada')}
                           disabled={procesandoId === `${emp.id}-entrada`}
-                          title="Validar que el colaborador sí está en planta aunque caseta no lo haya marcado"
+                          title="Validar que el colaborador sí está en planta"
                           style={{
                             height: '32px', padding: '0 11px', borderRadius: '8px',
                             border: `1px solid ${c.accent}`, background: c.accentSoft, color: c.accent,

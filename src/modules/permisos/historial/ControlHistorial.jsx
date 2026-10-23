@@ -107,7 +107,7 @@ export default function ControlHistorial() {
           </button>
         </div>
 
-        <ControlHoraCorteRH usuario={usuario} c={c} />
+        
       </div>
 
       {pestanaRH === 'asistencia_diaria' ? (
