@@ -47,7 +47,7 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
     .select('id', { count: 'exact', head: true })
     .eq('usuario_id', usuarioId)
     .eq('tipo_permiso', 'retardo')
-    .neq('estado_general', 'rechazado')
+    .not('estado_general', 'in', '("rechazado","cancelado")')
     .gte('fecha_permiso', fechaLimite.toISOString().split('T')[0]);
 
   if (permisoId) {
@@ -343,9 +343,15 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   const esGerente = solicitud.firma_2_id === usuario.id;
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
+  const esRetardoRech = (solicitud.tipo_permiso || '').toLowerCase() === 'retardo';
+  const partesNomRech = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
+  const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNomRech.length - 2]}` : partesNomRech.join(' ');
+  const motivoLimpioRech = String(motivoRechazo || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
+
   const updates = {
     estado_general: 'rechazado',
-    observaciones: `${solicitud.observaciones || ''} | RECHAZO: ${motivoRechazo}`
+    ...(esRetardoRech ? { pago: 'Se regresa' } : {}),
+    observaciones: `${solicitud.observaciones || ''} | RECHAZO (${nomCortoRech}): ${motivoLimpioRech}`
   };
 
   if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_1_id !== usuario.id) {
@@ -603,7 +609,7 @@ export const obtenerHistorialGeneralPermisos = async ({ deptoFiltro = 'todos', t
       firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),
       firmante3:firma_3_id (id, nombre_completo, rol, puesto, firma_url)
     `)
-    .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta', 'rechazado'])
+    .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta', 'rechazado', 'cancelado'])
     .order('created_at', { ascending: false });
 
   if (tipoFiltro && tipoFiltro !== 'todos') {
@@ -746,6 +752,7 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
     .update({
       firma_1_estado: 'rechazado',
       estado_general: 'rechazado',
+      ...((permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? { pago: 'Se regresa' } : {}),
       observaciones: `${permiso.observaciones || ''} | Rechazado por Jefatura: ${motivoRechazo.trim()}`
     })
     .eq('id', permiso.id);
@@ -780,4 +787,45 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
     mensaje: `🚫 Motivo: ${motivoRechazo.trim()}`,
     urlDestino: '/mis-permisos'
   });
+};
+
+// 15. CANCELAR SOLICITUD DE PERMISO (Con blindaje contra pases ya ejecutados en caseta)
+export const tieneSelloFisicoCaseta = (permiso) => {
+  if (!permiso) return false;
+  const fol = String(permiso.folio || '').toUpperCase();
+  const obs = String(permiso.observaciones || '');
+  if (fol.startsWith('CAS-')) return true;
+  if (permiso.estado_general === 'completado_caseta') return true;
+  if (/\[(?:LLEGADA EN PUERTA|SALIDA CASETA|ENTRADA CASETA|REINGRESO CASETA|REGRESADO EN PUERTA):/i.test(obs)) {
+    return true;
+  }
+  return false;
+};
+
+export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancelacion }) => {
+  if (!permiso?.id) throw new Error('Permiso inválido.');
+  if (tieneSelloFisicoCaseta(permiso)) {
+    throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia.');
+  }
+  const motivoLimpio = String(motivoCancelacion || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
+  if (!motivoLimpio) {
+    throw new Error('Es obligatorio indicar el motivo de la cancelación.');
+  }
+
+  const partesNom = String(usuario?.nombre_completo || 'Usuario').trim().split(/\s+/).filter(Boolean);
+  const nomCorto = partesNom.length > 2 ? `${partesNom[0]} ${partesNom[partesNom.length - 2]}` : partesNom.join(' ');
+  const etiquetaQuien = usuario?.id === permiso.usuario_id ? `Colaborador (${nomCorto})` : `RH/Jefatura (${nomCorto})`;
+
+  const nuevasObs = `${permiso.observaciones || ''} | CANCELADO por ${etiquetaQuien}: ${motivoLimpio}`;
+
+  const { error } = await supabase
+    .from('permisos')
+    .update({
+      estado_general: 'cancelado',
+      pago: 'Cancelado',
+      observaciones: nuevasObs
+    })
+    .eq('id', permiso.id);
+
+  if (error) throw error;
 };

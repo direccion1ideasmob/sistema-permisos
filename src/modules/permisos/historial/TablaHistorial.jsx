@@ -1,3 +1,4 @@
+import { cancelarSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
 import React, { useState, useMemo } from 'react';
 import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
@@ -33,7 +34,8 @@ export const parsearDatosObservaciones = (obs = '') => {
   const mRegresado = texto.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
 
   const mSubarea = texto.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
-  const mRechazo = texto.match(/RECHAZO:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
+  const mRechazo = texto.match(/RECHAZO(?:\s*\([^)]+\))?:\s*([^|]+)/i) || texto.match(/Rechazado por Jefatura:\s*([^|]+)/i);
+  const mCancelado = texto.match(/CANCELADO\s+por\s+([^:]+):\s*([^|]+)/i);
 
   const notasFlujo = [];
   segmentos.forEach(seg => {
@@ -62,7 +64,7 @@ export const parsearDatosObservaciones = (obs = '') => {
     horaRegresadoCaseta: mRegresado ? mRegresado[1].trim() : null,
     requiereRegreso: texto.toLowerCase().includes('regresa:'),
     supervisorSubarea: mSubarea ? mSubarea[1].trim() : null,
-    motivoRechazo: mRechazo ? mRechazo[1].trim() : null,
+    motivoRechazo: mRechazo ? mRechazo[1].trim() : (mCancelado ? `Cancelado por ${mCancelado[1].trim()}: ${mCancelado[2].trim()}` : null),
     notasFlujo
   };
 };
@@ -154,6 +156,7 @@ export default function TablaHistorial({
   c,
   modoOscuro,
   esControlRH = false,
+  onRecargar,
   onAbrirExportar,
   onSeleccionarPapeleta
 }) {
@@ -252,6 +255,7 @@ export default function TablaHistorial({
       if (tipoFiltro !== 'todos' && (s.tipo_permiso || '').toLowerCase() !== tipoFiltro) return false;
       if (filtroEstado === 'autorizado' && !esAut) return false;
       if (filtroEstado === 'rechazado' && s.estado_general !== 'rechazado') return false;
+      if (filtroEstado === 'cancelado' && s.estado_general !== 'cancelado') return false;
 
       return true;
     });
@@ -1219,7 +1223,7 @@ export default function TablaHistorial({
                               border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : esAlertaPago ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
                             }}>
                               {esAut ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                              {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
+                              {s.estado_general === 'cancelado' ? 'Cancelado' : (esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : (seRegresoCasa ? 'Se regresó' : 'Rechazado'))}
                             </span>
                           </td>
 
@@ -1387,7 +1391,7 @@ export default function TablaHistorial({
                         color: !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
                         border: `1px solid ${!esAut ? 'rgba(239,68,68,0.25)' : esAlertaPago ? 'rgba(245,158,11,0.3)' : 'rgba(22,163,74,0.25)'}`
                       }}>
-                        {esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : 'Rechazado'}
+                        {s.estado_general === 'cancelado' ? 'Cancelado' : (esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : (seRegresoCasa ? 'Se regresó' : 'Rechazado'))}
                       </span>
                       {expandido ? <ChevronUp size={15} color={textSecundario} /> : <ChevronDown size={15} color={textSecundario} />}
                     </div>

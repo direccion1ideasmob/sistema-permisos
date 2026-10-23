@@ -100,7 +100,7 @@ export default function Aprobaciones() {
 
   const solicitudesPendientes = solicitudesDelUsuario.filter(s => {
     if (s.usuario_id === usuario.id) return false;
-    if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general)) return false;
+    if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)) return false;
 
     const firma1OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado);
     const firma2OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_2_estado);
@@ -115,13 +115,13 @@ export default function Aprobaciones() {
 
   const solicitudesTransito = solicitudesDelUsuario.filter(s => {
     if (!esRH || s.usuario_id === usuario.id) return false;
-    if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general)) return false;
+    if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)) return false;
     if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return false;
     return s.firma_1_estado === 'pendiente' || s.firma_2_estado === 'pendiente';
   });
 
   const solicitudesHistorial = solicitudesDelUsuario.filter(s =>
-    ['autorizado', 'rechazado', 'aprobado', 'completado_caseta'].includes(s.estado_general)
+    ['autorizado', 'rechazado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)
   );
 
   const listadoActual = tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesTransito;

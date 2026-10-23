@@ -514,7 +514,7 @@ export default function TarjetaAprobacion({
                   background: 'transparent', color: c.textMuted, fontWeight: '700'
                 }}
               >
-                <X size={15} color={c.danger} /> Rechazar
+                <X size={15} color={c.danger} /> {esRetardo ? 'Regresar a Casa' : 'Rechazar'}
               </button>
               <button
                 onClick={() => onAprobar(solicitud)}
@@ -524,7 +524,7 @@ export default function TarjetaAprobacion({
                   backgroundColor: c.accent, color: '#fff', fontWeight: '800'
                 }}
               >
-                <Check size={15} /> Evaluar
+                <Check size={15} /> {esRetardo ? 'Permitir Acceso' : 'Evaluar'}
               </button>
             </>
           )}

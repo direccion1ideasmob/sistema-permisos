@@ -7,6 +7,7 @@ export default function ModalRechazoPermiso({
   const [motivoRechazo, setMotivoRechazo] = useState('');
 
   if (!solicitud) return null;
+  const esRetardo = (solicitud.tipo_permiso || '').toLowerCase() === 'retardo';
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -48,7 +49,7 @@ export default function ModalRechazoPermiso({
             </div>
             <div>
               <div style={{ fontSize: '19px', fontWeight: '900', color: c.danger, letterSpacing: '-0.01em' }}>
-                RECHAZAR SOLICITUD
+                {esRetardo ? 'REGRESAR A CASA (SIN ACCESO)' : 'RECHAZAR SOLICITUD'}
               </div>
               <div style={{ fontSize: '14.5px', color: c.textMuted, fontWeight: '600', marginTop: '3px' }}>
                 {solicitud.tipo_permiso?.toUpperCase()} • <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo}</strong>
@@ -72,11 +73,11 @@ export default function ModalRechazoPermiso({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
-              Motivo o Razón del Rechazo *
+              {esRetardo ? 'Motivo por el que se regresa al colaborador *' : 'Motivo o Razón del Rechazo *'}
             </label>
             <textarea 
               required rows={4} autoFocus
-              placeholder="Explica por qué no es posible autorizar este pase..."
+              placeholder={esRetardo ? "Ej. Llegó después de la tolerancia sin aviso previo / reincidencia..." : "Explica por qué no es posible autorizar este pase..."}
               value={motivoRechazo} onChange={e => setMotivoRechazo(e.target.value)}
               style={{
                 width: '100%', padding: '13px 15px', borderRadius: '12px',
@@ -109,7 +110,7 @@ export default function ModalRechazoPermiso({
                 cursor: 'pointer'
               }}
             >
-              {procesando ? 'Rechazando...' : 'Confirmar Rechazo'}
+              {procesando ? 'Procesando...' : (esRetardo ? 'Confirmar Regreso a Casa' : 'Confirmar Rechazo')}
             </button>
           </div>
         </form>

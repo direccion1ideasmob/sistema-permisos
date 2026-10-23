@@ -40,7 +40,6 @@ export default function ModalDictamenAprobar({
     { key: 'Con goce', label: 'Con Goce', icon: Banknote },
     { key: 'Sin goce', label: 'Sin Goce', icon: Receipt },
     { key: 'Con tiempo', label: 'Repone Tiempo', icon: Clock },
-    ...(esRetardo ? [{ key: 'Se regresa', label: 'Regresar a Casa', icon: CornerUpLeft, esRegreso: true }] : []),
     ...(esRH ? [] : [{ key: 'Pendiente', label: 'Delegar a RH', icon: UserCog }])
   ];
 

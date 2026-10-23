@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { obtenerPermisosUsuario, escalarPermisoAGerencia } from '../services/permisosService';
+import { obtenerPermisosUsuario, escalarPermisoAGerencia, cancelarSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
 import { obtenerTemaPermisos, generarEstilosPermisos } from '../permisosStyles';
 import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHistorial';
 import {
@@ -47,6 +47,20 @@ export default function MisPermisos() {
   }, [usuario?.id]);
 
   useEffect(() => { cargarHistorial(); }, [cargarHistorial]);
+
+  const cancelarMiSolicitud = async (permiso) => {
+    if (tieneSelloFisicoCaseta(permiso)) {
+      return alert('No se puede cancelar un pase que ya fue registrado en Caseta de Vigilancia.');
+    }
+    const motivo = window.prompt('¿Por qué deseas cancelar esta solicitud? (Ej. Sí llegué a tiempo / Se pospuso mi cita):');
+    if (!motivo || !motivo.trim()) return;
+    try {
+      await cancelarSolicitudPermiso({ permiso, usuario, motivoCancelacion: motivo });
+      await cargarHistorial();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const escalarPermiso = async (permiso) => {
     if (!window.confirm("¿Estás seguro de escalar esta solicitud a la Gerencia? Usa esta opción solo si tu Jefe Directo no ha respondido en más de 1 hora.")) return;
@@ -647,6 +661,22 @@ export default function MisPermisos() {
                         {renderSelloArea('R. Humanos', p.firma_3_estado)}
                       </div>
 
+                      {!tieneSelloFisicoCaseta(p) && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2px' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); cancelarMiSolicitud(p); }}
+                            style={{
+                              padding: '7px 13px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
+                              background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '12px', fontWeight: '800',
+                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                            }}
+                          >
+                            <XCircle size={13.5} /> Cancelar solicitud (Ya no la ocuparé)
+                          </button>
+                        </div>
+                      )}
+
                       {puedeEscalar && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2px', borderTop: `1px dashed ${c.border}`, paddingTop: '10px' }}>
                           <button
@@ -791,7 +821,7 @@ export default function MisPermisos() {
                                     className="mp-pill-dictamen"
                                     style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
                                   >
-                                    {esAutorizado ? (p.pago || 'AUTORIZADO') : 'RECHAZADO'}
+                                    {p.estado_general === 'cancelado' ? 'CANCELADO' : (esAutorizado ? (p.pago || 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
                                   </span>
                                   {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
                                 </div>
