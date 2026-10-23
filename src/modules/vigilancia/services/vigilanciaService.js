@@ -443,7 +443,8 @@ export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancel
   const { data, error } = await supabase
     .from('permisos')
     .update({
-      estado_general: 'cancelado',
+      estado_general: 'rechazado',
+      pago: 'Cancelado',
       observaciones: nuevasObs
     })
     .eq('id', permisoId)
@@ -577,7 +578,8 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
   let estadoFirma2 = gerenteFinalId ? (gerenteFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
   let estadoFirma3 = rhFinalId ? (rhFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
 
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId) {
+  const esRetardoAdmin = rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin');
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || esRetardoAdmin) {
     estadoFirma2 = 'omitido';
   }
 
