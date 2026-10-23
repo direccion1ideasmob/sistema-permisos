@@ -414,13 +414,13 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
 
   const { data: emp, error: errEmp } = await supabase
     .from('usuarios')
-    .select('*')
+    .select('id, nombre_completo, rol, area, reporta_a_id, tipo_personal, foto_url, departamento_id, sede_id')
     .eq('id', usuarioId)
     .maybeSingle();
 
   if (errEmp || !emp) throw new Error('No se encontró la información del colaborador.');
 
-  // Verificar si ya tiene un permiso de retardo hoy (usando la columna real fecha_permiso)
+  // 1. Verificar si ya tiene un permiso de retardo hoy en la tabla permisos
   const { data: existentes } = await supabase
     .from('permisos')
     .select('*')
@@ -432,7 +432,6 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
   if (existentes && existentes.length > 0) {
     const paseActual = existentes[0];
 
-    // Si ya estaba autorizado, sellar su entrada y meterlo a asistencias_caseta
     if (paseActual.estado_general === 'autorizado' || paseActual.estado_general === 'aprobado') {
       const seRegresa = (paseActual.pago || '').toLowerCase().includes('regresa');
       if (!seRegresa) {
@@ -442,7 +441,6 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
       return { resultado: 'se_regresa', data: paseActual };
     }
 
-    // Si sigue en_firmas, estampar que ya está físicamente en la puerta esperando a RH
     const obsPrev = paseActual.observaciones || '';
     if (!/\[LLEGADA EN PUERTA:/i.test(obsPrev)) {
       const nuevaObs = `${obsPrev} | [LLEGADA EN PUERTA: ${horaActual} hrs]`.replace(/^\s*\|\s*/, '');
@@ -451,70 +449,102 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
     return { resultado: 'en_espera_rh', data: paseActual };
   }
 
-  // Buscar cadena de mando igual que permisosService.js
-  const { data: todosUsuarios } = await supabase
-    .from('usuarios')
-    .select('id, rol, sede_id, departamento_id, area_id, subarea_id, estado')
-    .eq('estado', 'activo');
+  // 2. Enrutador idéntico a crearNuevaSolicitudPermiso (Firma 1, Firma 2, Firma 3)
+  const [{ data: depto }, { data: todosEmpDepto }] = await Promise.all([
+    emp.departamento_id
+      ? supabase.from('departamentos').select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id').eq('id', emp.departamento_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    emp.departamento_id
+      ? supabase.from('usuarios').select('id, area, rol').eq('departamento_id', emp.departamento_id).eq('activo', true)
+      : Promise.resolve({ data: [] })
+  ]);
 
-  const activos = todosUsuarios || [];
-  const esMismaSede = (u) => !emp.sede_id || !u.sede_id || String(u.sede_id) === String(emp.sede_id);
+  const areaSolicitante = (emp.area || '').trim().toUpperCase();
+  const reportaAId = emp.reporta_a_id || null;
+  const listaDepto = todosEmpDepto || [];
+  const areasEnDepto = new Set(listaDepto.map(u => (u.area || '').trim().toUpperCase()).filter(Boolean));
+  const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== emp.id);
 
-  const jefeSubarea = emp.subarea_id ? activos.find(u => u.rol === 'jefe_subarea' && String(u.subarea_id) === String(emp.subarea_id) && u.id !== emp.id) : null;
-  const jefeArea = emp.area_id ? activos.find(u => u.rol === 'jefe_area' && String(u.area_id) === String(emp.area_id) && u.id !== emp.id) : null;
-  const gerenteDepto = emp.departamento_id ? activos.find(u => u.rol === 'gerente_depto' && String(u.departamento_id) === String(emp.departamento_id) && esMismaSede(u) && u.id !== emp.id) : null;
-  const directorSede = activos.find(u => u.rol === 'director_sede' && esMismaSede(u) && u.id !== emp.id) || null;
-  const rhEncargado = activos.find(u => u.rol === 'gerente_rh' && esMismaSede(u))
-    || activos.find(u => u.rol === 'rh_nominas' && esMismaSede(u))
-    || activos.find(u => u.rol === 'gerente_rh')
-    || activos.find(u => u.rol === 'rh_nominas')
-    || null;
+  let jefeFinalId = null;
+  let reportaDirectoAGerente = false;
 
-  let firma1 = null;
-  let firma2 = null;
-
-  if (emp.rol === 'colaborador') {
-    firma1 = jefeSubarea?.id || jefeArea?.id || gerenteDepto?.id || directorSede?.id || null;
-    firma2 = gerenteDepto?.id || directorSede?.id || null;
-    if (firma1 && firma2 && String(firma1) === String(firma2)) {
-      firma2 = directorSede?.id && String(directorSede.id) !== String(firma1) ? directorSede.id : null;
+  if (reportaAId) {
+    const { data: supDirecto } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
+    if (supDirecto && supDirecto.activo) {
+      if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
+        jefeFinalId = supDirecto.id;
+      } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
+        reportaDirectoAGerente = true;
+      }
     }
-  } else if (emp.rol === 'jefe_subarea' || emp.rol === 'jefe_area') {
-    firma1 = gerenteDepto?.id || directorSede?.id || null;
-  } else if (emp.rol === 'gerente_depto') {
-    firma1 = directorSede?.id || null;
   }
 
-  const firmaRH = rhEncargado?.id || null;
-  const folio = `RET-${ Math.floor(100000 + Math.random() * 900000) }`;
-  const observaciones = `🕒 Llegada en puerta: ${horaActual} hrs | [LLEGADA EN PUERTA: ${horaActual} hrs]`;
+  if (!jefeFinalId && !reportaDirectoAGerente) {
+    const mandoMismaArea =
+      mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
+      mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
 
-  // calcular horas de retardo respecto a 07:00
+    if (mandoMismaArea) {
+      jefeFinalId = mandoMismaArea.id;
+    } else if (depto?.jefe_id && depto.jefe_id !== emp.id) {
+      jefeFinalId = depto.jefe_id;
+    } else if (areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
+      jefeFinalId = mandosEnDepto[0].id;
+    }
+  }
+
+  const nombreDeptoUpper = (depto?.nombre || '').toUpperCase();
+  const esDeptoRH = (depto?.clasificacion || '').toLowerCase().includes('rh') || nombreDeptoUpper.includes('RECURSOS HUMANOS') || nombreDeptoUpper.includes('VIGILANCIA') || nombreDeptoUpper === 'RH';
+  const clasificacionDepto = (depto?.clasificacion || emp.tipo_personal || 'produccion').toLowerCase();
+  const rolGerenteFallback = clasificacionDepto.includes('admin') ? 'gerente_admin' : (clasificacionDepto.includes('rh') ? 'gerente_rh' : 'gerente_produccion');
+
+  const [{ data: gerenteDeptoData }, { data: gerenteFallbackData }, { data: rhUsersData }] = await Promise.all([
+    depto?.gerente_id ? supabase.from('usuarios').select('id, rol').eq('id', depto.gerente_id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from('usuarios').select('id, rol').eq('rol', rolGerenteFallback).eq('activo', true).limit(1).maybeSingle(),
+    supabase.from('usuarios').select('id, rol').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true)
+  ]);
+
+  const listaRH = rhUsersData || [];
+  const gerenteRH = listaRH.find(u => u.rol === 'gerente_rh') || listaRH[0];
+  const rhFinalId = gerenteRH?.id || depto?.rh_id || null;
+
+  let gerenteFinalId = gerenteDeptoData?.id || (esDeptoRH ? rhFinalId : gerenteFallbackData?.id) || null;
+  let rolDelGerenteDepto = gerenteDeptoData?.rol || (esDeptoRH ? 'gerente_rh' : gerenteFallbackData?.rol);
+
+  let estadoFirma1 = jefeFinalId ? (jefeFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+  let estadoFirma2 = gerenteFinalId ? (gerenteFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+  let estadoFirma3 = rhFinalId ? (rhFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
+
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId) {
+    estadoFirma2 = 'omitido';
+  }
+
+  const folioTemporal = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
   const [hAct, mAct] = horaActual.split(':').map(Number);
   const diffHoras = Math.max(0, parseFloat((((hAct * 60 + mAct) - (7 * 60)) / 60).toFixed(2)));
+  const detalleHorarioTexto = `🕒 Llegada en puerta: ${horaActual} hrs | [LLEGADA EN PUERTA: ${horaActual} hrs]`;
 
-  // PAYLOAD CON LAS COLUMNAS 100% REALES DE PUBLIC.PERMISOS
+  // INSERT CON LAS 19 COLUMNAS EXACTAS DE PUBLIC.PERMISOS
   const payload = {
-    folio,
+    folio: folioTemporal,
     usuario_id: emp.id,
-    departamento_id: emp.departamento_id || null,
-    sede_id: emp.sede_id || null,
-    tipo_permiso: 'retardo',
-    naturaleza: 'Personal',
+    fecha_elaboracion: hoyStr,
     fecha_permiso: hoyStr,
-    fecha_fin: hoyStr,
+    fecha_fin: null,
+    tipo_permiso: 'retardo',
+    pago: 'Pendiente de dictamen',
+    asunto_motivo: '[PERSONAL] Llegada posterior al límite de tolerancia registrada en caseta.',
     total_horas: diffHoras,
-    motivo: 'Llegada posterior al límite de tolerancia registrada en caseta. En espera de veredicto de RH / Jefatura.',
-    observaciones,
-    pago: 'Pendiente RH',
+    observaciones: detalleHorarioTexto,
+    firma_empleado: true,
+    firma_1_id: jefeFinalId,
+    firma_1_estado: estadoFirma1,
+    firma_2_id: gerenteFinalId,
+    firma_2_estado: estadoFirma2,
+    firma_3_id: rhFinalId,
+    firma_3_estado: estadoFirma3,
     requiere_caseta: true,
-    estado_general: 'en_firmas',
-    firma_1_id: firma1,
-    firma_1_estado: firma1 ? 'pendiente' : 'no_requerida',
-    firma_2_id: firma2,
-    firma_2_estado: firma2 ? 'pendiente' : 'no_requerida',
-    firma_rh_id: firmaRH,
-    firma_rh_estado: 'pendiente'
+    estado_general: 'en_firmas'
   };
 
   const { data: creado, error: errInsert } = await supabase

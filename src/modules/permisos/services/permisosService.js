@@ -262,7 +262,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
         });
         // AUTO-SELLO EN PUERTA AL AUTORIZAR: Si el colaborador ya estaba esperando en la reja y fue autorizado para pasar, sellar su entrada automáticamente
         if (!seRegresa && (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
-          try { await registrarCheckCaseta(solicitudId, 'entrada'); } catch (_) {}
+          try { await registrarCheckCaseta(solicitud.id, 'entrada'); } catch (_) {}
         }
         if (false) await enviarNotificacion({
       mensaje: seRegresa
