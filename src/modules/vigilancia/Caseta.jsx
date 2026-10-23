@@ -721,27 +721,51 @@ export default function Caseta() {
         </button>
       </div>
 
-      {/* BUSCADOR OBLIGATORIO POR NÓMINA O INICIALES */}
+      {/* CONSOLA DE BÚSQUEDA GRANDE + TECLADO RÁPIDO DE NÓMINA */}
       <div style={{
-        background: c.surfaceCard, border: `1.5px solid ${tieneFiltroActivo ? c.accent : c.border}`, borderRadius: '12px',
-        padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px'
+        background: c.surfaceCard,
+        border: `2px solid ${tieneFiltroActivo ? c.accent : c.border}`,
+        borderRadius: '16px',
+        padding: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        boxShadow: tieneFiltroActivo ? '0 6px 20px rgba(22,163,74,0.12)' : 'none'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
           <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: tieneFiltroActivo ? c.accent : c.textMuted }} />
+            <Search
+              size={22}
+              style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: tieneFiltroActivo ? c.accent : c.textMuted
+              }}
+            />
             <input
               ref={inputBusquedaRef}
               type="text"
-              placeholder="Escribe # de nómina o primeras 2 letras del nombre..."
+              placeholder="# Nómina o 2 letras del nombre..."
               value={busquedaTexto}
               onChange={(e) => {
                 setBusquedaTexto(e.target.value);
                 setConfirmandoSalidaId(null);
               }}
               style={{
-                width: '100%', height: '38px', padding: '0 32px 0 36px', borderRadius: '9px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                fontSize: '13.5px', fontWeight: '700', boxSizing: 'border-box', outline: 'none'
+                width: '100%',
+                height: '56px',
+                padding: '0 48px 0 48px',
+                borderRadius: '13px',
+                border: `2px solid ${tieneFiltroActivo ? c.accent : c.border}`,
+                background: c.bg,
+                color: c.text,
+                fontSize: '20px',
+                fontWeight: '900',
+                letterSpacing: '0.02em',
+                boxSizing: 'border-box',
+                outline: 'none'
               }}
             />
             {busquedaTexto && (
@@ -752,9 +776,24 @@ export default function Caseta() {
                   setConfirmandoSalidaId(null);
                   if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
                 }}
-                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '8px',
+                  background: 'rgba(239,68,68,0.12)',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
               >
-                <X size={16} />
+                <X size={20} strokeWidth={2.5} />
               </button>
             )}
           </div>
@@ -763,18 +802,111 @@ export default function Caseta() {
             onClick={cargarDatos}
             title="Actualizar"
             style={{
-              width: '38px', height: '38px', borderRadius: '9px', border: `1px solid ${c.border}`,
-              background: c.bg, color: c.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+              width: '56px',
+              height: '56px',
+              borderRadius: '13px',
+              border: `1.5px solid ${c.border}`,
+              background: c.bg,
+              color: c.text,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
             }}
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={20} />
+          </button>
+        </div>
+
+        {/* BOTONERA NUMÉRICA TÁCTIL RÁPIDA PARA # DE NÓMINA */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(6, 1fr)',
+          gap: '6px'
+        }}>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((num) => (
+            <button
+              key={num}
+              type="button"
+              onClick={() => {
+                setBusquedaTexto((prev) => prev + num);
+                setConfirmandoSalidaId(null);
+              }}
+              style={{
+                height: '44px',
+                borderRadius: '10px',
+                border: `1.5px solid ${c.border}`,
+                background: c.bg,
+                color: c.text,
+                fontSize: '18px',
+                fontWeight: '900',
+                fontFamily: 'ui-monospace, monospace',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none'
+              }}
+            >
+              {num}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setBusquedaTexto((prev) => prev.slice(0, -1));
+              setConfirmandoSalidaId(null);
+            }}
+            style={{
+              height: '44px',
+              borderRadius: '10px',
+              border: `1.5px solid ${c.border}`,
+              background: 'rgba(245,158,11,0.12)',
+              color: '#d97706',
+              fontSize: '13px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            ⌫
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBusquedaTexto('');
+              setConfirmandoSalidaId(null);
+            }}
+            style={{
+              height: '44px',
+              borderRadius: '10px',
+              border: '1.5px solid rgba(239,68,68,0.3)',
+              background: 'rgba(239,68,68,0.10)',
+              color: '#ef4444',
+              fontSize: '12px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            Limpiar
           </button>
         </div>
 
         {ultimoRegistradoTexto && (
           <div style={{
-            background: c.accentSoft, border: `1px solid ${c.accent}`, color: c.accent,
-            borderRadius: '8px', padding: '6px 10px', fontSize: '12px', fontWeight: '800',
+            background: c.accentSoft,
+            border: `1.5px solid ${c.accent}`,
+            color: c.accent,
+            borderRadius: '10px',
+            padding: '9px 12px',
+            fontSize: '14px',
+            fontWeight: '900',
             textAlign: 'center'
           }}>
             {ultimoRegistradoTexto}
@@ -880,7 +1012,7 @@ export default function Caseta() {
                         disabled={Boolean(procesandoId)}
                         title="Registrar entrada"
                         style={{
-                          minWidth: '46px', height: '38px', padding: '0 16px', borderRadius: '9px', border: 'none',
+                          minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
                           background: c.accent, color: '#fff', fontSize: '13px',
                           fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
