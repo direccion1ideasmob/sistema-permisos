@@ -35,7 +35,7 @@ const moverFechaDias = (fechaYYYYMMDD, dias) => {
   return `${yy}-${mm}-${dd}`;
 };
 
-export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c, modoOscuro }) {
+export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c, modoOscuro, selectorModo = null }) {
   const hoyStr = obtenerFechaLocalHoy();
   const [fecha, setFecha] = useState(hoyStr);
   const [busqueda, setBusqueda] = useState('');
@@ -281,8 +281,10 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
 
       {/* BARRA DE CONTROL EMPAQUETADA EN UN SOLO BLOQUE LIMPIO */}
       <div className="vad-toolbar-card">
-        {/* FILA 1: NAVEGADOR DE FECHA + SEGMENTOS DE ESTATUS + CORTE Y EXPORTAR */}
+        {/* FILA 1: SELECTOR MODO + NAVEGADOR DE FECHA + SEGMENTOS DE ESTATUS + CORTE Y EXPORTAR */}
         <div className="vad-row-top">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {selectorModo}
           {/* Selector de Fecha con flechas anterior / siguiente */}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '9px', padding: '3px' }}>
             <button
@@ -329,6 +331,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
               onChange={(e) => e.target.value && setFecha(e.target.value)}
               style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
             />
+          </div>
           </div>
 
           {/* Segmentos de Estatus (Contadores 100% coherentes) */}

@@ -5,9 +5,7 @@ import TablaHistorial from './TablaHistorial';
 import ModalPapeletaPDF from './ModalPapeletaPDF';
 import ModalExportarExcel from './ModalExportarExcel';
 import VistaAsistenciaDiariaRH from './VistaAsistenciaDiariaRH';
-import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../aprobacionesStyles';
-import { FileText, UserCheck } from 'lucide-react';
 
 export default function ControlHistorial() {
   const { usuario } = useAuth();
@@ -41,7 +39,7 @@ export default function ControlHistorial() {
     setCargando(true);
     try {
       const data = await obtenerHistorialGeneralPermisos();
-      setSolicitudes(data);
+      setSolicitudes(data || []);
     } catch (err) {
       console.error('Error al cargar historial general para RH:', err);
     } finally {
@@ -53,62 +51,64 @@ export default function ControlHistorial() {
     if (usuario?.id) cargarTodasSolicitudes();
   }, [usuario?.id, cargarTodasSolicitudes]);
 
+  const selectorModo = (
+    <div style={{
+      display: 'inline-flex',
+      background: c.bg,
+      border: `1px solid ${c.border}`,
+      borderRadius: '8px',
+      padding: '2px',
+      gap: '2px',
+      flexShrink: 0
+    }}>
+      <button
+        type="button"
+        onClick={() => setPestanaRH('permisos')}
+        style={{
+          height: '30px', padding: '0 12px', borderRadius: '6px', border: 'none',
+          background: pestanaRH === 'permisos' ? c.surfaceCard : 'transparent',
+          color: pestanaRH === 'permisos' ? c.text : c.textMuted,
+          fontWeight: pestanaRH === 'permisos' ? '800' : '600',
+          fontSize: '12.5px', cursor: 'pointer',
+          boxShadow: pestanaRH === 'permisos' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+          transition: 'all 0.15s ease'
+        }}
+      >
+        Permisos
+      </button>
+      <button
+        type="button"
+        onClick={() => setPestanaRH('asistencia_diaria')}
+        style={{
+          height: '30px', padding: '0 12px', borderRadius: '6px', border: 'none',
+          background: pestanaRH === 'asistencia_diaria' ? c.surfaceCard : 'transparent',
+          color: pestanaRH === 'asistencia_diaria' ? c.text : c.textMuted,
+          fontWeight: pestanaRH === 'asistencia_diaria' ? '800' : '600',
+          fontSize: '12.5px', cursor: 'pointer',
+          boxShadow: pestanaRH === 'asistencia_diaria' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+          transition: 'all 0.15s ease'
+        }}
+      >
+        Asistencia
+      </button>
+    </div>
+  );
+
   return (
     <div className="aprobaciones-container control-historial-wrapper">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
       <style>{`
         .control-historial-wrapper {
-          padding: 18px 22px;
+          padding: 16px 22px;
           box-sizing: border-box;
           width: 100%;
         }
         @media (max-width: 768px) {
           .control-historial-wrapper {
-            padding: 10px 10px 28px 10px;
+            padding: 42px 10px 28px 10px;
           }
         }
       `}</style>
-
-      {/* BARRA SUPERIOR DE NAVEGACIÓN RH + RELOJ CON CANDADO */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '10px',
-        marginBottom: '12px',
-        flexWrap: 'wrap'
-      }}>
-        <div className="tabs-aprobacion-bar" style={{
-          display: 'inline-grid',
-          gridTemplateColumns: 'repeat(2, auto)',
-          gap: '4px',
-          height: '38px',
-          padding: '4px',
-          margin: 0
-        }}>
-          <button
-            type="button"
-            className={`tab-btn ${pestanaRH === 'permisos' ? 'active' : ''}`}
-            onClick={() => setPestanaRH('permisos')}
-            style={{ padding: '0 14px', fontSize: '12.5px', gap: '6px' }}
-          >
-            <FileText size={14} />
-            <span>Historial de Permisos</span>
-          </button>
-
-          <button
-            type="button"
-            className={`tab-btn ${pestanaRH === 'asistencia_diaria' ? 'active' : ''}`}
-            onClick={() => setPestanaRH('asistencia_diaria')}
-            style={{ padding: '0 14px', fontSize: '12.5px', gap: '6px' }}
-          >
-            <UserCheck size={14} />
-            <span>Lista de Asistencia Diaria</span>
-          </button>
-        </div>
-
-        
-      </div>
 
       {pestanaRH === 'asistencia_diaria' ? (
         <VistaAsistenciaDiariaRH
@@ -116,10 +116,11 @@ export default function ControlHistorial() {
           departamentos={departamentos}
           c={c}
           modoOscuro={modoOscuro}
+          selectorModo={selectorModo}
         />
       ) : cargando ? (
-        <div style={{ textAlign: 'center', padding: '44px', color: c.textMuted, fontSize: '15px', fontWeight: '600' }}>
-          Cargando historial...
+        <div style={{ textAlign: 'center', padding: '44px', color: c.textMuted, fontSize: '14px', fontWeight: '600' }}>
+          Cargando registros...
         </div>
       ) : (
         <TablaHistorial
@@ -128,6 +129,7 @@ export default function ControlHistorial() {
           c={c}
           modoOscuro={modoOscuro}
           esControlRH={true}
+          selectorModo={selectorModo}
           onRecargar={cargarTodasSolicitudes}
           onAbrirExportar={() => setMostrarModalExportar(true)}
           onSeleccionarPapeleta={(permiso) => setPapeletaSeleccionada(permiso)}
@@ -143,8 +145,9 @@ export default function ControlHistorial() {
 
       {mostrarModalExportar && (
         <ModalExportarExcel
-          solicitudes={solicitudes}
+          solicitudesPrecargadas={solicitudes}
           departamentos={departamentos}
+          c={c}
           modoOscuro={modoOscuro}
           onClose={() => setMostrarModalExportar(false)}
         />

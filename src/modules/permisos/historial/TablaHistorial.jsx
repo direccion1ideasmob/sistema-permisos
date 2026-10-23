@@ -1,33 +1,29 @@
-import { cancelarSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
 import React, { useState, useMemo } from 'react';
+import { cancelarSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
 import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
-  Factory, Building2, HardHat, FileSpreadsheet, RotateCcw, Clock,
-  CheckCircle2, XCircle, CalendarDays, ChevronDown, ChevronUp,
-  DoorOpen, MinusCircle, CornerUpLeft, MessageSquare, ShieldCheck, FileText,
-  User, Stethoscope, Briefcase, Calendar, SlidersHorizontal
+  FileSpreadsheet, RotateCcw, CheckCircle2, XCircle, ChevronDown, ChevronUp,
+  DoorOpen, CornerUpLeft, MessageSquare, ShieldCheck, FileText,
+  User, Stethoscope, Briefcase, Calendar, SlidersHorizontal, X
 } from 'lucide-react';
 
 export const parsearDatosObservaciones = (obs = '') => {
   const texto = String(obs || '');
   const segmentos = texto.split('|').map(s => s.trim()).filter(Boolean);
 
-  // El horario solicitado es el que pidió el empleado, ignorando sellos técnicos de caseta
   const segHorario = segmentos.find(s =>
     !/^\[.*\]$/.test(s) &&
     !/llegada en puerta:/i.test(s) &&
     !/VoBo /i.test(s) &&
     !/^Nota /i.test(s) &&
     !/^Res:/i.test(s) &&
-    !/RECHAZO:/i.test(s) &&
+    !/RECHAZO/i.test(s) &&
+    !/CANCELADO/i.test(s) &&
     !/Rechazado por/i.test(s)
   ) || '';
 
-  const horarioSolicitado = segHorario
-    .replace(/🕒|📅/g, '')
-    .trim();
+  const horarioSolicitado = segHorario.replace(/🕒|📅/g, '').trim();
 
-  // Sellos exclusivos de Caseta (Si tiene hora aquí es porque Caseta ya lo validó físicamente)
   const mSalida = texto.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
   const mEntrada = texto.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
   const mLlegadaPuerta = texto.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
@@ -140,7 +136,7 @@ const obtenerRangoSemana = (offset = 0, fechaReferenciaStr = null) => {
   const d2 = String(domingo.getDate()).padStart(2, '0');
   const m2 = meses[domingo.getMonth()];
 
-  const etiquetaRango = m1 === m2 ? `${d1} al ${d2} ${m2}` : `${d1} ${m1} - ${d2} ${m2}`;
+  const etiquetaRango = m1 === m2 ? `${d1}–${d2} ${m2}` : `${d1} ${m1}–${d2} ${m2}`;
 
   return {
     inicio: fmtISO(lunes),
@@ -150,30 +146,40 @@ const obtenerRangoSemana = (offset = 0, fechaReferenciaStr = null) => {
   };
 };
 
+const obtenerNominaPermiso = (s) => {
+  const folio = (s.folio || '').toUpperCase();
+  const clasif = (s.usuarios?.tipo_personal || s.usuarios?.departamentos?.clasificacion || '').toLowerCase();
+  const nomDepto = (s.usuarios?.departamentos?.nombre || '').toLowerCase();
+  if (folio.startsWith('A-') || clasif.includes('admin')) return 'administracion';
+  if (folio.startsWith('O-') || clasif.includes('obra') || nomDepto.includes('obra')) return 'obra';
+  return 'produccion';
+};
+
 export default function TablaHistorial({
   solicitudes = [],
   departamentos = [],
   c,
   modoOscuro,
   esControlRH = false,
+  selectorModo = null,
   onRecargar,
   onAbrirExportar,
   onSeleccionarPapeleta
 }) {
-  const [areaActiva, setAreaActiva] = useState('produccion');
   const [busqueda, setBusqueda] = useState('');
+  const [nominaFiltro, setNominaFiltro] = useState('todas'); // 'todas' | 'produccion' | 'administracion' | 'obra'
   const [deptoFiltro, setDeptoFiltro] = useState('todos');
   const [tipoFiltro, setTipoFiltro] = useState('todos');
   const [filtroEstado, setFiltroEstado] = useState('todos');
-  const [modoPeriodo, setModoPeriodo] = useState('semana');
+  const [modoPeriodo, setModoPeriodo] = useState('todo'); // Por defecto muestra TODOS para no esconder registros
   const [offsetSemana, setOffsetSemana] = useState(0);
   const [paginaActual, setPaginaActual] = useState(1);
   const [seleccionados, setSeleccionados] = useState([]);
   const [expandidos, setExpandidos] = useState([]);
-  const [mostrarFiltrosMovil, setMostrarFiltrosMovil] = useState(false);
+  const [mostrarPanelFiltros, setMostrarPanelFiltros] = useState(false);
 
-  const registrosPorPagina = 12;
-  const textSecundario = modoOscuro ? '#cbd5e1' : '#475569';
+  const registrosPorPagina = 14;
+  const textSecundario = modoOscuro ? '#94a3b8' : '#64748b';
 
   const fechaAncla = useMemo(() => {
     const hoyISO = new Date().toISOString().slice(0, 10);
@@ -203,44 +209,14 @@ export default function TablaHistorial({
     });
   }, [solicitudes, modoPeriodo, infoSemana]);
 
-  const pasesPorArea = useMemo(() => {
-    if (!esControlRH) return { todos: solicitudesEnPeriodo };
-
-    const prod = [];
-    const admin = [];
-    const obra = [];
-
-    solicitudesEnPeriodo.forEach(s => {
-      const folio = (s.folio || '').toUpperCase();
-      const clasif = (s.usuarios?.tipo_personal || s.usuarios?.departamentos?.clasificacion || '').toLowerCase();
-      const nomDepto = (s.usuarios?.departamentos?.nombre || '').toLowerCase();
-
-      if (folio.startsWith('A-') || clasif.includes('admin')) {
-        admin.push(s);
-      } else if (folio.startsWith('O-') || clasif.includes('obra') || nomDepto.includes('obra')) {
-        obra.push(s);
-      } else {
-        prod.push(s);
-      }
-    });
-
-    const ordenar = (lista) =>
-      [...lista].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    return {
-      produccion: ordenar(prod),
-      administracion: ordenar(admin),
-      obra: ordenar(obra)
-    };
-  }, [solicitudesEnPeriodo, esControlRH]);
-
   const solicitudesProcesadas = useMemo(() => {
-    const base = esControlRH ? (pasesPorArea[areaActiva] || []) : solicitudesEnPeriodo;
     const term = busqueda.toLowerCase().trim();
+    const ordenadas = [...solicitudesEnPeriodo].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    return base.filter(s => {
+    return ordenadas.filter(s => {
       const u = s.usuarios || {};
-      const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
+      const esCancelado = (s.pago || '').toLowerCase() === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+      const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
 
       if (term) {
         const match =
@@ -251,15 +227,16 @@ export default function TablaHistorial({
         if (!match) return false;
       }
 
+      if (nominaFiltro !== 'todas' && obtenerNominaPermiso(s) !== nominaFiltro) return false;
       if (deptoFiltro !== 'todos' && String(u.departamento_id) !== String(deptoFiltro)) return false;
       if (tipoFiltro !== 'todos' && (s.tipo_permiso || '').toLowerCase() !== tipoFiltro) return false;
       if (filtroEstado === 'autorizado' && !esAut) return false;
-      if (filtroEstado === 'rechazado' && s.estado_general !== 'rechazado') return false;
-      if (filtroEstado === 'cancelado' && s.estado_general !== 'cancelado') return false;
+      if (filtroEstado === 'rechazado' && (s.estado_general !== 'rechazado' || esCancelado)) return false;
+      if (filtroEstado === 'cancelado' && !esCancelado) return false;
 
       return true;
     });
-  }, [solicitudesEnPeriodo, esControlRH, pasesPorArea, areaActiva, busqueda, deptoFiltro, tipoFiltro, filtroEstado]);
+  }, [solicitudesEnPeriodo, busqueda, nominaFiltro, deptoFiltro, tipoFiltro, filtroEstado]);
 
   const totalPaginas = Math.ceil(solicitudesProcesadas.length / registrosPorPagina) || 1;
   const indiceInicio = (paginaActual - 1) * registrosPorPagina;
@@ -282,31 +259,33 @@ export default function TablaHistorial({
     }
   };
 
+  const cantidadFiltrosSecundarios = [
+    nominaFiltro !== 'todas',
+    deptoFiltro !== 'todos',
+    tipoFiltro !== 'todos',
+    filtroEstado !== 'todos'
+  ].filter(Boolean).length;
+
+  const hayFiltrosActivos = Boolean(busqueda || cantidadFiltrosSecundarios > 0 || modoPeriodo === 'semana');
+
   const limpiarFiltros = () => {
     setBusqueda('');
+    setNominaFiltro('todas');
     setDeptoFiltro('todos');
     setTipoFiltro('todos');
     setFiltroEstado('todos');
-    setModoPeriodo('semana');
+    setModoPeriodo('todo');
     setOffsetSemana(0);
     setPaginaActual(1);
   };
 
-  const hayFiltrosActivos =
-    busqueda ||
-    deptoFiltro !== 'todos' ||
-    tipoFiltro !== 'todos' ||
-    filtroEstado !== 'todos' ||
-    modoPeriodo !== 'semana' ||
-    offsetSemana !== 0;
-
   const getEstiloTipo = (tipoRaw = '') => {
     const t = tipoRaw.toLowerCase();
-    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.09)', border: 'rgba(239, 68, 68, 0.28)', label: 'RETARDO' };
-    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.09)', border: 'rgba(139, 92, 246, 0.28)', label: 'FALTA' };
-    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.09)', border: 'rgba(16, 185, 129, 0.28)', label: 'VACACIONES' };
-    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', label: 'SALIDA' };
-    return { color: c.text, bg: c.bg, border: c.border, label: (tipoRaw || 'PERMISO').toUpperCase() };
+    if (t === 'retardo') return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.22)', label: 'Retardo' };
+    if (t === 'falta') return { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)', border: 'rgba(139, 92, 246, 0.22)', label: 'Falta' };
+    if (t === 'vacaciones') return { color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.22)', label: 'Vacaciones' };
+    if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.08)', border: 'rgba(14, 165, 233, 0.22)', label: 'Salida' };
+    return { color: c.text, bg: c.bg, border: c.border, label: (tipoRaw || 'Permiso') };
   };
 
   const renderIconoNaturaleza = (cat = '') => {
@@ -318,8 +297,8 @@ export default function TablaHistorial({
     else if (low.includes('vacaciones')) Icono = Calendar;
 
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: textSecundario, fontWeight: '700' }}>
-        <Icono size={13} color={textSecundario} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: textSecundario, fontWeight: '600' }}>
+        <Icono size={12.5} color={textSecundario} />
         <span>{cat}</span>
       </span>
     );
@@ -336,18 +315,17 @@ export default function TablaHistorial({
     return (
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: '6px',
-        padding: '5px 10px', borderRadius: '8px',
+        padding: '4px 9px', borderRadius: '7px',
         background: c.surfaceCard, border: `1px solid ${c.border}`,
-        fontSize: '12.5px', color: c.text
+        fontSize: '12px', color: c.text
       }}>
-        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, flexShrink: 0 }} />
-        <span style={{ color: textSecundario, fontWeight: '700' }}>{rolLabel}:</span>
-        <strong style={{ fontWeight: '800' }}>{acortarNombre(nombre || 'Autorizado')}</strong>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span style={{ color: textSecundario, fontWeight: '600' }}>{rolLabel}:</span>
+        <strong style={{ fontWeight: '700' }}>{acortarNombre(nombre || 'Autorizado')}</strong>
       </div>
     );
   };
 
-  const alturaControl = '40px';
   const totalColumnas = esControlRH ? 6 : 4;
 
   return (
@@ -356,100 +334,93 @@ export default function TablaHistorial({
         .th-main-wrapper {
           display: flex;
           flex-direction: column;
-          gap: 14px;
+          gap: 10px;
           width: 100%;
           box-sizing: border-box;
         }
-        .th-top-bar {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-        }
-        .th-tabs-area {
-          flex: 0 1 520px;
-          margin: 0;
-          height: 44px;
-          box-sizing: border-box;
-        }
-        .th-right-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-          margin-left: auto;
-        }
-        .th-week-box {
+        /* UNA SOLA BARRA SUPERIOR NEUTRA Y SILENCIOSA */
+        .th-single-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 8px;
           background: ${c.surfaceCard};
-          border: 1.5px solid ${c.border};
-          padding: 0 12px;
-          height: 44px;
-          box-sizing: border-box;
-          border-radius: 11px;
-        }
-        .th-btn-export-desktop {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          padding: 0 18px;
-          height: 44px;
-          box-sizing: border-box;
-          border-radius: 11px;
-          border: none;
-          background: ${c.accent};
-          color: #fff;
-          font-size: 13.5px;
-          font-weight: 800;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-        .th-filters-desktop-bar {
-          background: ${c.surfaceCard};
-          border: 1.5px solid ${c.border};
-          border-radius: 12px;
-          padding: 10px 14px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-          box-sizing: border-box;
-        }
-        .th-search-box {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: ${c.bg};
           border: 1px solid ${c.border};
-          border-radius: 9px;
-          padding: 0 12px;
-          height: ${alturaControl};
+          border-radius: 11px;
+          padding: 8px 12px;
+          flex-wrap: wrap;
           box-sizing: border-box;
-          flex: 1 1 240px;
+        }
+        .th-toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1 1 320px;
           min-width: 0;
         }
-        .th-select-filter {
+        .th-search-minimal {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          background: ${c.bg};
+          border: 1px solid ${c.border};
+          border-radius: 8px;
+          padding: 0 10px;
+          height: 34px;
+          flex: 1;
+          max-width: 340px;
+          min-width: 160px;
+          box-sizing: border-box;
+        }
+        .th-neutral-btn {
+          height: 34px;
+          padding: 0 11px;
+          border-radius: 8px;
+          border: 1px solid ${c.border};
           background: ${c.bg};
           color: ${c.text};
-          border: 1px solid ${c.border};
-          border-radius: 9px;
-          padding: 0 12px;
-          height: ${alturaControl};
-          box-sizing: border-box;
-          font-size: 13px;
+          font-size: 12.5px;
           font-weight: 700;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+          box-sizing: border-box;
+          transition: all 0.15s ease;
+        }
+        .th-neutral-btn:hover {
+          border-color: ${textSecundario};
+        }
+        .th-toolbar-right {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        /* PANEL GRADUAL DE FILTROS (OCULTO POR DEFECTO) */
+        .th-gradual-filters {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 8px;
+          background: ${c.surfaceCard};
+          border: 1px solid ${c.border};
+          border-radius: 10px;
+          padding: 10px 12px;
+          box-sizing: border-box;
+        }
+        .th-gradual-select {
+          width: 100%;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: 7px;
+          border: 1px solid ${c.border};
+          background: ${c.bg};
+          color: ${c.text};
+          font-size: 12.5px;
+          font-weight: 600;
           outline: none;
-        }
-        .th-mobile-toolbar {
-          display: none;
-        }
-        .th-mobile-drawer {
-          display: none;
+          box-sizing: border-box;
         }
         .th-desktop-table-view {
           display: block;
@@ -457,606 +428,292 @@ export default function TablaHistorial({
         .th-mobile-cards-view {
           display: none;
         }
-
-        /* =========================================================
-           VISTA MÓVIL MINIMALISTA Y ULTRA COMPACTA (< 768PX)
-           ========================================================= */
         @media (max-width: 768px) {
-          .th-main-wrapper {
-            padding-top: 42px;
-            gap: 8px;
-          }
-          .th-top-bar {
-            display: block;
-          }
-          .th-tabs-area {
-            width: 100%;
-            height: 36px;
-            padding: 3px !important;
-            border-radius: 10px !important;
-            display: grid !important;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 3px;
-            box-sizing: border-box;
-          }
-          .th-tabs-area .tab-btn {
-            padding: 0 4px !important;
-            font-size: 12px !important;
-            gap: 4px !important;
-            min-width: 0 !important;
-            border-radius: 7px !important;
-            justify-content: center !important;
-          }
-          .th-tabs-area .tab-btn svg {
-            display: none !important;
-          }
-          .th-tabs-area .tab-badge {
-            padding: 1px 5px !important;
-            font-size: 10.5px !important;
-            border-radius: 999px !important;
-          }
-          /* Ocultamos las barras pesadas de escritorio en móvil */
-          .th-right-actions,
-          .th-filters-desktop-bar,
           .th-desktop-table-view {
             display: none !important;
           }
-
-          /* Nueva barra móvil minimalista: Semana estética + 2 íconos discretos */
-          .th-mobile-toolbar {
-            display: flex !important;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            width: 100%;
-          }
-          .th-mobile-week-pill {
-            flex: 1;
-            min-width: 0;
-            height: 36px;
-            background: ${c.surfaceCard};
-            border: 1px solid ${c.border};
-            border-radius: 10px;
-            padding: 0 6px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 4px;
-            box-sizing: border-box;
-          }
-          .th-mobile-icon-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            border: 1px solid ${c.border};
-            background: ${c.surfaceCard};
-            color: ${c.text};
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            flex-shrink: 0;
-            padding: 0;
-            position: relative;
-          }
-
-          /* Cajón oculto de búsqueda y filtros (solo se ve al tocar la lupa) */
-          .th-mobile-drawer {
-            display: flex !important;
-            flex-direction: column;
-            gap: 8px;
-            background: ${c.surfaceCard};
-            border: 1px solid ${c.border};
-            border-radius: 12px;
-            padding: 10px;
-            box-sizing: border-box;
-          }
-          .th-mobile-drawer-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-          }
-          .th-select-filter {
-            width: 100%;
-            min-width: 0;
-            height: 34px;
-            font-size: 12px;
-            padding: 0 8px;
-          }
-
-          /* Tarjetas ultra comprimidas y estéticas */
           .th-mobile-cards-view {
             display: flex !important;
             flex-direction: column;
             gap: 7px;
             width: 100%;
           }
+          .th-search-minimal {
+            max-width: none;
+          }
           .th-mcard {
             background: ${c.surfaceCard};
             border: 1px solid ${c.border};
-            border-radius: 11px;
+            border-radius: 10px;
             padding: 10px 12px;
             display: flex;
             flex-direction: column;
             gap: 4px;
-            box-sizing: border-box;
-            transition: background 0.15s ease;
-          }
-          .th-mcard-row1 {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            width: 100%;
-          }
-          .th-mcard-name {
-            font-size: 13.5px;
-            font-weight: 800;
-            color: ${c.text};
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            min-width: 0;
-            flex: 1;
-            letter-spacing: -0.01em;
-          }
-          .th-mcard-row2 {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            font-size: 11.5px;
-            color: ${textSecundario};
-            font-weight: 600;
-            width: 100%;
-          }
-          .th-mcard-meta-left {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            min-width: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
           }
         }
       `}</style>
 
-      {/* 1. BARRA SUPERIOR (PESTAÑAS + CONTROLES DE ESCRITORIO) */}
-      <div className="th-top-bar">
-        {esControlRH && (
-          <div className="tabs-aprobacion-bar th-tabs-area">
-            <button
-              className={`tab-btn ${areaActiva === 'produccion' ? 'active' : ''}`}
-              onClick={() => { setAreaActiva('produccion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
-            >
-              <Factory size={14} />
-              <span>Producción</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'produccion' ? c.accent : c.border, color: areaActiva === 'produccion' ? '#fff' : c.text, fontSize: '11.5px' }}>
-                {pasesPorArea.produccion?.length || 0}
-              </span>
-            </button>
+      {/* 1. BARRA ÚNICA, NEUTRA Y ORDENADA */}
+      <div className="th-single-toolbar">
+        <div className="th-toolbar-left">
+          {selectorModo}
 
-            <button
-              className={`tab-btn ${areaActiva === 'administracion' ? 'active' : ''}`}
-              onClick={() => { setAreaActiva('administracion'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
-            >
-              <Building2 size={14} />
-              <span>Admin</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'administracion' ? c.accent : c.border, color: areaActiva === 'administracion' ? '#fff' : c.text, fontSize: '11.5px' }}>
-                {pasesPorArea.administracion?.length || 0}
-              </span>
-            </button>
-
-            <button
-              className={`tab-btn ${areaActiva === 'obra' ? 'active' : ''}`}
-              onClick={() => { setAreaActiva('obra'); setPaginaActual(1); setSeleccionados([]); }}
-              style={{ fontSize: '13.5px', height: '100%', padding: '0 14px' }}
-            >
-              <HardHat size={14} />
-              <span>Obra</span>
-              <span className="tab-badge" style={{ background: areaActiva === 'obra' ? c.accent : c.border, color: areaActiva === 'obra' ? '#fff' : c.text, fontSize: '11.5px' }}>
-                {pasesPorArea.obra?.length || 0}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* NAVEGADOR SEMANAL Y BOTÓN EXCEL DE ESCRITORIO */}
-        <div className="th-right-actions">
-          <div className="th-week-box">
-            {modoPeriodo === 'semana' ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <button
-                    onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); setSeleccionados([]); }}
-                    style={{
-                      width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                      background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}
-                  >
-                    <ChevronLeft size={15} />
-                  </button>
-
-                  <div style={{ padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '800', color: c.text }}>
-                      Semana {infoSemana.numSemana}
-                    </span>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: textSecundario, marginLeft: '5px' }}>
-                      ({infoSemana.etiquetaRango})
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); setSeleccionados([]); }}
-                    style={{
-                      width: '28px', height: '28px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                      background: c.bg, color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}
-                  >
-                    <ChevronRight size={15} />
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {offsetSemana !== 0 && (
-                    <button
-                      onClick={() => { setOffsetSemana(0); setPaginaActual(1); setSeleccionados([]); }}
-                      style={{
-                        height: '28px', padding: '0 8px', borderRadius: '7px', border: 'none',
-                        background: c.accentSoft, color: c.accent, fontSize: '11.5px', fontWeight: '800', cursor: 'pointer'
-                      }}
-                    >
-                      Hoy
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); setSeleccionados([]); }}
-                    style={{
-                      height: '28px', padding: '0 9px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                      background: c.bg, color: textSecundario, fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Ver Todo ({solicitudes.length})
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap' }}>
-                  Mostrando Todo ({solicitudes.length})
-                </span>
-                <button
-                  onClick={() => { setModoPeriodo('semana'); setOffsetSemana(0); setPaginaActual(1); }}
-                  style={{
-                    height: '28px', padding: '0 10px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                    background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap'
-                  }}
-                >
-                  Volver a Semana {infoSemana.numSemana}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {esControlRH && onAbrirExportar && (
-            <button onClick={onAbrirExportar} className="th-btn-export-desktop">
-              <FileSpreadsheet size={16} /> Exportar Excel
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* BARRA MINIMALISTA EXCLUSIVA PARA CELULAR: SEMANA COMPACTA + 2 BOTONES DE ÍCONO */}
-      <div className="th-mobile-toolbar">
-        <div className="th-mobile-week-pill">
-          {modoPeriodo === 'semana' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); }}
-                style={{
-                  width: '26px', height: '26px', borderRadius: '6px', border: 'none',
-                  background: c.bg, color: c.text, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0
-                }}
-              >
-                <ChevronLeft size={15} />
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                <CalendarDays size={13} color={c.accent} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', fontWeight: '800', color: c.text }}>
-                  Sem {infoSemana.numSemana}
-                </span>
-                <span style={{ fontSize: '11.5px', fontWeight: '600', color: textSecundario }}>
-                  · {infoSemana.etiquetaRango}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); }}
-                  style={{
-                    width: '26px', height: '26px', borderRadius: '6px', border: 'none',
-                    background: c.bg, color: c.text, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                  }}
-                >
-                  <ChevronRight size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); }}
-                  style={{
-                    height: '24px', padding: '0 7px', borderRadius: '6px', border: `1px solid ${c.border}`,
-                    background: c.bg, color: textSecundario, fontSize: '10.5px', fontWeight: '700', cursor: 'pointer'
-                  }}
-                >
-                  Todo
-                </button>
-              </div>
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 4px' }}>
-              <span style={{ fontSize: '12px', fontWeight: '800', color: c.text }}>
-                Todo el historial ({solicitudes.length})
-              </span>
-              <button
-                type="button"
-                onClick={() => { setModoPeriodo('semana'); setOffsetSemana(0); setPaginaActual(1); }}
-                style={{
-                  height: '24px', padding: '0 8px', borderRadius: '6px', border: 'none',
-                  background: c.accentSoft, color: c.accent, fontSize: '11px', fontWeight: '800', cursor: 'pointer'
-                }}
-              >
-                Sem {infoSemana.numSemana}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ÍCONO DISCRETO DE BÚSQUEDA / FILTROS */}
-        <button
-          type="button"
-          onClick={() => setMostrarFiltrosMovil(prev => !prev)}
-          className="th-mobile-icon-btn"
-          title="Buscar o filtrar"
-          style={{
-            borderColor: (mostrarFiltrosMovil || hayFiltrosActivos) ? c.accent : c.border,
-            background: (mostrarFiltrosMovil || hayFiltrosActivos) ? c.accentSoft : c.surfaceCard,
-            color: (mostrarFiltrosMovil || hayFiltrosActivos) ? c.accent : c.text
-          }}
-        >
-          <Search size={16} />
-          {hayFiltrosActivos && (
-            <span style={{
-              position: 'absolute', top: '5px', right: '5px',
-              width: '6px', height: '6px', borderRadius: '50%', background: c.accent
-            }} />
-          )}
-        </button>
-
-        {/* ÍCONO DISCRETO DE EXPORTAR EXCEL */}
-        {esControlRH && onAbrirExportar && (
-          <button
-            type="button"
-            onClick={onAbrirExportar}
-            className="th-mobile-icon-btn"
-            title="Exportar Excel"
-            style={{ color: c.accent }}
-          >
-            <FileSpreadsheet size={16} />
-          </button>
-        )}
-      </div>
-
-      {/* CAJÓN DESPLEGABLE DE BÚSQUEDA Y FILTROS EN CELULAR (100% OCULTO HASTA QUE TOCAS LA LUPA) */}
-      {mostrarFiltrosMovil && (
-        <div className="th-mobile-drawer">
-          <div className="th-search-box" style={{ flex: 'none', height: '36px' }}>
+          <div className="th-search-minimal">
             <Search size={14} color={textSecundario} style={{ flexShrink: 0 }} />
             <input
               type="text"
-              placeholder="Buscar por nombre, folio o #empleado..."
+              placeholder="Buscar colaborador, folio o #nómina..."
               value={busqueda}
               onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
-              style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13px', width: '100%', fontWeight: '500' }}
+              style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '12.5px', width: '100%', fontWeight: '500' }}
             />
             {busqueda && (
               <button
                 type="button"
                 onClick={() => setBusqueda('')}
-                style={{ background: 'transparent', border: 'none', color: textSecundario, fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: textSecundario, cursor: 'pointer', display: 'flex', padding: 0 }}
               >
-                Borrar
+                <X size={13} />
               </button>
             )}
           </div>
 
-          <div className="th-mobile-drawer-grid">
-            {esControlRH && departamentos.length > 0 && (
-              <select
-                value={deptoFiltro}
-                onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-                className="th-select-filter"
-              >
-                <option value="todos">Depto: Todos</option>
-                {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-              </select>
+          {/* Botón discreto de Filtros (Revelación Gradual) */}
+          <button
+            type="button"
+            onClick={() => setMostrarPanelFiltros(prev => !prev)}
+            className="th-neutral-btn"
+            style={{
+              borderColor: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.text : c.border,
+              background: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.surface : c.bg
+            }}
+          >
+            <SlidersHorizontal size={13.5} color={textSecundario} />
+            <span>Filtros</span>
+            {cantidadFiltrosSecundarios > 0 && (
+              <span style={{
+                background: c.text, color: c.surfaceCard, fontSize: '10.5px',
+                fontWeight: '800', padding: '1px 6px', borderRadius: '999px'
+              }}>
+                {cantidadFiltrosSecundarios}
+              </span>
             )}
-
-            <select
-              value={tipoFiltro}
-              onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
-              className="th-select-filter"
-            >
-              <option value="todos">Tipo: Todos</option>
-              <option value="salida">Salida</option>
-              <option value="retardo">Retardo</option>
-              <option value="falta">Falta</option>
-              <option value="vacaciones">Vacaciones</option>
-            </select>
-
-            <select
-              value={filtroEstado}
-              onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-              className="th-select-filter"
-              style={{ gridColumn: '1 / -1' }}
-            >
-              <option value="todos">Estado: Autorizados y Rechazados</option>
-              <option value="autorizado">Solo Autorizados</option>
-              <option value="rechazado">Solo Rechazados</option>
-            </select>
-          </div>
+          </button>
 
           {hayFiltrosActivos && (
             <button
               type="button"
               onClick={limpiarFiltros}
+              title="Restablecer filtros"
               style={{
-                height: '32px', borderRadius: '8px', border: `1px solid ${c.border}`,
-                background: c.bg, color: textSecundario, fontSize: '12px', fontWeight: '700',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                height: '34px', padding: '0 9px', borderRadius: '8px',
+                border: 'none', background: 'transparent', color: textSecundario,
+                fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: '4px'
               }}
             >
-              <RotateCcw size={12} /> Limpiar filtros activos
+              <RotateCcw size={12.5} /> Limpiar
             </button>
           )}
         </div>
-      )}
 
-      {/* 2. BARRA DE FILTROS EXCLUSIVA DE ESCRITORIO / LAPTOP 14" */}
-      <div className="th-filters-desktop-bar">
-        <div className="th-search-box">
-          <Search size={15} color={textSecundario} style={{ flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Buscar por folio, colaborador o #empleado..."
-            value={busqueda}
-            onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
-            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '13.5px', width: '100%', fontWeight: '500' }}
-          />
+        {/* Lado derecho: Selector de Periodo sobrio + Imprimir selección + Exportar discreto */}
+        <div className="th-toolbar-right">
+          {esControlRH && seleccionados.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
+              className="th-neutral-btn"
+              style={{ color: c.accent, borderColor: c.accent }}
+            >
+              <Printer size={13.5} /> Imprimir ({seleccionados.length})
+            </button>
+          )}
+
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            height: '34px', padding: '0 6px', borderRadius: '8px',
+            background: c.bg, border: `1px solid ${c.border}`
+          }}>
+            {modoPeriodo === 'semana' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); }}
+                  style={{ width: '24px', height: '24px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: c.text, padding: '0 4px', whiteSpace: 'nowrap' }}>
+                  Sem {infoSemana.numSemana} <span style={{ color: textSecundario, fontWeight: '500' }}>({infoSemana.etiquetaRango})</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); }}
+                  style={{ width: '24px', height: '24px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); }}
+                  style={{ height: '24px', padding: '0 8px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.surfaceCard, color: textSecundario, fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  Ver todos
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: c.text, padding: '0 6px', whiteSpace: 'nowrap' }}>
+                  Todos ({solicitudesProcesadas.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setModoPeriodo('semana'); setOffsetSemana(0); setPaginaActual(1); }}
+                  style={{ height: '24px', padding: '0 8px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.surfaceCard, color: textSecundario, fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Filtrar por semana
+                </button>
+              </>
+            )}
+          </div>
+
+          {esControlRH && onAbrirExportar && (
+            <button
+              type="button"
+              onClick={onAbrirExportar}
+              className="th-neutral-btn"
+              title="Exportar registros a Excel"
+            >
+              <FileSpreadsheet size={14} color={c.accent} />
+              <span>Exportar</span>
+            </button>
+          )}
         </div>
-
-        {esControlRH && departamentos.length > 0 && (
-          <select
-            value={deptoFiltro}
-            onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-            className="th-select-filter"
-          >
-            <option value="todos">Todos los Deptos</option>
-            {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-          </select>
-        )}
-
-        <select
-          value={tipoFiltro}
-          onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
-          className="th-select-filter"
-        >
-          <option value="todos">Todos los Tipos</option>
-          <option value="salida">Salida</option>
-          <option value="retardo">Retardo</option>
-          <option value="falta">Falta</option>
-          <option value="vacaciones">Vacaciones</option>
-        </select>
-
-        <select
-          value={filtroEstado}
-          onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
-          className="th-select-filter"
-        >
-          <option value="todos">Autorizados y Rechazados</option>
-          <option value="autorizado">Solo Autorizados</option>
-          <option value="rechazado">Solo Rechazados</option>
-        </select>
-
-        {hayFiltrosActivos && (
-          <button
-            onClick={limpiarFiltros}
-            style={{
-              padding: '0 12px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
-              border: `1px solid ${c.border}`, background: c.bg, color: textSecundario,
-              fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-            }}
-          >
-            <RotateCcw size={13} /> Limpiar
-          </button>
-        )}
-
-        {esControlRH && seleccionados.length > 0 && (
-          <button
-            onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
-            style={{
-              padding: '0 14px', height: alturaControl, boxSizing: 'border-box', borderRadius: '8px',
-              border: 'none', background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '800',
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
-            }}
-          >
-            <Printer size={14} /> Imprimir ({seleccionados.length})
-          </button>
-        )}
       </div>
 
-      {/* 3. LISTADO */}
-      {solicitudesPaginadas.length === 0 ? (
-        <div style={{
-          background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-          padding: '36px 20px', textAlign: 'center', color: textSecundario, fontSize: '13.5px', fontWeight: '600'
-        }}>
-          <div>
-            Sin permisos de <strong>{areaActiva === 'produccion' ? 'Producción' : areaActiva === 'administracion' ? 'Administración' : 'Obra'}</strong> en {modoPeriodo === 'semana' ? `Sem ${infoSemana.numSemana} (${infoSemana.etiquetaRango})` : 'este periodo'}.
-          </div>
-          {esControlRH && solicitudesEnPeriodo.length > 0 && (
-            <div style={{ marginTop: '6px', fontSize: '12.5px', color: c.accent }}>
-              (Hay {solicitudesEnPeriodo.length} permiso(s) en las otras pestañas en esta semana).
+      {/* 2. PANEL GRADUAL DE FILTROS (SOLO SE ABRE AL TOCAR "FILTROS") */}
+      {mostrarPanelFiltros && (
+        <div className="th-gradual-filters">
+          {esControlRH && (
+            <div>
+              <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Nómina
+              </label>
+              <select
+                value={nominaFiltro}
+                onChange={(e) => { setNominaFiltro(e.target.value); setPaginaActual(1); }}
+                className="th-gradual-select"
+              >
+                <option value="todas">Todas las nóminas</option>
+                <option value="produccion">Producción</option>
+                <option value="administracion">Administración</option>
+                <option value="obra">Obra</option>
+              </select>
             </div>
           )}
+
+          {esControlRH && departamentos.length > 0 && (
+            <div>
+              <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Departamento
+              </label>
+              <select
+                value={deptoFiltro}
+                onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
+                className="th-gradual-select"
+              >
+                <option value="todos">Todos los departamentos</option>
+                {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
+              Tipo de incidencia
+            </label>
+            <select
+              value={tipoFiltro}
+              onChange={(e) => { setTipoFiltro(e.target.value); setPaginaActual(1); }}
+              className="th-gradual-select"
+            >
+              <option value="todos">Todos los tipos</option>
+              <option value="salida">Salida anticipada</option>
+              <option value="retardo">Retardo</option>
+              <option value="falta">Falta</option>
+              <option value="vacaciones">Vacaciones</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
+              Resolución
+            </label>
+            <select
+              value={filtroEstado}
+              onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
+              className="th-gradual-select"
+            >
+              <option value="todos">Todos los estados</option>
+              <option value="autorizado">Solo autorizados</option>
+              <option value="rechazado">Solo rechazados / regresados</option>
+              <option value="cancelado">Solo cancelados</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* 3. CONTENIDO PRINCIPAL */}
+      {solicitudesPaginadas.length === 0 ? (
+        <div style={{
+          background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '11px',
+          padding: '40px 20px', textAlign: 'center', color: textSecundario, fontSize: '13.5px', fontWeight: '500'
+        }}>
+          No hay permisos registrados que coincidan con la vista actual.
         </div>
       ) : (
         <>
-          {/* A) TABLA EJECUTIVA DE ESCRITORIO / LAPTOP 14" */}
-          <div className="th-desktop-table-view" style={{ background: c.surfaceCard, borderRadius: '12px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
+          {/* TABLA LIMPIA DE ESCRITORIO */}
+          <div className="th-desktop-table-view" style={{ background: c.surfaceCard, borderRadius: '11px', border: `1px solid ${c.border}`, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+              <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13.5px' }}>
                 <colgroup>
-                  {esControlRH && <col style={{ width: '42px' }} />}
-                  <col style={{ width: esControlRH ? '30%' : '36%' }} />
-                  <col style={{ width: esControlRH ? '27%' : '32%' }} />
-                  <col style={{ width: '15%' }} />
+                  {esControlRH && <col style={{ width: '38px' }} />}
+                  <col style={{ width: esControlRH ? '32%' : '38%' }} />
+                  <col style={{ width: esControlRH ? '28%' : '32%' }} />
+                  <col style={{ width: '14%' }} />
                   <col style={{ width: '13%' }} />
-                  {esControlRH && <col style={{ width: '195px' }} />}
+                  {esControlRH && <col style={{ width: '170px' }} />}
                 </colgroup>
                 <thead>
                   <tr style={{
                     background: c.surface, borderBottom: `1px solid ${c.border}`,
-                    color: textSecundario, fontSize: '12px', fontWeight: '800',
+                    color: textSecundario, fontSize: '11px', fontWeight: '700',
                     textTransform: 'uppercase', letterSpacing: '0.04em'
                   }}>
                     {esControlRH && (
-                      <th style={{ padding: '12px 10px 12px 16px', verticalAlign: 'middle' }}>
+                      <th style={{ padding: '10px 8px 10px 14px', verticalAlign: 'middle' }}>
                         <div onClick={toggleSeleccionarTodo} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           {seleccionados.length > 0 && seleccionados.length === solicitudesPaginadas.length
-                            ? <CheckSquare size={17} color={c.accent} />
-                            : <Square size={17} />}
+                            ? <CheckSquare size={15} color={c.accent} />
+                            : <Square size={15} />}
                         </div>
                       </th>
                     )}
-                    <th style={{ padding: '12px 14px', verticalAlign: 'middle' }}>Colaborador / Folio</th>
-                    <th style={{ padding: '12px 14px', verticalAlign: 'middle' }}>Incidencia y Horario</th>
-                    <th style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Caseta</th>
-                    <th style={{ padding: '12px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Dictamen</th>
-                    {esControlRH && <th style={{ padding: '12px 16px 12px 10px', verticalAlign: 'middle', textAlign: 'right' }}>Detalle / Papeleta</th>}
+                    <th style={{ padding: '10px 14px', verticalAlign: 'middle' }}>Colaborador</th>
+                    <th style={{ padding: '10px 14px', verticalAlign: 'middle' }}>Incidencia</th>
+                    <th style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Caseta</th>
+                    <th style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'center' }}>Dictamen</th>
+                    {esControlRH && <th style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'right' }}>Acciones</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {solicitudesPaginadas.map(s => {
                     const u = s.usuarios || {};
-                    const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
                     const pagoLow = (s.pago || '').toLowerCase();
+                    const esCancelado = pagoLow === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+                    const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
                     const seRegresoCasa = pagoLow.includes('regresa');
                     const esAlertaPago = seRegresoCasa || pagoLow.includes('sin goce');
                     const seleccionado = seleccionados.includes(s.id);
@@ -1077,26 +734,14 @@ export default function TablaHistorial({
 
                     const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
-                    const renderIconoCaseta = () => {
-                      if (!aplicaCaseta) {
-                        return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
-                            background: c.bg, color: textSecundario, border: `1px solid ${c.border}`
-                          }}>
-                            N/A
-                          </span>
-                        );
+                    const renderSelloCaseta = () => {
+                      if (!aplicaCaseta || esCancelado) {
+                        return <span style={{ fontSize: '12px', color: textSecundario }}>—</span>;
                       }
                       if (horaRegresadoCaseta || seRegresoCasa) {
                         return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800',
-                            background: 'rgba(245,158,11,0.14)', color: '#d97706'
-                          }}>
-                            <CornerUpLeft size={13} /> {horaRegresadoCaseta || 'Sin acceso'}
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CornerUpLeft size={12.5} /> {horaRegresadoCaseta || 'Se retiró'}
                           </span>
                         );
                       }
@@ -1105,35 +750,12 @@ export default function TablaHistorial({
                           ? `${horaSalidaCaseta.replace(/\s*hrs/i, '')} → ${horaEntradaCaseta.replace(/\s*hrs/i, '')}`
                           : (horaSalidaCaseta || horaEntradaCaseta);
                         return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800',
-                            background: 'rgba(22,163,74,0.1)', color: '#16a34a', border: '1px solid rgba(22,163,74,0.28)'
-                          }}>
-                            <DoorOpen size={13} /> {textoHora}
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <DoorOpen size={12.5} /> {textoHora}
                           </span>
                         );
                       }
-                      if (!esAut) {
-                        return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '5px',
-                            padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
-                            background: 'rgba(239,68,68,0.1)', color: '#ef4444'
-                          }}>
-                            Sin acceso
-                          </span>
-                        );
-                      }
-                      return (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700',
-                          background: c.bg, color: textSecundario, border: `1px dashed ${c.border}`
-                        }}>
-                          Sin sello
-                        </span>
-                      );
+                      return <span style={{ fontSize: '12px', color: textSecundario }}>Pendiente</span>;
                     };
 
                     return (
@@ -1144,116 +766,104 @@ export default function TablaHistorial({
                             cursor: 'pointer',
                             borderBottom: expandido ? 'none' : `1px solid ${c.borderDivider}`,
                             background: seleccionado
-                              ? (modoOscuro ? 'rgba(22,163,74,0.14)' : 'rgba(22,163,74,0.06)')
+                              ? (modoOscuro ? 'rgba(22,163,74,0.12)' : 'rgba(22,163,74,0.05)')
                               : expandido
-                                ? (modoOscuro ? 'rgba(255,255,255,0.03)' : '#f8fafc')
+                                ? (modoOscuro ? 'rgba(255,255,255,0.02)' : '#f8fafc')
                                 : 'transparent',
-                            transition: 'background 0.15s ease'
+                            transition: 'background 0.12s ease'
                           }}
                         >
                           {esControlRH && (
-                            <td style={{ padding: '14px 10px 14px 16px', verticalAlign: 'middle' }} onClick={(e) => toggleSeleccion(s.id, e)}>
+                            <td style={{ padding: '11px 8px 11px 14px', verticalAlign: 'middle' }} onClick={(e) => toggleSeleccion(s.id, e)}>
                               <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                 {seleccionado
-                                  ? <CheckSquare size={17} color={c.accent} />
-                                  : <Square size={17} color={textSecundario} style={{ opacity: 0.6 }} />}
+                                  ? <CheckSquare size={15} color={c.accent} />
+                                  : <Square size={15} color={textSecundario} style={{ opacity: 0.5 }} />}
                               </div>
                             </td>
                           )}
 
-                          <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-                              <span style={{
-                                fontFamily: 'ui-monospace, monospace', fontSize: '12.5px', fontWeight: '800',
-                                color: c.text, background: c.bg, border: `1px solid ${c.border}`,
-                                padding: '2px 8px', borderRadius: '5px'
-                              }}>
+                          <td style={{ padding: '11px 14px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                            <div style={{ fontWeight: '700', color: c.text, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {u.nombre_completo || 'Colaborador'}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '12px', color: textSecundario }}>
+                              <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700', color: c.text }}>
                                 {s.folio}
                               </span>
-                              <span style={{ fontSize: '13px', fontWeight: '800', color: textSecundario }}>
-                                #{u.numero_empleado}
+                              <span>·</span>
+                              <span>#{u.numero_empleado}</span>
+                              <span>·</span>
+                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {u.departamentos?.nombre || 'General'}
                               </span>
-                              <span style={{ fontSize: '12.5px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                • {u.departamentos?.nombre || 'General'}{u.area && u.area !== u.departamentos?.nombre ? ` (${u.area})` : ''}
-                              </span>
-                            </div>
-                            <div style={{
-                              fontWeight: '800', color: c.text, fontSize: '15.5px',
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                            }}>
-                              {u.nombre_completo || 'Colaborador'}
                             </div>
                           </td>
 
-                          <td style={{ padding: '14px', verticalAlign: 'middle', overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <td style={{ padding: '11px 14px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                               <span style={{
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                minWidth: '82px', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase',
-                                padding: '2px 8px', borderRadius: '5px',
+                                fontSize: '11px', fontWeight: '700', padding: '1px 7px', borderRadius: '5px',
                                 background: estiloTipo.bg, border: `1px solid ${estiloTipo.border}`, color: estiloTipo.color
                               }}>
                                 {estiloTipo.label}
                               </span>
-                              <span style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
-                                {s.fecha_permiso}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${s.fecha_fin}` : ''}
+                              <span style={{ fontSize: '13px', fontWeight: '700', color: c.text }}>
+                                {formatearFechaCorta(s.fecha_permiso)}{s.fecha_fin && s.fecha_fin !== s.fecha_permiso ? ` al ${formatearFechaCorta(s.fecha_fin)}` : ''}
                               </span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: textSecundario, fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '12px', color: textSecundario, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               <span>{horarioSolicitado}</span>
                               {categoria && (
                                 <>
-                                  <span>•</span>
+                                  <span>·</span>
                                   {renderIconoNaturaleza(categoria)}
                                 </>
                               )}
                             </div>
                           </td>
 
-                          <td style={{ padding: '14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {renderIconoCaseta()}
+                          <td style={{ padding: '11px 14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {renderSelloCaseta()}
                           </td>
 
-                          <td style={{ padding: '14px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <td style={{ padding: '11px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                              minWidth: '108px', fontSize: '12.5px', fontWeight: '800', padding: '5px 10px', borderRadius: '7px',
-                              backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : esAlertaPago ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
-                              color: !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
-                              border: `1px solid ${!esAut ? 'rgba(239,68,68,0.28)' : esAlertaPago ? 'rgba(245,158,11,0.35)' : 'rgba(22,163,74,0.28)'}`
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                              fontSize: '12px', fontWeight: '700', padding: '3px 9px', borderRadius: '6px',
+                              backgroundColor: esCancelado ? c.bg : !esAut ? 'rgba(239,68,68,0.10)' : esAlertaPago ? 'rgba(245,158,11,0.12)' : 'rgba(22,163,74,0.10)',
+                              color: esCancelado ? textSecundario : !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
+                              border: `1px solid ${esCancelado ? c.border : !esAut ? 'rgba(239,68,68,0.22)' : esAlertaPago ? 'rgba(245,158,11,0.28)' : 'rgba(22,163,74,0.22)'}`
                             }}>
-                              {esAut ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                              {s.estado_general === 'cancelado' ? 'Cancelado' : (esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : (seRegresoCasa ? 'Se regresó' : 'Rechazado'))}
+                              {esCancelado ? 'Cancelado' : esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : (seRegresoCasa ? 'Se regresó' : 'Rechazado')}
                             </span>
                           </td>
 
                           {esControlRH && (
-                            <td style={{ padding: '14px 16px 14px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                <button
-                                  onClick={() => toggleExpandir(s.id)}
-                                  style={{
-                                    padding: '7px 10px', borderRadius: '7px',
-                                    border: `1px solid ${expandido ? c.text : c.border}`,
-                                    background: expandido ? c.surface : c.bg,
-                                    color: expandido ? c.text : textSecundario,
-                                    fontSize: '12.5px', fontWeight: '800', cursor: 'pointer',
-                                    display: 'inline-flex', alignItems: 'center', gap: '4px'
-                                  }}
-                                >
-                                  {expandido ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                                  {expandido ? 'Ocultar' : 'Detalles'}
-                                </button>
-
+                            <td style={{ padding: '11px 14px 11px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                 <button
                                   onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
                                   style={{
-                                    padding: '7px 12px', borderRadius: '7px', border: `1px solid ${c.border}`,
-                                    background: c.bg, color: c.text, fontSize: '12.5px', fontWeight: '800',
+                                    height: '28px', padding: '0 10px', borderRadius: '6px', border: `1px solid ${c.border}`,
+                                    background: c.bg, color: c.text, fontSize: '12px', fontWeight: '700',
                                     cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                                   }}
                                 >
-                                  <Printer size={14} color={textSecundario} /> Papeleta
+                                  <Printer size={13} color={textSecundario} /> Papeleta
+                                </button>
+                                <button
+                                  onClick={() => toggleExpandir(s.id)}
+                                  title="Ver detalles"
+                                  style={{
+                                    width: '28px', height: '28px', borderRadius: '6px',
+                                    border: `1px solid ${expandido ? c.text : c.border}`,
+                                    background: expandido ? c.surface : 'transparent',
+                                    color: textSecundario, cursor: 'pointer',
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                                  }}
+                                >
+                                  {expandido ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                 </button>
                               </div>
                             </td>
@@ -1263,61 +873,80 @@ export default function TablaHistorial({
                         {expandido && (
                           <tr style={{
                             borderBottom: `1px solid ${c.borderDivider}`,
-                            background: modoOscuro ? 'rgba(255,255,255,0.025)' : '#f8fafc'
+                            background: modoOscuro ? 'rgba(255,255,255,0.015)' : '#f8fafc'
                           }}>
-                            <td colSpan={totalColumnas} style={{ padding: '0 18px 16px 18px' }}>
+                            <td colSpan={totalColumnas} style={{ padding: '0 16px 14px 16px' }}>
                               <div style={{
                                 display: 'grid',
                                 gridTemplateColumns: '1.2fr 1fr',
                                 gap: '16px',
-                                padding: '14px 16px',
-                                borderRadius: '10px',
+                                padding: '12px 14px',
+                                borderRadius: '9px',
                                 background: c.bg,
                                 border: `1px solid ${c.border}`
                               }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '12px', borderRight: `1px solid ${c.border}` }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                    <FileText size={13} color={textSecundario} />
-                                    <span>Motivo {categoria ? `• ${categoria}` : ''}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '12px', borderRight: `1px solid ${c.border}` }}>
+                                  <div style={{ fontSize: '11px', fontWeight: '700', color: textSecundario, textTransform: 'uppercase' }}>
+                                    Motivo {categoria ? `· ${categoria}` : ''}
                                   </div>
-                                  <div style={{ fontSize: '14px', fontWeight: '600', color: c.text, lineHeight: 1.45 }}>
+                                  <div style={{ fontSize: '13.5px', fontWeight: '500', color: c.text, lineHeight: 1.45 }}>
                                     {motivoTexto || 'Sin motivo especificado.'}
                                   </div>
 
                                   {notasFlujo && notasFlujo.length > 0 && (
-                                    <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                        <MessageSquare size={12} color={textSecundario} />
-                                        <span>Comentarios de Autorización</span>
-                                      </div>
+                                    <div style={{ marginTop: '4px', paddingTop: '6px', borderTop: `1px dashed ${c.border}`, display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                       {notasFlujo.map((n, idx) => (
-                                        <div key={idx} style={{ fontSize: '13px', color: c.text }}>
-                                          <strong>{n.autor}:</strong> {n.texto}
+                                        <div key={idx} style={{ fontSize: '12.5px', color: c.text }}>
+                                          <strong style={{ color: textSecundario }}>{n.autor}:</strong> {n.texto}
                                         </div>
                                       ))}
                                     </div>
                                   )}
 
                                   {!esAut && motivoRechazo && (
-                                    <div style={{ fontSize: '13px', color: '#ef4444', fontWeight: '700', marginTop: '4px' }}>
-                                      Motivo de rechazo: {motivoRechazo}
+                                    <div style={{ fontSize: '12.5px', color: esCancelado ? textSecundario : '#ef4444', fontWeight: '600', marginTop: '2px' }}>
+                                      {motivoRechazo}
                                     </div>
                                   )}
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                                    <ShieldCheck size={14} color={textSecundario} />
-                                    <span>Cadena de Firmas y Aprobación</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '8px' }}>
+                                  <div>
+                                    <div style={{ fontSize: '11px', fontWeight: '700', color: textSecundario, textTransform: 'uppercase', marginBottom: '6px' }}>
+                                      Autorizaciones
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                      {supervisorSubarea && <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />}
+                                      <ChipFirmaDetalle rolLabel="Jefe" nombre={s.firmante1?.nombre_completo} estado={s.firma_1_estado} />
+                                      <ChipFirmaDetalle rolLabel="Gerente" nombre={s.firmante2?.nombre_completo} estado={s.firma_2_estado} />
+                                      <ChipFirmaDetalle rolLabel="RH" nombre={s.firmante3?.nombre_completo} estado={s.firma_3_estado} />
+                                    </div>
                                   </div>
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                    {supervisorSubarea && (
-                                      <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />
-                                    )}
-                                    <ChipFirmaDetalle rolLabel="Jefe" nombre={s.firmante1?.nombre_completo} estado={s.firma_1_estado} />
-                                    <ChipFirmaDetalle rolLabel="Gerente" nombre={s.firmante2?.nombre_completo} estado={s.firma_2_estado} />
-                                    <ChipFirmaDetalle rolLabel="RH" nombre={s.firmante3?.nombre_completo} estado={s.firma_3_estado} />
-                                  </div>
+
+                                  {esControlRH && !esCancelado && s.estado_general !== 'rechazado' && !tieneSelloFisicoCaseta(s) && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                      <button
+                                        type="button"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          const mot = window.prompt('Motivo de cancelación del pase (ej. Vacaciones pospuestas / Ya no se ocupó):');
+                                          if (!mot || !mot.trim()) return;
+                                          try {
+                                            await cancelarSolicitudPermiso({ permiso: s, usuario: { nombre_completo: 'Recursos Humanos' }, motivoCancelacion: mot });
+                                            if (onRecargar) onRecargar();
+                                          } catch (err) {
+                                            alert(err.message);
+                                          }
+                                        }}
+                                        style={{
+                                          padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
+                                          background: 'transparent', color: '#ef4444', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer'
+                                        }}
+                                      >
+                                        Cancelar pase
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -1331,159 +960,54 @@ export default function TablaHistorial({
             </div>
           </div>
 
-          {/* B) TARJETAS MÓVILES ULTRA COMPRIMIDAS Y ESTÉTICAS (2 RENGLONES LIMPIOS) */}
+          {/* TARJETAS MÓVILES COMPACTAS */}
           <div className="th-mobile-cards-view">
             {solicitudesPaginadas.map(s => {
               const u = s.usuarios || {};
-              const esAut = ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
               const pagoLow = (s.pago || '').toLowerCase();
+              const esCancelado = pagoLow === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+              const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
               const seRegresoCasa = pagoLow.includes('regresa');
-              const esAlertaPago = seRegresoCasa || pagoLow.includes('sin goce');
               const expandido = expandidos.includes(s.id);
               const estiloTipo = getEstiloTipo(s.tipo_permiso);
-              const tipoLow = (s.tipo_permiso || '').toLowerCase();
-
-              const {
-                horarioSolicitado,
-                horaSalidaCaseta,
-                horaEntradaCaseta,
-                horaRegresadoCaseta,
-                supervisorSubarea,
-                motivoRechazo,
-                notasFlujo
-              } = parsearDatosObservaciones(s.observaciones);
-              const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
-
-              const fechaCorta = formatearFechaCorta(s.fecha_permiso).replace(/\s+\d{4}$/, '');
-
-              let horaCorta = String(horarioSolicitado || '')
-                .replace(/^Llegada estimada:\s*/i, '')
-                .replace(/^Salida definitiva:\s*/i, '')
-                .replace(/^Para el:\s*.*$/i, 'Día completo');
-
-              if (tipoLow === 'vacaciones' || horaCorta.toLowerCase().startsWith('del ')) {
-                horaCorta = (s.fecha_fin && s.fecha_fin !== s.fecha_permiso)
-                  ? `al ${formatearFechaCorta(s.fecha_fin).replace(/\s+\d{4}$/, '')}`
-                  : '1 día';
-              }
+              const { horarioSolicitado, motivoRechazo, notasFlujo } = parsearDatosObservaciones(s.observaciones);
+              const { texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
               return (
                 <div
                   key={s.id}
                   className="th-mcard"
-                  style={{ borderLeft: `4px solid ${estiloTipo.color}` }}
+                  onClick={() => toggleExpandir(s.id)}
+                  style={{ borderLeft: `3px solid ${estiloTipo.color}`, cursor: 'pointer' }}
                 >
-                  {/* RENGLÓN 1: NOMBRE DEL COLABORADOR <---> DICTAMEN + FLECHA */}
-                  <div
-                    className="th-mcard-row1"
-                    onClick={() => toggleExpandir(s.id)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="th-mcard-name">
-                      {u.nombre_completo || 'Colaborador'}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                      <span style={{
-                        fontSize: '10px', fontWeight: '800', padding: '2px 7px', borderRadius: '5px',
-                        textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '0.02em',
-                        backgroundColor: !esAut ? 'rgba(239,68,68,0.12)' : esAlertaPago ? 'rgba(245,158,11,0.14)' : 'rgba(22,163,74,0.12)',
-                        color: !esAut ? '#ef4444' : esAlertaPago ? '#d97706' : '#16a34a',
-                        border: `1px solid ${!esAut ? 'rgba(239,68,68,0.25)' : esAlertaPago ? 'rgba(245,158,11,0.3)' : 'rgba(22,163,74,0.25)'}`
-                      }}>
-                        {s.estado_general === 'cancelado' ? 'Cancelado' : (esAut ? (seRegresoCasa ? 'Se regresa' : (s.pago || 'Autorizado')) : (seRegresoCasa ? 'Se regresó' : 'Rechazado'))}
-                      </span>
-                      {expandido ? <ChevronUp size={15} color={textSecundario} /> : <ChevronDown size={15} color={textSecundario} />}
-                    </div>
-                  </div>
-
-                  {/* RENGLÓN 2: FOLIO · TIPO · FECHA · HORA <---> DEPTO */}
-                  <div
-                    className="th-mcard-row2"
-                    onClick={() => toggleExpandir(s.id)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="th-mcard-meta-left">
-                      <span style={{
-                        fontFamily: 'ui-monospace, monospace', fontSize: '10.5px', fontWeight: '800',
-                        color: textSecundario
-                      }}>
-                        {s.folio}
-                      </span>
-                      <span>·</span>
-                      <span style={{
-                        fontSize: '10px', fontWeight: '800', textTransform: 'uppercase',
-                        color: estiloTipo.color
-                      }}>
-                        {estiloTipo.label}
-                      </span>
-                      <span>·</span>
-                      <span style={{ color: c.text, fontWeight: '700' }}>
-                        {fechaCorta}
-                      </span>
-                      <span style={{ color: textSecundario }}>
-                        ({horaCorta})
-                      </span>
-                    </div>
-
-                    <span style={{ fontSize: '10.5px', fontWeight: '700', color: textSecundario, flexShrink: 0 }}>
-                      #{u.numero_empleado} {u.departamentos?.nombre ? `· ${u.departamentos.nombre}` : ''}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13.5px', fontWeight: '700', color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.nombre_completo}
+                    </span>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: esCancelado ? textSecundario : esAut ? '#16a34a' : '#ef4444' }}>
+                      {esCancelado ? 'Cancelado' : esAut ? (s.pago || 'Autorizado') : 'Rechazado'}
                     </span>
                   </div>
-
-                  {/* DETALLE EXPANDIBLE AL TOCAR LA TARJETA */}
+                  <div style={{ fontSize: '11.5px', color: textSecundario, display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>{s.folio}</span>
+                    <span>·</span>
+                    <span style={{ color: estiloTipo.color, fontWeight: '700' }}>{estiloTipo.label}</span>
+                    <span>·</span>
+                    <span>{formatearFechaCorta(s.fecha_permiso)}</span>
+                    <span>({horarioSolicitado})</span>
+                  </div>
                   {expandido && (
-                    <div style={{
-                      marginTop: '6px', paddingTop: '8px', borderTop: `1px dashed ${c.border}`,
-                      display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px'
-                    }}>
-                      <div style={{
-                        background: c.bg, padding: '8px 10px', borderRadius: '8px',
-                        border: `1px solid ${c.border}`, color: c.text, lineHeight: 1.4
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                          <span style={{ fontSize: '10.5px', fontWeight: '800', color: textSecundario, textTransform: 'uppercase' }}>
-                            Motivo
-                          </span>
-                          {renderIconoNaturaleza(categoria)}
-                        </div>
-                        {motivoTexto || 'Sin motivo especificado.'}
-                      </div>
-
-                      {(horaSalidaCaseta || horaEntradaCaseta || horaRegresadoCaseta) && (
-                        <div style={{ fontSize: '11.5px', fontWeight: '700', color: textSecundario }}>
-                          Caseta: {horaSalidaCaseta ? `Salida ${horaSalidaCaseta}` : ''} {horaEntradaCaseta ? `· Entrada ${horaEntradaCaseta}` : ''} {horaRegresadoCaseta ? `· Regresado ${horaRegresadoCaseta}` : ''}
-                        </div>
-                      )}
-
-                      {notasFlujo && notasFlujo.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          {notasFlujo.map((n, idx) => (
-                            <div key={idx} style={{ fontSize: '12px', color: c.text }}>
-                              <strong>💬 {n.autor}:</strong> {n.texto}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                        {supervisorSubarea && <ChipFirmaDetalle rolLabel="Subárea" nombre={supervisorSubarea} estado="autorizado" />}
-                        <ChipFirmaDetalle rolLabel="Jefe" nombre={s.firmante1?.nombre_completo} estado={s.firma_1_estado} />
-                        <ChipFirmaDetalle rolLabel="Gerente" nombre={s.firmante2?.nombre_completo} estado={s.firma_2_estado} />
-                        <ChipFirmaDetalle rolLabel="RH" nombre={s.firmante3?.nombre_completo} estado={s.firma_3_estado} />
-                      </div>
-
+                    <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: `1px dashed ${c.border}`, fontSize: '12px', color: c.text }}>
+                      <div>{motivoTexto}</div>
+                      {notasFlujo.map((n, i) => <div key={i} style={{ color: textSecundario }}><strong>{n.autor}:</strong> {n.texto}</div>)}
+                      {motivoRechazo && <div style={{ color: '#ef4444' }}>{motivoRechazo}</div>}
                       {esControlRH && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onSeleccionarPapeleta && onSeleccionarPapeleta([s]); }}
-                          style={{
-                            width: '100%', height: '34px', borderRadius: '8px', border: `1px solid ${c.border}`,
-                            background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                          }}
+                          style={{ marginTop: '6px', width: '100%', height: '30px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, fontSize: '12px', fontWeight: '700' }}
                         >
-                          <Printer size={14} color={c.accent} /> Ver Papeleta Oficial
+                          Ver Papeleta
                         </button>
                       )}
                     </div>
@@ -1493,34 +1017,36 @@ export default function TablaHistorial({
             })}
           </div>
 
-          {/* PAGINACIÓN COMPACTA */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px',
-            padding: '10px 14px', borderRadius: '11px', border: `1px solid ${c.border}`, background: c.surfaceCard
-          }}>
-            <span style={{ fontSize: '12px', color: textSecundario, fontWeight: '600' }}>
-              {solicitudesPaginadas.length} de {solicitudesProcesadas.length} registros
-            </span>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <button
-                onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
-                disabled={paginaActual === 1}
-                style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === 1 ? 'not-allowed' : 'pointer', opacity: paginaActual === 1 ? 0.5 : 1 }}
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <span style={{ fontSize: '12px', fontWeight: '800', color: c.text }}>
-                {paginaActual} / {totalPaginas}
+          {/* PAGINACIÓN DISCRETA */}
+          {totalPaginas > 1 && (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 12px', borderRadius: '9px', border: `1px solid ${c.border}`, background: c.surfaceCard
+            }}>
+              <span style={{ fontSize: '12px', color: textSecundario }}>
+                Mostrando {solicitudesPaginadas.length} de {solicitudesProcesadas.length}
               </span>
-              <button
-                onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
-                disabled={paginaActual === totalPaginas}
-                style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === totalPaginas ? 'not-allowed' : 'pointer', opacity: paginaActual === totalPaginas ? 0.5 : 1 }}
-              >
-                <ChevronRight size={14} />
-              </button>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <button
+                  onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
+                  disabled={paginaActual === 1}
+                  style={{ padding: '4px 7px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === 1 ? 'not-allowed' : 'pointer', opacity: paginaActual === 1 ? 0.4 : 1 }}
+                >
+                  <ChevronLeft size={13} />
+                </button>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: c.text }}>
+                  {paginaActual} / {totalPaginas}
+                </span>
+                <button
+                  onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
+                  disabled={paginaActual === totalPaginas}
+                  style={{ padding: '4px 7px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.bg, color: c.text, cursor: paginaActual === totalPaginas ? 'not-allowed' : 'pointer', opacity: paginaActual === totalPaginas ? 0.4 : 1 }}
+                >
+                  <ChevronRight size={13} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

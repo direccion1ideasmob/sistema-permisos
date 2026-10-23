@@ -47,7 +47,7 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
     .select('id', { count: 'exact', head: true })
     .eq('usuario_id', usuarioId)
     .eq('tipo_permiso', 'retardo')
-    .not('estado_general', 'in', '("rechazado","cancelado")')
+    .neq('estado_general', 'rechazado')
     .gte('fecha_permiso', fechaLimite.toISOString().split('T')[0]);
 
   if (permisoId) {
@@ -609,7 +609,7 @@ export const obtenerHistorialGeneralPermisos = async ({ deptoFiltro = 'todos', t
       firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),
       firmante3:firma_3_id (id, nombre_completo, rol, puesto, firma_url)
     `)
-    .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta', 'rechazado', 'cancelado'])
+    .in('estado_general', ['autorizado', 'aprobado', 'completado_caseta', 'rechazado'])
     .order('created_at', { ascending: false });
 
   if (tipoFiltro && tipoFiltro !== 'todos') {
@@ -821,7 +821,7 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
   const { error } = await supabase
     .from('permisos')
     .update({
-      estado_general: 'cancelado',
+      estado_general: 'rechazado',
       pago: 'Cancelado',
       observaciones: nuevasObs
     })
