@@ -491,8 +491,7 @@ export const crearNuevaSolicitudPermiso = async ({
   let estadoFirma3 = rhFinalId ? (rhFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
 
   // FUSIÓN INTELIGENTE: Si la división ya es comandada por José Coca (RH / Vigilancia), omitimos Firma 2 para no firmar doble
-  const esRetardoAdmin = form.tipo_permiso === 'retardo' && (rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin'));
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || esRetardoAdmin) {
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId) {
     estadoFirma2 = 'omitido';
   }
 
