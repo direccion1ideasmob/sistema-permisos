@@ -254,25 +254,18 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
   if (error) throw error;
 
-  if ((solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
-    try {
-      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
-      if (guardias && guardias.length > 0) {
-        const nomTrab = solicitud.usuarios?.nombre_completo || 'Colaborador';
-        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
-          titulo: '🚫 ACCESO DENEGADO',
-          mensaje: `👤 ${nomTrab} • Se retira de planta.`,
-          fotoUrl: solicitud.usuarios?.foto_url || null,
-          urlDestino: '/caseta/asistencia'
-        });
-      }
-    } catch (_) {}
-  }
+  // 1) AVISO CORTO A CASETA SI ES RETARDO EN PUERTA Y YA HUBO DECISIÓN DE JEFE O RH
+  const tipoLower = (solicitud.tipo_permiso || '').toLowerCase();
+  const estaEnPuerta = /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
 
-  // Notificar a Caseta si el colaborador estaba esperando resolución en puerta
-  if ((solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
-    const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
-    const yaResolvioJefeORH = updates.firma_1_estado === 'autorizado' || updates.estado_general === 'autorizado' || seRegresaDictamen;
+  if (tipoLower === 'retardo' && estaEnPuerta) {
+    const yaResolvioJefeORH =
+      updates.firma_1_estado === 'autorizado' ||
+      updates.estado_general === 'autorizado' ||
+      huboRelevoSubareaADepto ||
+      seRegresaDictamen;
+
     if (yaResolvioJefeORH) {
       try {
         const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
@@ -291,17 +284,30 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     }
   }
 
+  // 2) AVISO CORTO A CASETA CUANDO UN PASE DE SALIDA QUEDA AUTORIZADO
+  if (tipoLower === 'salida' && updates.estado_general === 'autorizado') {
+    try {
+      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+      if (guardias && guardias.length > 0) {
+        const nomTrab = solicitud.usuarios?.nombre_completo || 'Colaborador';
+        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+          titulo: '🔵 PASE DE SALIDA AUTORIZADO',
+          mensaje: `👤 ${nomTrab} • Autorizado para salir de planta.`,
+          fotoUrl: solicitud.usuarios?.foto_url || null,
+          urlDestino: '/caseta'
+        });
+      }
+    } catch (_) {}
+  }
+
+  // 3) NOTIFICACIÓN AL EMPLEADO O AL SIGUIENTE FIRMANTE EN LA CADENA
   if (updates.estado_general === 'autorizado') {
     const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
-    const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
     await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
-      titulo: seRegresa ? `↩️ Retardo Dictaminado: Se Regresa` : `✅ ${tipoPase} Autorizado`,
-        });
-        
-        if (false) await enviarNotificacion({
-      mensaje: seRegresa
-        ? `Folio de respaldo: ${nuevoFolioGenerado}\nDictamen: Se regresa al trabajador (Sin acceso en planta)`
-        : `Folio Oficial: ${nuevoFolioGenerado}\nDictamen: ${dictamenPago}`,
+      titulo: seRegresaDictamen ? '↩️ Acceso no autorizado' : `✅ ${tipoPase} Autorizado`,
+      mensaje: seRegresaDictamen
+        ? `Folio: ${nuevoFolioGenerado} • Instrucción: Retirarse de planta.`
+        : `Folio Oficial: ${nuevoFolioGenerado} • Tu solicitud ha sido autorizada.`,
       urlDestino: '/mis-permisos'
     });
   } else if (siguientesEnFirmar.length > 0) {
@@ -357,6 +363,22 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
 
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
   if (error) throw error;
+
+  // Si era un retardo esperando en puerta, avisar a Caseta sin detalles administrativos
+  if ((solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
+    try {
+      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+      if (guardias && guardias.length > 0) {
+        const nomTrab = solicitud.usuarios?.nombre_completo || 'Colaborador';
+        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+          titulo: '🚫 ACCESO DENEGADO',
+          mensaje: `👤 ${nomTrab} • Se retira de planta.`,
+          fotoUrl: solicitud.usuarios?.foto_url || null,
+          urlDestino: '/caseta/asistencia'
+        });
+      }
+    } catch (_) {}
+  }
 
   const tipoPaseR = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
   await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
@@ -728,6 +750,21 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
     .eq('id', permiso.id);
 
   if (error) throw error;
+
+  if ((permiso.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(permiso.observaciones || '')) {
+    try {
+      const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+      if (guardias && guardias.length > 0) {
+        const nomTrab = permiso.usuarios?.nombre_completo || 'Colaborador';
+        await enviarNotificacionPushUsuarios(guardias.map(g => g.id), {
+          titulo: '🚫 ACCESO DENEGADO',
+          mensaje: `👤 ${nomTrab} • Se retira de planta.`,
+          fotoUrl: permiso.usuarios?.foto_url || null,
+          urlDestino: '/caseta/asistencia'
+        });
+      }
+    } catch (_) {}
+  }
 
   const mapaRechazo = {
     salida: 'SALIDA RECHAZADA',
