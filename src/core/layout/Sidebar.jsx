@@ -336,14 +336,7 @@ export default function Sidebar({
                 <ClipboardList size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
                 <span style={s.navText}>Pase de Lista</span>
               </Link>
-              <Link 
-                to="/caseta/retardo" 
-                onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta/retardo' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-              >
-                <Clock size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Apoyo Retardo</span>
-              </Link>
+              
             </>
           )}
         </nav>

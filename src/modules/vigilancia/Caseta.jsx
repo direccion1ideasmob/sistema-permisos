@@ -55,8 +55,8 @@ export default function Caseta() {
   const [marcasSalidaRecientes, setMarcasSalidaRecientes] = useState({});
   const [ahoraMs, setAhoraMs] = useState(Date.now());
 
-  const [confirmandoEntradaId, setConfirmandoEntradaId] = useState(null);
-  const [confirmandoSalidaId, setConfirmandoSalidaId] = useState(null);
+  // ESTADO DEL MODAL DE DOBLE PALOMITA: { emp, tipoMarca: 'entrada' | 'salida' }
+  const [modalConfirmacion, setModalConfirmacion] = useState(null);
   const [ultimoRegistradoTexto, setUltimoRegistradoTexto] = useState('');
 
   useEffect(() => {
@@ -120,11 +120,18 @@ export default function Caseta() {
     }
   };
 
-  const handleMarcarAsistencia = async (empleadoId, tipoMarca, nombreColaborador = '') => {
-    if (procesandoId) return;
+  const handleConfirmarDesdeModal = async () => {
+    if (!modalConfirmacion || procesandoId) return;
+    const { emp, tipoMarca } = modalConfirmacion;
+    const empleadoId = emp.id;
+    const nombreColaborador = emp.nombre_completo;
+
     setProcesandoId(`${empleadoId}-${tipoMarca}`);
     try {
       const res = await registrarAsistenciaLista(empleadoId, tipoMarca, usuario?.id || null, false);
+
+      setModalConfirmacion(null);
+      setBusquedaTexto('');
 
       if (tipoMarca === 'entrada') {
         if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
@@ -133,23 +140,15 @@ export default function Caseta() {
         } else if (res?.resultado === 'en_espera_rh') {
           setUltimoRegistradoTexto(`⏳ En espera de veredicto de RH: ${nombreColaborador}`);
         }
-        setBusquedaTexto('');
-        setTimeout(() => {
-          setUltimoRegistradoTexto('');
-          if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
-        }, 1600);
+      } else {
+        setMarcasSalidaRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
+        setUltimoRegistradoTexto(`✓ Salida registrada: ${nombreColaborador}`);
       }
 
-      if (tipoMarca === 'salida') {
-        setMarcasSalidaRecientes(prev => ({ ...prev, [empleadoId]: Date.now() }));
-        setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
-        setBusquedaTexto('');
-        setUltimoRegistradoTexto(`✓ Salida registrada: ${nombreColaborador}`);
-        setTimeout(() => {
-          setUltimoRegistradoTexto('');
-          if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
-        }, 1600);
-      }
+      setTimeout(() => {
+        setUltimoRegistradoTexto('');
+        if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
+      }, 1800);
 
       await cargarDatos();
     } catch (err) {
@@ -631,7 +630,7 @@ export default function Caseta() {
   }
 
   // ====================================================================
-  // PASE DE LISTA: MÍNIMO 3 LETRAS Y SOLO PERMITE MARCAR CUANDO HAY <= 3 COINCIDENCIAS
+  // PASE DE LISTA: MÍNIMO 3 LETRAS + MÁXIMO 3 RESULTADOS + MODAL DE DOBLE PALOMITA
   // ====================================================================
   const termino = (busquedaTexto || '').toLowerCase().trim();
   const letrasSinEspacios = termino.replace(/\s+/g, '');
@@ -640,20 +639,17 @@ export default function Caseta() {
   const todosSinEntrada = empleadosSede.filter(emp => !mapaAsistencias[emp.id]?.hora_entrada);
   const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
 
-  // Separar los que ya están retenidos en puerta (esperando veredicto de RH o con orden de retiro)
   const retenidosActivosPuerta = todosSinEntrada.filter((emp) => {
     const t = mapaIncidenciasHoy[emp.id]?.tipo || 'normal';
     return t === 'retardo_en_espera' || t === 'retardo_regresa' || t === 'retardo_autorizado';
   });
 
-  // Coincidencias de búsqueda en Entrada (solo si escribió >= 3 letras)
   const coincidenciasEntrada = tieneMinimo3Letras
     ? todosSinEntrada.filter((emp) => (emp.nombre_completo || '').toLowerCase().includes(termino))
     : [];
 
   const demasiadasCoincidenciasEntrada = tieneMinimo3Letras && coincidenciasEntrada.length > 3;
 
-  // En Planta: mostrar siempre los recién marcados (60s para poder Deshacer) o coincidencias cuando hay >= 3 letras y <= 3 resultados
   const recientesEnPlanta = todosEnPlanta.filter((emp) => {
     const recE = marcasEntradaRecientes[emp.id] && (ahoraMs - marcasEntradaRecientes[emp.id] < 60000);
     const recS = marcasSalidaRecientes[emp.id] && (ahoraMs - marcasSalidaRecientes[emp.id] < 60000);
@@ -672,13 +668,127 @@ export default function Caseta() {
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
       <style>{estilosComunesCaseta}</style>
 
+      {/* =================================================================
+          MODAL DE CONFIRMACIÓN CON EL NOMBRE DEL TRABAJADOR Y OTRA PALOMITA
+          ================================================================= */}
+      {modalConfirmacion && (
+        <div
+          onClick={() => { if (!procesandoId) setModalConfirmacion(null); }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.68)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: c.surfaceCard,
+              border: `2px solid ${modalConfirmacion.tipoMarca === 'salida' ? '#0284c7' : c.accent}`,
+              borderRadius: '18px',
+              padding: '24px 22px',
+              width: '100%',
+              maxWidth: '410px',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.35)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: '14px'
+            }}
+          >
+            <span style={{
+              fontSize: '11.5px',
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              padding: '4px 12px',
+              borderRadius: '999px',
+              background: modalConfirmacion.tipoMarca === 'salida' ? 'rgba(2,132,199,0.14)' : c.accentSoft,
+              color: modalConfirmacion.tipoMarca === 'salida' ? '#0284c7' : c.accent
+            }}>
+              {modalConfirmacion.tipoMarca === 'salida' ? 'Confirmar Salida de Planta' : 'Confirmar Entrada a Planta'}
+            </span>
+
+            <AvatarColaborador u={modalConfirmacion.emp} size={68} />
+
+            <div>
+              <div style={{ fontSize: '19px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
+                {modalConfirmacion.emp?.nombre_completo}
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '5px' }}>
+                #{modalConfirmacion.emp?.numero_empleado}
+                {modalConfirmacion.emp?.departamentos?.nombre ? ` • ${modalConfirmacion.emp.departamentos.nombre}` : ''}
+              </div>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1.4fr',
+              gap: '10px',
+              width: '100%',
+              marginTop: '6px'
+            }}>
+              <button
+                type="button"
+                onClick={() => setModalConfirmacion(null)}
+                disabled={Boolean(procesandoId)}
+                style={{
+                  height: '52px',
+                  borderRadius: '12px',
+                  border: `1.5px solid ${c.border}`,
+                  background: c.bg,
+                  color: c.textMuted,
+                  fontSize: '14px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <X size={18} /> Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmarDesdeModal}
+                disabled={Boolean(procesandoId)}
+                style={{
+                  height: '52px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: modalConfirmacion.tipoMarca === 'salida' ? '#0284c7' : c.accent,
+                  color: '#ffffff',
+                  fontSize: '15px',
+                  fontWeight: '900',
+                  cursor: procesandoId ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 6px 18px rgba(22,163,74,0.32)'
+                }}
+              >
+                <Check size={22} strokeWidth={3.2} />
+                <span>{procesandoId ? 'Registrando...' : 'Confirmar'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="tabs-aprobacion-bar caseta-tabs-bar-2">
         <button
           className={`tab-btn ${subTabAsistencia === 'por_llegar' ? 'active' : ''}`}
-          onClick={() => {
-            setSubTabAsistencia('por_llegar');
-            setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
-          }}
+          onClick={() => setSubTabAsistencia('por_llegar')}
         >
           <Users size={15} />
           <span>Entrada</span>
@@ -689,10 +799,7 @@ export default function Caseta() {
 
         <button
           className={`tab-btn ${subTabAsistencia === 'en_planta' ? 'active' : ''}`}
-          onClick={() => {
-            setSubTabAsistencia('en_planta');
-            setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
-          }}
+          onClick={() => setSubTabAsistencia('en_planta')}
         >
           <UserCheck size={15} />
           <span>En Planta / Salidas</span>
@@ -702,7 +809,7 @@ export default function Caseta() {
         </button>
       </div>
 
-      {/* BUSCADOR GRANDE DE TEXTO (MÍNIMO 3 LETRAS, SIN TECLADO NUMÉRICO) */}
+      {/* BUSCADOR GRANDE DE TEXTO (MÍNIMO 3 LETRAS) */}
       <div style={{
         background: c.surfaceCard,
         border: `2px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
@@ -730,10 +837,7 @@ export default function Caseta() {
               type="text"
               placeholder="Escribe al menos 3 letras del nombre o apellido..."
               value={busquedaTexto}
-              onChange={(e) => {
-                setBusquedaTexto(e.target.value);
-                setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
-              }}
+              onChange={(e) => setBusquedaTexto(e.target.value)}
               style={{
                 width: '100%',
                 height: '56px',
@@ -753,7 +857,6 @@ export default function Caseta() {
                 type="button"
                 onClick={() => {
                   setBusquedaTexto('');
-                  setConfirmandoEntradaId(null); setConfirmandoSalidaId(null);
                   if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
                 }}
                 style={{
@@ -818,7 +921,6 @@ export default function Caseta() {
       {/* PESTAÑA 1: ENTRADA */}
       {subTabAsistencia === 'por_llegar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          {/* Mostrar siempre a quienes están esperando respuesta de RH en la puerta */}
           {!tieneMinimo3Letras && retenidosActivosPuerta.map((emp) => {
             const inc = mapaIncidenciasHoy[emp.id];
             const tipoInc = inc?.tipo || 'normal';
@@ -872,52 +974,20 @@ export default function Caseta() {
                     >
                       <CornerUpLeft size={15} /> Confirmar Retiro
                     </button>
-                  ) : confirmandoEntradaId === emp.id ? (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <button
-                            onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
-                            disabled={Boolean(procesandoId)}
-                            style={{
-                              height: '44px', padding: '0 16px', borderRadius: '10px', border: 'none',
-                              background: c.accent, color: '#fff', fontSize: '13px',
-                              fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                              display: 'inline-flex', alignItems: 'center', gap: '6px',
-                              boxShadow: '0 4px 12px rgba(22,163,74,0.28)'
-                            }}
-                          >
-                            <Check size={18} strokeWidth={3} />
-                            <span>{procesandoId === `${emp.id}-entrada` ? ' Procesando...' : 'Confirmar'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmandoEntradaId(null)}
-                            disabled={Boolean(procesandoId)}
-                            style={{
-                              width: '38px', height: '44px', borderRadius: '10px',
-                              border: `1.5px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmandoEntradaId(emp.id)}
-                          disabled={Boolean(procesandoId)}
-                          title="Seleccionar para confirmar entrada"
-                          style={{
-                            minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px',
-                            border: `2px solid ${c.accent}`,
-                            background: c.accentSoft, color: c.accent, fontSize: '13px',
-                            fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                          }}
-                        >
-                          <Check size={20} strokeWidth={3} />
-                        </button>
-                      )}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
+                      disabled={Boolean(procesandoId)}
+                      style={{
+                        minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
+                        background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '900',
+                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                    >
+                      <Check size={20} strokeWidth={3} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1028,52 +1098,22 @@ export default function Caseta() {
                           <CornerUpLeft size={15} /> Confirmar Retiro
                         </button>
                       )
-                    ) : confirmandoEntradaId === emp.id ? (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <button
-                            onClick={() => handleMarcarAsistencia(emp.id, 'entrada', emp.nombre_completo)}
-                            disabled={Boolean(procesandoId)}
-                            style={{
-                              height: '44px', padding: '0 16px', borderRadius: '10px', border: 'none',
-                              background: c.accent, color: '#fff', fontSize: '13px',
-                              fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                              display: 'inline-flex', alignItems: 'center', gap: '6px',
-                              boxShadow: '0 4px 12px rgba(22,163,74,0.28)'
-                            }}
-                          >
-                            <Check size={18} strokeWidth={3} />
-                            <span>{procesandoId === `${emp.id}-entrada` ? ' Procesando...' : 'Confirmar'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmandoEntradaId(null)}
-                            disabled={Boolean(procesandoId)}
-                            style={{
-                              width: '38px', height: '44px', borderRadius: '10px',
-                              border: `1.5px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmandoEntradaId(emp.id)}
-                          disabled={Boolean(procesandoId)}
-                          title="Seleccionar para confirmar entrada"
-                          style={{
-                            minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px',
-                            border: `2px solid ${c.accent}`,
-                            background: c.accentSoft, color: c.accent, fontSize: '13px',
-                            fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                          }}
-                        >
-                          <Check size={20} strokeWidth={3} />
-                        </button>
-                      )}
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
+                        disabled={Boolean(procesandoId)}
+                        title="Seleccionar trabajador"
+                        style={{
+                          minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
+                          background: c.accent, color: '#fff', fontSize: '13px',
+                          fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                        }}
+                      >
+                        <Check size={20} strokeWidth={3} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1082,7 +1122,7 @@ export default function Caseta() {
         </div>
       )}
 
-      {/* PESTAÑA 2: EN PLANTA / SALIDAS (MÍNIMO 3 LETRAS Y MÁXIMO 3 RESULTADOS PARA PODER SELECCIONAR) */}
+      {/* PESTAÑA 2: EN PLANTA / SALIDAS */}
       {subTabAsistencia === 'en_planta' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
           {!tieneMinimo3Letras && recientesEnPlanta.map((emp) => {
@@ -1206,14 +1246,12 @@ export default function Caseta() {
               const tsSalida = marcasSalidaRecientes[emp.id];
               const puedeDeshacerSalida = Boolean(tsSalida && tieneSalida && (ahoraMs - tsSalida < 60000));
 
-              const pidiendoConfirmarSalida = confirmandoSalidaId === emp.id;
-
               return (
                 <div
                   key={emp.id}
                   style={{
                     background: c.surfaceCard,
-                    border: `1.5px solid ${pidiendoConfirmarSalida ? '#0284c7' : c.border}`,
+                    border: `1.5px solid ${c.border}`,
                     borderRadius: '11px',
                     padding: '10px 13px',
                     display: 'flex',
@@ -1295,41 +1333,18 @@ export default function Caseta() {
                           </button>
                         )}
                       </>
-                    ) : pidiendoConfirmarSalida ? (
-                      <>
-                        <button
-                          onClick={() => handleMarcarAsistencia(emp.id, 'salida', emp.nombre_completo)}
-                          disabled={Boolean(procesandoId)}
-                          style={{
-                            height: '38px', padding: '0 14px', borderRadius: '9px', border: 'none',
-                            background: '#0284c7', color: '#fff', fontSize: '12px',
-                            fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                          }}
-                        >
-                          <Check size={15} strokeWidth={3} /> Confirmar Salida
-                        </button>
-                        <button
-                          onClick={() => setConfirmandoSalidaId(null)}
-                          style={{
-                            height: '38px', padding: '0 9px', borderRadius: '9px',
-                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center'
-                          }}
-                        >
-                          <X size={15} />
-                        </button>
-                      </>
                     ) : (
                       <button
-                        onClick={() => setConfirmandoSalidaId(emp.id)}
+                        type="button"
+                        onClick={() => setModalConfirmacion({ emp, tipoMarca: 'salida' })}
                         disabled={Boolean(procesandoId)}
                         style={{
-                          height: '38px', padding: '0 14px', borderRadius: '9px', border: `1px solid ${c.border}`,
-                          background: c.bg, color: c.text, fontSize: '12px',
-                          fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                          height: '42px', padding: '0 16px', borderRadius: '10px', border: `1.5px solid ${c.border}`,
+                          background: c.bg, color: c.text, fontSize: '12.5px',
+                          fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
                         }}
                       >
-                        <LogOut size={14} /> Salida
+                        <LogOut size={15} /> Salida
                       </button>
                     )}
                   </div>
