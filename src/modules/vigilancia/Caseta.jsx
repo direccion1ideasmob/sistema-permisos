@@ -9,13 +9,12 @@ import {
   registrarAsistenciaLista,
   deshacerEntradaReciente,
   deshacerSalidaReciente,
-  cancelarPasePorInasistenciaOCambio,
   obtenerFechaLocalHoy
 } from './services/vigilanciaService';
 import {
   DoorOpen, RotateCcw, CheckCircle2, LogOut,
   Search, RefreshCw, UserCheck, Users,
-  Hourglass, CornerUpLeft, X, Check, Undo2, Ban
+  Hourglass, CornerUpLeft, X, Check, Undo2
 } from 'lucide-react';
 
 export default function Caseta() {
@@ -103,19 +102,6 @@ export default function Caseta() {
       await cargarDatos();
     } catch (err) {
       alert('Error al sellar movimiento: ' + err.message);
-    } finally {
-      setProcesandoId(null);
-    }
-  };
-
-  const handleCancelarPaseSinUso = async (paseId, nombre) => {
-    if (!window.confirm(`¿Confirmas que ${nombre || 'el colaborador'} ya no utilizó este pase o no se presentó?`)) return;
-    setProcesandoId(paseId);
-    try {
-      await cancelarPasePorInasistenciaOCambio(paseId, 'Cancelado en puerta (No se presentó / Sin uso)');
-      await cargarDatos();
-    } catch (err) {
-      alert('Error al cancelar pase: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -508,21 +494,7 @@ export default function Caseta() {
                         </div>
                       </div>
 
-                      <div className="caseta-card-actions">
-                        <button
-                          type="button"
-                          onClick={() => handleCancelarPaseSinUso(p.id, p.usuarios?.nombre_completo)}
-                          disabled={procesandoId === p.id}
-                          style={{
-                            height: '34px', padding: '0 10px', borderRadius: '8px',
-                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                            fontSize: '11px', fontWeight: '700', cursor: 'pointer',
-                            display: 'inline-flex', alignItems: 'center', gap: '4px'
-                          }}
-                        >
-                          <Ban size={13} /> Se retiró
-                        </button>
-                      </div>
+
                     </div>
                   ))}
                 </div>
@@ -584,21 +556,6 @@ export default function Caseta() {
                     </div>
 
                     <div className="caseta-card-actions">
-                      {!esRegresoCasa && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancelarPaseSinUso(p.id, p.usuarios?.nombre_completo)}
-                          disabled={procesandoId === p.id}
-                          style={{
-                            height: '38px', padding: '0 10px', borderRadius: '9px',
-                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                            fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
-                            display: 'inline-flex', alignItems: 'center', gap: '4px'
-                          }}
-                        >
-                          <Ban size={13} /> Sin uso
-                        </button>
-                      )}
                       <button
                         onClick={() => handleSellarPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'))}
                         disabled={procesandoId === p.id}
