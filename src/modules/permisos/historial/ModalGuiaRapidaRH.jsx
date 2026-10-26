@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
   X, BookOpen, User, Shield, CheckSquare, FileBarChart,
-  Users, Zap, Bell, Lock
+  Users, Zap
 } from 'lucide-react';
 
 export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
-  const [tabActiva, setTabActiva] = useState('rh_autorizaciones');
+  const [tabActiva, setTabActiva] = useState('rh_aprobaciones');
 
   const bgCard = modoOscuro ? '#18181b' : '#ffffff';
   const bgSub = modoOscuro ? '#121214' : '#f8fafc';
@@ -16,139 +16,145 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
   const bgTabActive = modoOscuro ? '#27272a' : '#0f172a';
 
   const pestanas = [
-    { id: 'rh_autorizaciones', label: '1. Autorizaciones RH', icono: CheckSquare },
-    { id: 'rh_historial', label: '2. Control y Asistencia', icono: FileBarChart },
-    { id: 'rh_directorio', label: '3. Directorio y Bajas', icono: Users },
-    { id: 'vigilancia', label: '4. Caseta / Vigilancia', icono: Shield },
-    { id: 'colaboradores', label: '5. Empleados y Jefes', icono: User },
+    { id: 'rh_aprobaciones', label: '1. Aprobaciones', icono: CheckSquare },
+    { id: 'rh_historial', label: '2. Control / Historial', icono: FileBarChart },
+    { id: 'rh_directorio', label: '3. Directorio RH', icono: Users },
+    { id: 'caseta', label: '4. Caseta', icono: Shield },
+    { id: 'empleados', label: '5. Pases y Perfil', icono: User },
     { id: 'reglas', label: '6. Reglas Automáticas', icono: Zap }
   ];
 
   const secciones = {
-    rh_autorizaciones: [
+    rh_aprobaciones: [
       {
-        titulo: 'Horarios Oficiales de Planta',
+        titulo: 'Relojes de Turno RH (Configurables en Vivo)',
         puntos: [
-          ['Reloj [07:15 – 17:00]', 'Ubicado arriba en Autorizaciones. Define la hora límite de entrada (tolerancia) y la hora oficial de salida de turno para toda la planta.']
+          ['Botón [🕒 HH:MM – HH:MM]', 'Ubicado arriba a la derecha en "Aprobaciones". Muestra la Tolerancia de Entrada y la Salida Oficial vigentes (por defecto 07:15 y 17:00, pero RH puede cambiarlas en cualquier momento).'],
+          ['Cómo cambiar los horarios', '1) Toca el botón del reloj. 2) Toca el botón "🔒 Candado" para que cambie a "🔓 Abierto". 3) Modifica "Tolerancia Entrada" y/o "Salida Oficial". 4) Presiona "Guardar horarios". Si deseas volver al estándar, usa "Restaurar (07:15 / 17:00)".']
         ]
       },
       {
-        titulo: 'Retardos en Puerta (En Vivo)',
+        titulo: 'Pestañas: "Por Dictaminar" y "En Tránsito"',
         puntos: [
-          ['Tarjeta Roja RETARDO', 'Aparece al instante cuando Vigilancia registra en caseta a un trabajador que llegó después de la hora límite. Muestra la hora exacta de llegada a puerta.'],
-          ['Botón "✓ Permitir Acceso"', 'Autoriza la entrada (Con goce o Sin goce), asigna Folio Oficial y registra automáticamente su entrada en la lista de Asistencia Diaria.'],
-          ['Botón "× Regresar a Casa"', 'Niega el acceso, convierte el registro en Falta por Retardo (Sin goce) con Folio Oficial y ordena a Caseta retirar al colaborador.']
+          ['Por Dictaminar', 'Solicitudes que ya cumplieron las firmas previas de su área y están listas para la resolución final de RH.'],
+          ['En Tránsito y botón "Saltar Firma"', 'Muestra solicitudes que aún esperan firma de Jefe de Área o Gerencia. Si un jefe no está disponible, RH puede entrar a "En Tránsito" y presionar el botón rojo "Saltar Firma" en la tarjeta para hacer avanzar el pase de inmediato.'],
+          ['Vista de Jefes y Gerentes', 'A diferencia de RH, los Jefes y Gerentes ven las pestañas "Por Autorizar" e "Historial de mi Área".']
         ]
       },
       {
-        titulo: 'Dictamen Final y Folios Oficiales',
+        titulo: 'Cómo Resolver Solicitudes y Retardos',
         puntos: [
-          ['Por Dictaminar / En Tránsito', '"Por Dictaminar" muestra solicitudes listas para resolución de RH. "En Tránsito" muestra las que aún esperan firma de Jefe o Gerente.'],
-          ['Condición de Pago', 'Al autorizar Salidas, Faltas o Vacaciones, RH define si aplica "Con goce" o "Sin goce" de sueldo (o Rechazo con motivo).'],
-          ['Folios Oficiales', 'Al cerrarse en RH, el folio temporal REQ- cambia por el consecutivo oficial según su nómina: P- (Producción), A- (Administración) u O- (Obra).']
+          ['En Retardos ("Permitir Acceso" / "Regresar a Casa")', 'La tarjeta muestra la hora de llegada a caseta y cuántos retardos previos tiene el trabajador. • Si presionas "Permitir Acceso": eliges la condición de pago y el sistema registra automáticamente su entrada en la asistencia del día. • Si presionas "Regresar a Casa": escribes el motivo, el registro se convierte en "Falta (Retardo) Sin goce" con Folio Oficial y ordena a Caseta retirar al colaborador.'],
+          ['En Salidas, Faltas y Vacaciones ("Evaluar" / "Rechazar")', 'Al tocar "Evaluar" se abre la ventana "Resolución de Pase" con las opciones: "Con Goce", "Sin Goce" y "Repone Tiempo" (los Jefes/Gerentes tienen además el botón "Delegar a RH" para dejar la decisión de pago a RH; en Vacaciones sólo aplica "Con Goce"). Puedes escribir una nota opcional y presionar "Firmar y Autorizar".'],
+          ['Asignación de Folio Oficial', 'Mientras está en firmas el pase tiene un folio temporal "REQ-XXXXXX". Al autorizarlo RH, recibe su Folio Oficial consecutivo según la nómina del empleado: "P-26-XXXX" (Producción), "A-26-XXXX" (Administración) u "O-26-XXXX" (Obra).']
         ]
       }
     ],
     rh_historial: [
       {
-        titulo: 'Vista "Permisos" (Historial General)',
+        titulo: 'Switch Superior: [ Permisos | Asistencia ]',
         puntos: [
-          ['Botón [🎛️ Filtros]', 'Filtra por Periodo (Todo el historial o Por Semana), Tipo de Nómina (Producción, Administración, Obra), Tipo de Incidencia y Resolución.'],
-          ['Detalle y Firmas', 'Toca cualquier fila para ver el motivo completo, notas de flujo y quién autorizó (Subárea, Jefe, Gerente, RH).'],
-          ['Papeleta PDF', 'Presiona "Papeleta" en la fila para un PDF individual, o marca varias casillas a la izquierda y presiona el icono de impresora (🖨️) arriba.'],
-          ['Cancelar Pase desde RH', 'Dentro del detalle desplegado de un permiso autorizado: si el trabajador aún no cruza caseta, RH puede cancelarlo indicando el motivo.'],
-          ['Bitácora y Depuración', 'En Filtros → Resolución → "Bitácora de cancelados" puedes ver los pases anulados y usar el botón "Depurar" para borrarlos de la base de datos.'],
-          ['Exportar Excel [📥]', 'Abre el generador para descargar el reporte de permisos en Excel filtrado por fechas o nómina.']
+          ['Cambio de Vista', 'Ubicado arriba a la izquierda en "Control / Historial". Alterna entre la tabla histórica de permisos y el pase de lista diario.']
         ]
       },
       {
-        titulo: 'Vista "Asistencia" (Pase de Lista Diario)',
+        titulo: '1. Vista "Permisos"',
         puntos: [
-          ['Navegador de Fecha (< Hoy >)', 'Consulta la asistencia en tiempo real de hoy o navega a cualquier fecha anterior.'],
-          ['Filtros de Asistencia [🎛️]', 'Filtra la lista por Estatus (Todos, En Planta, Justificados, Sin Registro / Faltas) y por Tipo de Nómina.'],
-          ['Acciones Rápidas RH (Solo Hoy)', 'Desde la fila del colaborador puedes marcar manualmente "✓ Entrada", registrar "Salida" o deshacer ("↶") una entrada marcada por error.'],
-          ['Corte Diario en Excel [📥]', 'Descarga el CSV/Excel con entradas, salidas, retardos y faltas del día. En el día actual se habilita al llegar la hora de salida oficial (17:00) o cuando todos los presentes registraron salida; en días anteriores está siempre disponible.']
+          ['Buscador y Botón [🎛️ Filtros]', 'Busca por apellido, nombre, folio o # de empleado. Al tocar "[🎛️ Filtros]" puedes filtrar por: • Periodo ("Todo el historial" o "Filtrar por semana..." navegando con < Sem X >). • Tipo de Nómina (Todas, Producción, Administración, Obra). • Tipo de incidencia (Salida anticipada, Retardo, Falta, Falta por retardo, Vacaciones). • Resolución (Activos/Oficiales, Solo autorizados, Solo rechazados/regresados, Bitácora de cancelados).'],
+          ['Ver Detalle y "Cancelar pase"', 'Toca cualquier fila para desplegar el motivo, comentarios y quiénes firmaron (Subárea, Jefe, Gerente, RH). Si el pase está autorizado pero aún NO tiene sello físico de caseta, aparece el botón rojo "Cancelar pase" para anularlo indicando el motivo.'],
+          ['Bitácora de Cancelados y "Depurar"', 'Los pases cancelados se ocultan de la vista principal para no ensuciar nómina. Para verlos o borrarlos definitivamente de la base de datos, abre "[🎛️ Filtros]" → Resolución → "Bitácora de cancelados" y presiona el botón rojo "Depurar".'],
+          ['Papeleta PDF Individual o Masiva', '• Individual: presiona el botón "Papeleta" en la fila del registro. • Masiva: marca las casillas cuadradas a la izquierda de varios registros y presiona el botón de impresora "🖨️ (N)" arriba a la derecha. Dentro de la vista previa presiona "Imprimir / PDF".'],
+          ['Generador de Excel [📥 Exportar]', 'Abre la ventana "Exportar Reporte (.CSV / Excel)" donde puedes: 1) Elegir periodo rápido (Esta Semana, Este Mes, Mes Anterior, Todo el Historial) o fechas exactas Desde/Hasta. 2) Filtrar por Tipo de Nómina, Departamento, Tipo de Permiso y Dictamen de Pago. 3) En "Alcance de Colaboradores" dejarlo vacío para exportar a todos, o buscar y "+ Agregar" empleados específicos.']
+        ]
+      },
+      {
+        titulo: '2. Vista "Asistencia"',
+        puntos: [
+          ['Navegador de Fecha (< Fecha >)', 'Muestra el pase de lista del día. Usa las flechas "<" ">" o toca la fecha para abrir el calendario y consultar días anteriores.'],
+          ['Botón [🎛️ Filtros] en Asistencia', 'Permite filtrar la lista por: • Estatus de Asistencia (Todos, En Planta, Justificados, Sin Registro / Faltas). • Tipo de Nómina (Todas, Producción, Administración, Obra). • También incluye los "Relojes de Turno RH" y el botón "Actualizar".'],
+          ['Marcar o Deshacer desde RH (Solo en fecha HOY)', 'En la fila de cada colaborador RH puede: • Presionar "✓ Entrada" (si llegó y no se registró en caseta). • Presionar "Salida" (para cerrar su jornada). • Presionar la flecha curva "↶" para deshacer una entrada marcada por error hoy.'],
+          ['Descargar Corte Diario [📥 Exportar / Al cierre]', 'Descarga el Excel con Hora de Entrada, Hora de Salida, Estatus (Puntual, Retardo, Falta, Justificado) y Folio de cada trabajador. • En el día de HOY: el botón dice "Al cierre" y se desbloquea cuando el reloj alcanza la Hora de Salida Oficial configurada por RH o cuando todos los presentes ya tienen salida registrada. • En fechas anteriores: siempre está habilitado como "Exportar".']
         ]
       }
     ],
     rh_directorio: [
       {
-        titulo: 'Seguridad y Candado de Edición (🔒 / 🔓)',
+        titulo: 'Candado de Seguridad (🔒 Desbloquear Edición)',
         puntos: [
-          ['Desbloquear Edición', 'Por protección, el Directorio inicia en modo lectura. Toca el candado (🔒) e ingresa el PIN de administración para habilitar cambios.']
+          ['Modo Lectura vs Edición', 'Para evitar cambios accidentales, tanto la vista "Empresa" como "Colaboradores" inician bloqueadas. Toca el botón del candado ("🔒" / "Desbloquear Edición") e ingresa el PIN de administración para habilitar el modo "🔓 Edición Habilitada".']
         ]
       },
       {
-        titulo: 'Pestaña "Empresa" (Organigrama en Árbol)',
+        titulo: 'Vista "Empresa" (Organigrama por División)',
         puntos: [
-          ['Estructura por División', 'Agrupa al personal activo en 4 ramas: Planta & Producción, Administración, Capital Humano y Operaciones en Obra.'],
-          ['Editar Departamento (✏️)', 'Con el candado abierto (🔓), cambia el nombre del departamento o su clasificación (Planta, Admón, RH, Obra).'],
-          ['Reubicar en Árbol (✏️)', 'Con el candado abierto (🔓), toca el lápiz en cualquier colaborador para cambiar su Departamento, Subárea, Puesto, Jefe directo al que reporta y Rol.']
+          ['Expandir / Comprimir', 'Muestra las 4 divisiones: Planta & Producción, Administración, Capital Humano y Operaciones en Obra. Usa el botón superior "Expandir / Comprimir" o toca cada barra para abrir departamentos y subáreas.'],
+          ['Editar Departamento (Botón ✏️)', 'Con el candado abierto (🔓), toca el icono de lápiz (✏️) junto al nombre de cualquier departamento para cambiar su nombre o moverlo de clasificación (Planta, Admón, RH, Obra).'],
+          ['Reubicar Colaborador en el Árbol (Botón ✏️)', 'Con el candado abierto (🔓), toca el lápiz (✏️) en la tarjeta de cualquier persona para abrir "Reubicación en Estructura" y cambiar: 1. Departamento, 2. Subdepartamento / Área, 3. Puesto, 4. A quién reporta en el organigrama y 5. Rol de Autorización.']
         ]
       },
       {
-        titulo: 'Pestaña "Colaboradores" (Expedientes, Altas y Bajas)',
+        titulo: 'Vista "Colaboradores" (Tabla, Altas, Expediente y Bajas)',
         puntos: [
-          ['Botón "+ NUEVO"', 'Registra un nuevo colaborador. Al escribir su nombre y apellido genera en automático su Usuario Login y correo. Permite tomar foto y subir Firma Digital.'],
-          ['Expediente Lateral', 'Toca cualquier colaborador para ver sus datos, llamarle por teléfono (📞) o abrir chat directo en WhatsApp (💬).'],
-          ['Edición en Cascada y Catálogos', 'Con el candado abierto (🔓), edita cualquier dato del expediente o elige "+ Crear Nueva Sede / Depto / Subárea / Puesto" (incluye detector de nombres similares para no duplicar).'],
-          ['Tramitar Baja Laboral', 'Dentro del expediente (con candado 🔓), toca "Tramitar Baja", escribe la palabra BAJA, indica fecha efectiva y motivo. Su estatus pasa a Baja conservando su historial.'],
-          ['Reactivar o Eliminar Definitivo', 'Si está dado de baja puedes "Reactivar". El botón rojo "Eliminar Registro y Fotos" (escribiendo ELIMINAR) borra para siempre al usuario, su foto y su firma del servidor.']
+          ['Ordenar Columnas y Filtrar', 'En computadora puedes hacer clic sobre cualquier encabezado de la tabla (Nº EMP, COLABORADOR, SEDE, NÓMINA, DEPARTAMENTO, PUESTO, ESTATUS) para ordenar ascendente o descendente. El botón "Filtrar" abre el buscador y filtros por Sede, Nómina, Depto y Estatus (Solo Activos / Solo Bajas / Todos).'],
+          ['Dar de Alta (Botón "+ NUEVO")', 'Abre la ventana "Nuevo Colaborador". • Al escribir Nombre y Apellido Paterno, el sistema autocompleta el "Usuario Login" (ej. juan.perez) y el "Correo Institucional" (@mobiliarium.com), pero ambos campos se pueden borrar y editar manualmente. • Permite tomar foto con cámara o subir archivo, cargar imagen de "Subir Firma" (para las papeletas PDF) y definir su PIN (mínimo 6 caracteres).'],
+          ['Crear Nuevas Sedes, Deptos, Áreas o Puestos', 'Tanto al crear un colaborador como al editar su expediente, en los selectores de Sede, Departamento, Subdepto/Área y Puesto puedes elegir la última opción "+ Crear Nueva..." para registrar uno nuevo en el momento (el sistema muestra coincidencias existentes para evitar duplicados).'],
+          ['Expediente Lateral y Contacto Directo', 'Al tocar a cualquier colaborador en la lista se abre su expediente a la derecha. En modo lectura incluye botones directos para llamarle por teléfono (📞) o abrirle chat en WhatsApp (💬), además de ver su foto y firma en zoom.'],
+          ['Tramitar Baja, Reactivar o Eliminar Definitivo', 'Con el candado abierto (🔓), al final del expediente lateral tienes 3 acciones laborales: • "Tramitar Baja": pide escribir la palabra BAJA, elegir Fecha Efectiva y Motivo de Separación (pasa a inactivo pero conserva todo su historial de permisos y asistencias). • "Reactivar": disponible si el colaborador está en baja. • "Eliminar Registro y Fotos": pide escribir ELIMINAR y borra permanentemente al usuario, su foto y su firma de la base de datos.']
         ]
       }
     ],
-    vigilancia: [
+    caseta: [
       {
-        titulo: 'Módulo "Pase de Lista" (Entradas y Salidas)',
+        titulo: 'Módulo 1: "Pase de Lista" (Menú lateral de Caseta)',
         puntos: [
-          ['Registrar Entrada', 'En la pestaña "Entrada", escribe mínimo 3 letras del apellido o nombre → toca el botón verde (✓) → verifica foto y nombre en la ventana → toca "Confirmar".'],
-          ['Trabajador con Retardo', 'Si llega después de la hora límite, el sistema lo pone en "🔔 En Puerta" esperando a RH. Cuando RH autoriza pasa a planta; si RH lo rechaza aparece el botón rojo "Confirmar Retiro".'],
-          ['Registrar Salida de Turno', 'En la pestaña "En Planta / Salidas", busca al colaborador → toca "Salida" → "Confirmar".'],
-          ['Deshacer Error (↶)', 'Si el guardia marcó entrada o salida por equivocación, en "En Planta / Salidas" toca la flecha curva (↶) junto al trabajador para revertir la marca.']
+          ['Pestaña "Entrada" (Regla de 3 letras)', 'El guardia debe escribir al menos 3 letras del apellido, nombre o # de empleado. Por seguridad, si hay más de 3 coincidencias el sistema pide escribir una letra más. Luego toca el botón verde "✓" y en la ventana con fotografía presiona "Confirmar".'],
+          ['Si el trabajador llega tarde (Recuadro "🔔 En puerta")', 'Si pasa después de la Tolerancia de Entrada configurada por RH, el sistema no lo mete a planta y lo coloca arriba en "🔔 En puerta (En espera y Resoluciones)" con leyenda "En espera de RH". • Si RH autoriza: aparece el botón verde "Dar Paso a Planta" (o se registra su entrada si RH ya lo dictaminó en vivo). • Si RH ordena regresarlo: aparece el botón rojo "Confirmar Retiro".'],
+          ['Pestaña "En Planta / Salidas"', 'Muestra a todo el personal que está dentro de planta. • Cuando el trabajador se retira al final de su jornada, el guardia toca "Salida" → "Confirmar". • Si el trabajador salió con pase temporal y regresa, muestra el botón azul "Reingreso".'],
+          ['Corregir Errores en Caseta (Botón Deshacer "↶")', 'En la pestaña "En Planta / Salidas", cada trabajador tiene a la derecha un botón con flecha curva ("↶"): si aún no tiene salida, deshace la entrada marcada por error; si ya se le marcó salida, deshace la salida para devolverlo a planta.']
         ]
       },
       {
-        titulo: 'Módulo "Pases de Puerta" (Permisos durante el turno)',
+        titulo: 'Módulo 2: "Pases de Puerta" (Menú lateral de Caseta)',
         puntos: [
-          ['En Puerta', 'Muestra al personal con pase autorizado listo para cruzar. El guardia toca "Confirmar Salida", "Dar Acceso" o "Confirmar Retiro".'],
-          ['Por Regresar', 'Lista a quienes salieron con pase temporal (con regreso). Al volver a planta, el guardia toca "Confirmar Reingreso".'],
-          ['Sellados', 'Bitácora de todos los pases que ya fueron sellados físicamente en el día.']
+          ['Pestaña "En Puerta"', 'Muestra los permisos autorizados listos para cruzar y los retenidos en espera de RH. Según el caso, el guardia presiona: • "Confirmar Salida" (azul, para pases de salida anticipada). • "Dar Acceso" (verde, para entradas/retardos autorizados). • "Confirmar Retiro" (rojo, cuando RH ordena que se regrese a casa).'],
+          ['Pestaña "Por Regresar"', 'Lista a los colaboradores que salieron con un pase temporal (con regreso el mismo día). Cuando vuelven a caseta, el guardia presiona "Confirmar Reingreso".'],
+          ['Pestaña "Sellados"', 'Bitácora de todos los pases que ya fueron sellados físicamente en caseta durante el día.']
         ]
       }
     ],
-    colaboradores: [
+    empleados: [
       {
-        titulo: 'Colaboradores (Solicitar y Consultar Pases)',
+        titulo: 'Módulo "Solicitar Pase" (Colaboradores, Jefes y RH)',
         puntos: [
-          ['Solicitar Pase', 'Paso 1: Elegir Fecha. Paso 2: Elegir Tipo (Salida, Retardo, Falta, Vacaciones). Paso 3: Categoría (Personal, Cita Médica, Trabajo), horario y motivo.'],
-          ['Candados Automáticos', 'El sistema bloquea pedir pases si el trabajador ya tiene el día cerrado (Falta, Vacaciones, Salida definitiva o Regresado en puerta) o pedir Retardo si ya está dentro de planta.'],
-          ['Mis Permisos y Cancelación', 'Muestra solicitudes "En Proceso" y "Concluidos". El trabajador puede cancelar su solicitud únicamente si aún no tiene sello físico de caseta.']
+          ['Paso 1: Fecha', 'Selecciona primero la fecha (permite hasta 7 días hacia atrás o fechas futuras). El sistema revisa en tiempo real si en esa fecha ya tienes incidencias o registros en caseta.'],
+          ['Paso 2: Tipo de Movimiento / Permiso', 'Son 4 botones: "Salida Anticipada", "Llegada Tarde", "Falta Programada" y "Vacaciones". • Si en la fecha elegida ya tienes jornada cerrada (Falta, Vacaciones, Salida definitiva o Retiro en puerta) o si ya tienes entrada en planta y quieres pedir "Llegada Tarde" o "Falta", el botón correspondiente aparece bloqueado con candado ("🔒 No disponible") explicando el motivo.'],
+          ['Paso 3: Naturaleza, Horarios y Envío', '• En Salida, Llegada Tarde y Falta debes elegir "3. Naturaleza del Asunto": "Personal / Familiar", "Cita Médica" o "Asunto de Trabajo". • En "Salida Anticipada" puedes marcar la casilla "¿Regresas a laborar en el mismo turno? (Salida y reingreso)" e indicar la hora de retorno. • Si pides "Llegada Tarde" para hoy con menos de 1 hora y media de anticipación al límite de entrada (y no es Asunto de Trabajo), se envía como "AVISO DE URGENCIA".']
         ]
       },
       {
-        titulo: 'Encargados, Jefes de Área y Gerentes',
+        titulo: 'Módulo "Mis Permisos"',
         puntos: [
-          ['Cadena de Autorización', 'Nivel 3 (Encargado de Subárea da VoBo) → Nivel 2 (Jefe de Área aprueba) → Nivel 1 (Gerente de División aprueba en Faltas/Vacaciones) → Cierre en RH.'],
-          ['Bandeja de Aprobaciones', 'En "Por Dictaminar" aprueban o rechazan (con motivo obligatorio). En "En Tránsito" consultan las solicitudes que ya firmaron y están en manos de RH.']
+          ['Pestaña "En Proceso"', 'Muestra tus solicitudes activas con el avance de las 3 firmas (Jefatura, Gerencia, R. Humanos). • Botón "Cancelar solicitud (Ya no la ocuparé)": disponible siempre que el pase aún NO tenga sello físico de caseta. • Botón "Escalar por inactividad": aparece automáticamente cuando la solicitud cumple más de 1 hora pendiente en la firma 1 (Jefatura), permitiendo pasarla a Gerencia.'],
+          ['Pestaña "Concluidos"', 'Agrupa tu historial por mes y año mostrando el Folio Oficial asignado, el dictamen de pago y los sellos de entrada/salida de caseta.']
         ]
       },
       {
-        titulo: 'Barra Lateral (Para todos los usuarios)',
+        titulo: 'Opciones del Menú Lateral (Perfil, Alertas y PIN)',
         puntos: [
-          ['Iconos Superiores (☀️/🌙 y 🔔)', 'El sol/luna cambia entre Modo Claro y Oscuro. La campana (🔔) activa las Alertas Push en el celular o computadora.'],
-          ['Foto y PIN de Seguridad (⚙️)', 'Tocando la foto circular se actualiza la fotografía de perfil. El engrane (⚙️) junto al rol permite cambiar la contraseña/PIN personal.']
+          ['Modo Claro/Oscuro (☀️/🌙) y Alertas Push (🔔)', 'En la parte superior del menú lateral: el sol/luna cambia el tema visual y la campana (🔔) activa las notificaciones en el navegador del celular o PC.'],
+          ['Foto de Perfil, Nombre y Seguridad (⚙️)', '• Toca tu fotografía circular para abrir "Tomar foto" o "Elegir imagen". • Solo usuarios con rol de RH o Superadmin pueden hacer clic sobre su propio nombre en el menú lateral para editarlo. • El botón del engrane (⚙️) junto a tu rol abre la configuración de Seguridad y PIN personal.']
         ]
       }
     ],
     reglas: [
       {
-        titulo: 'Automatizaciones del Sistema (Sin intervención manual)',
+        titulo: 'Reglas y Cierres Automáticos del Sistema',
         puntos: [
-          ['1. Falta sustituye a Retardo', 'Si un trabajador solicita un Retardo temprano pero más tarde reporta una Falta para el mismo día, el sistema cancela el retardo previo en automático y deja solo la Falta.'],
-          ['2. Asistencia sustituye a Falta', 'Si un trabajador tenía registrada una Falta para hoy pero sí se presenta a laborar en caseta, el sistema anula la falta previa y registra su asistencia o retardo real.'],
-          ['3. Pases de Salida no utilizados (Cierre 17:00 hrs)', 'Al cumplirse la hora oficial de salida de RH, cualquier pase de salida anticipada que no haya sido sellado en caseta se cancela automáticamente como "Sin uso".'],
-          ['4. Retardos por App que nunca llegaron (Cierre 17:00 hrs)', 'Si un trabajador pidió permiso de Retardo desde su celular pero nunca registró entrada en caseta en todo el día, al cierre del turno el sistema lo convierte automáticamente en Falta Sin Goce con Folio Oficial.'],
-          ['5. Orden Alfabético Universal', 'Todas las listas, tablas, reportes de asistencia y exportaciones a Excel se ordenan automáticamente por Apellido Paterno, Apellido Materno y Nombre.']
+          ['1. Cadena Jerárquica de Firmas', '• Empleado de Subárea con Encargado (Nivel 3): el Encargado da VoBo → pasa al Jefe de Área (Firma 1) → en Faltas/Vacaciones pasa al Gerente de División (Firma 2) → cierra RH (Firma 3). • En Salidas y Retardos normales la Firma 2 (Gerencia) se omite automáticamente para agilizar el flujo.'],
+          ['2. Reporte de Falta cancela Retardo previo', 'Si un colaborador solicitó una "Llegada Tarde" para hoy pero antes de entrar a planta registra una "Falta Programada" para el mismo día, el sistema cancela automáticamente el retardo previo ("Sustituido por reporte de FALTA").'],
+          ['3. Entrada física en Caseta cancela Falta previa', 'Si el colaborador tenía una Falta registrada para hoy pero sí se presenta en Caseta y se registra su entrada (o retardo en puerta), el sistema cancela la falta previa en automático.'],
+          ['4. Depuración al cumplir la Hora de Salida Oficial de RH', 'Cuando el reloj alcanza la "Salida Oficial" configurada en Relojes de Turno RH (ej. 17:00 hrs): • Todo pase de "Salida Anticipada" del día que nunca fue sellado en caseta se cancela automáticamente por falta de uso. • Todo pase de "Llegada Tarde" solicitado por app que nunca registró entrada en caseta durante toda la jornada se convierte automáticamente en "Falta Sin Goce" con su Folio Oficial.'],
+          ['5. Ordenamiento Alfabético Estándar', 'En todas las pantallas del sistema, buscadores, papeletas y archivos Excel descargables, los nombres se muestran y ordenan siempre por Apellido Paterno, Apellido Materno y Nombre.']
         ]
       }
     ]
@@ -161,7 +167,7 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
-        background: 'rgba(15, 23, 42, 0.72)',
+        background: 'rgba(15, 23, 42, 0.75)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -177,12 +183,12 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
           border: `1.5px solid ${border}`,
           borderRadius: '16px',
           width: '100%',
-          maxWidth: '720px',
-          maxHeight: '88vh',
+          maxWidth: '780px',
+          maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          boxShadow: '0 25px 50px rgba(0,0,0,0.45)'
+          boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
         }}
       >
         {/* CABECERA */}
@@ -194,20 +200,21 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
           justifyContent: 'space-between',
           background: bgSub
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: '30px', height: '30px', borderRadius: '8px',
+              width: '32px', height: '32px', borderRadius: '8px',
               background: 'rgba(22, 163, 74, 0.14)', color: accent,
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0
             }}>
-              <BookOpen size={16} />
+              <BookOpen size={17} />
             </div>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: '800', color: text, lineHeight: 1.2 }}>
-                Manual Operativo del Sistema
+              <div style={{ fontSize: '14.5px', fontWeight: '800', color: text, lineHeight: 1.2 }}>
+                Guía Operativa del Sistema (RH)
               </div>
-              <div style={{ fontSize: '11px', fontWeight: '600', color: textMuted }}>
-                Guía directa de funciones por módulo y reglas automáticas
+              <div style={{ fontSize: '11.5px', fontWeight: '600', color: textMuted, marginTop: '2px' }}>
+                Referencia exacta de botones, opciones configurables y reglas automáticas
               </div>
             </div>
           </div>
@@ -218,14 +225,15 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
             style={{
               width: '30px', height: '30px', borderRadius: '8px',
               border: `1px solid ${border}`, background: bgCard, color: textMuted,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0
             }}
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* BARRA DE PESTAÑAS DEL MANUAL (ESTILO NEGRO UNIFICADO) */}
+        {/* PESTAÑAS (MISMO DISEÑO NEGRO UNIFICADO) */}
         <div style={{
           display: 'flex',
           gap: '4px',
@@ -268,7 +276,7 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
           })}
         </div>
 
-        {/* CONTENIDO DE LA PESTAÑA ACTIVA */}
+        {/* CONTENIDO DE LA SECCIÓN */}
         <div style={{
           padding: '16px',
           overflowY: 'auto',
@@ -300,9 +308,9 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
                 {bloque.titulo}
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {bloque.puntos.map(([accion, descripcion], i) => (
-                  <div key={i} style={{ fontSize: '12.5px', lineHeight: 1.45, color: text }}>
+                  <div key={i} style={{ fontSize: '12.5px', lineHeight: 1.48, color: text }}>
                     <strong style={{ fontWeight: '800', color: text }}>• {accion}:</strong>{' '}
                     <span style={{ color: textMuted, fontWeight: '500' }}>{descripcion}</span>
                   </div>
