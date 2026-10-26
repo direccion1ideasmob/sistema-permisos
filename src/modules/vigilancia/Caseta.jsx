@@ -412,7 +412,7 @@ export default function Caseta() {
             <DoorOpen size={15} />
             <span>En Puerta</span>
             {totalPorCruzarYEspera > 0 && (
-              <span className="tab-badge" style={{ background: c.accent, color: '#fff', fontSize: '11px', padding: '1px 6px' }}>
+              <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
                 {totalPorCruzarYEspera}
               </span>
             )}
@@ -425,7 +425,7 @@ export default function Caseta() {
             <RotateCcw size={15} />
             <span>Por Regresar</span>
             {personalFuera.length > 0 && (
-              <span className="tab-badge" style={{ background: '#2563eb', color: '#fff', fontSize: '11px', padding: '1px 6px' }}>
+              <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
                 {personalFuera.length}
               </span>
             )}
@@ -853,7 +853,7 @@ export default function Caseta() {
         >
           <Users size={15} />
           <span>Entrada</span>
-          <span className="tab-badge" style={{ background: c.accent, color: '#fff', fontSize: '11px', padding: '1px 6px' }}>
+          <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
             {todosSinEntrada.length}
           </span>
         </button>
@@ -864,7 +864,7 @@ export default function Caseta() {
         >
           <UserCheck size={15} />
           <span>En Planta / Salidas</span>
-          <span className="tab-badge" style={{ background: '#0284c7', color: '#fff', fontSize: '11px', padding: '1px 6px' }}>
+          <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
             {todosEnPlanta.length}
           </span>
         </button>

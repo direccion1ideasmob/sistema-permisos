@@ -57,7 +57,22 @@ export const generarEstilosAprobaciones = (c, modoOscuro) => `
   }
 
   .tab-btn.active {
-    background: ${c.surfaceCard};
+    background: ${modoOscuro ? '#27272a' : '#0f172a'} !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+  .tab-btn.active svg {
+    color: #ffffff !important;
+  }
+  .tab-btn.active .tab-badge {
+    background: rgba(255, 255, 255, 0.22) !important;
+    color: #ffffff !important;
+  }
+  .tab-btn:not(.active) .tab-badge {
+    background: ${modoOscuro ? '#27272a' : '#e2e8f0'} !important;
+    color: ${c.text} !important;
+  };
     color: ${c.accent};
     border-color: ${c.border};
     box-shadow: ${modoOscuro ? '0 4px 14px rgba(0,0,0,0.4)' : '0 2px 6px rgba(0,0,0,0.06)'};
