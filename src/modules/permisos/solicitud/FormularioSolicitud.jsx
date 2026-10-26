@@ -44,6 +44,73 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   };
 
   useEffect(() => {
+    if (!userId || !fechaPermiso) {
+      setBloqueoFechaActiva(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const finConsulta = tipoPermiso === 'vacaciones' && fechaFinVacaciones ? fechaFinVacaciones : fechaPermiso;
+        const [{ data }, { data: asistHoy }] = await Promise.all([
+          supabase
+            .from('permisos')
+            .select('id, folio, fecha_permiso, fecha_fin, tipo_permiso, estado_general, pago, observaciones')
+            .eq('usuario_id', userId)
+            .lte('fecha_permiso', finConsulta),
+          supabase
+            .from('asistencias_caseta')
+            .select('hora_entrada, hora_salida')
+            .eq('usuario_id', userId)
+            .eq('fecha', fechaPermiso)
+            .maybeSingle()
+        ]);
+
+        if (cancelado) return;
+        const activos = (data || []).filter(p => {
+          const finP = p.fecha_fin || p.fecha_permiso;
+          if (!(p.fecha_permiso <= finConsulta && finP >= fechaPermiso)) return false;
+          const pagoL = String(p.pago || '').toLowerCase();
+          const obsL = String(p.observaciones || '');
+          if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL)) return false;
+          const esRegreso = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
+          if (p.estado_general === 'rechazado' && !esRegreso) return false;
+          return true;
+        });
+
+        const regCasa = activos.find(p => (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || ''));
+        const faltaOVac = activos.find(p => ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase()));
+        const retardoHoy = activos.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+        const salidasHoy = activos.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
+        const salidaAbierta = salidasHoy.find(s => !/\[REINGRESO CASETA:/i.test(String(s.observaciones || '')));
+
+        if (regCasa) {
+          setBloqueoFechaActiva(`Jornada cerrada para el ${fechaPermiso}: Ya cuentas con un dictamen de retiro en puerta (Falta por retardo • Folio ${regCasa.folio}). No es posible solicitar otro permiso ni salida en esta fecha.`);
+        } else if (faltaOVac) {
+          setBloqueoFechaActiva(`Ya cuentas con un registro de ${(faltaOVac.tipo_permiso || '').toUpperCase()} (${faltaOVac.folio}) para el ${fechaPermiso}. No es posible registrar otro permiso en la misma fecha.`);
+        } else if (tipoPermiso === 'retardo' && retardoHoy) {
+          setBloqueoFechaActiva(`Ya tienes un pase de Retardo (${retardoHoy.folio}) registrado para el ${fechaPermiso}.`);
+        } else if (tipoPermiso === 'retardo' && asistHoy?.hora_entrada) {
+          setBloqueoFechaActiva(`Ya cuentas con registro de entrada en planta (${asistHoy.hora_entrada} hrs) el ${fechaPermiso}. No es posible solicitar un Retardo.`);
+        } else if (tipoPermiso === 'retardo' && salidasHoy.length > 0) {
+          setBloqueoFechaActiva(`Ya tienes un pase de Salida (${salidasHoy[0].folio}) para el ${fechaPermiso}. No es posible solicitar un Retardo.`);
+        } else if (tipoPermiso === 'salida' && asistHoy?.hora_salida) {
+          setBloqueoFechaActiva(`Ya registraste tu salida definitiva de planta (${asistHoy.hora_salida} hrs) el ${fechaPermiso}.`);
+        } else if (tipoPermiso === 'salida' && retardoHoy && retardoHoy.estado_general === 'en_firmas') {
+          setBloqueoFechaActiva(`Tienes un pase de Retardo (${retardoHoy.folio}) pendiente de autorización. Podrás solicitar una Salida una vez que se autorice tu acceso.`);
+        } else if (tipoPermiso === 'salida' && salidaAbierta) {
+          setBloqueoFechaActiva(`Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para el ${fechaPermiso}.`);
+        } else if ((tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') && asistHoy?.hora_entrada) {
+          setBloqueoFechaActiva(`No es posible registrar ${tipoPermiso.toUpperCase()} para el ${fechaPermiso} porque ya tienes registro de entrada en planta (${asistHoy.hora_entrada} hrs).`);
+        } else {
+          setBloqueoFechaActiva(null);
+        }
+      } catch (_) {}
+    })();
+    return () => { cancelado = true; };
+  }, [userId, fechaPermiso, fechaFinVacaciones, tipoPermiso]);
+
+  useEffect(() => {
     obtenerHoraLimiteTolerancia().then((h) => {
       if (h) setHoraLimiteRH(h);
     }).catch(() => {});

@@ -469,11 +469,19 @@ export const crearNuevaSolicitudPermiso = async ({
   const fechaInicioNueva = fechaPermiso;
   const fechaFinNueva = tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : fechaPermiso;
 
-  const { data: pasesUsuario } = await supabase
-    .from('permisos')
-    .select('id, folio, fecha_permiso, fecha_fin, tipo_permiso, estado_general, pago, observaciones')
-    .eq('usuario_id', userId)
-    .lte('fecha_permiso', fechaFinNueva);
+  const [{ data: pasesUsuario }, { data: asistenciaDia }] = await Promise.all([
+    supabase
+      .from('permisos')
+      .select('id, folio, fecha_permiso, fecha_fin, tipo_permiso, estado_general, pago, observaciones')
+      .eq('usuario_id', userId)
+      .lte('fecha_permiso', fechaFinNueva),
+    supabase
+      .from('asistencias_caseta')
+      .select('hora_entrada, hora_salida')
+      .eq('usuario_id', userId)
+      .eq('fecha', fechaPermiso)
+      .maybeSingle()
+  ]);
 
   const activosMismaFecha = (pasesUsuario || []).filter(p => {
     const finPase = p.fecha_fin || p.fecha_permiso;
@@ -498,32 +506,70 @@ export const crearNuevaSolicitudPermiso = async ({
     ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase())
   );
   const retardoPrevio = activosMismaFecha.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+  const salidasPrevias = activosMismaFecha.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
 
+  // 1) Si ya fue regresado a casa en esa fecha (Falta por retardo) -> Bloquear CUALQUIER solicitud
   if (paseRegresadoACasa) {
     throw new Error(`No es posible generar otro permiso para esta fecha porque ya existe un dictamen de retiro de planta (Falta por retardo • Folio ${paseRegresadoACasa.folio}).`);
   }
 
+  // 2) Si ya tiene una Falta o Vacaciones en esa fecha -> Bloquear CUALQUIER solicitud
   if (paseAusenciaCompleta) {
     const etiquetaExistente = (paseAusenciaCompleta.tipo_permiso || '').toUpperCase();
     throw new Error(`No es posible registrar este permiso porque ya existe un registro de ${etiquetaExistente} (${paseAusenciaCompleta.folio}) para esta fecha.`);
   }
 
-  if (retardoPrevio) {
-    if (tipoPermiso === 'retardo') {
+  // 3) HUECO 1: Si pide un RETARDO pero YA registró entrada normal en Caseta o YA tiene un pase de Salida ese día
+  if (tipoPermiso === 'retardo') {
+    if (retardoPrevio) {
       throw new Error(`Ya existe un registro de retardo (${retardoPrevio.folio}) para esta fecha. No es posible generar dos retardos el mismo día.`);
     }
-    if ((tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') && tieneSelloFisicoCaseta(retardoPrevio)) {
+    if (asistenciaDia?.hora_entrada) {
+      throw new Error(`No es posible solicitar un Retardo para esta fecha porque ya cuentas con registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
+    }
+    if (salidasPrevias.length > 0) {
+      throw new Error(`No es posible solicitar un Retardo porque ya tienes un pase de Salida (${salidasPrevias[0].folio}) registrado para esta fecha.`);
+    }
+  }
+
+  // 4) HUECO 2 y HUECO 3: Reglas al solicitar una SALIDA ANTICIPADA
+  if (tipoPermiso === 'salida') {
+    if (asistenciaDia?.hora_salida) {
+      throw new Error(`No es posible solicitar una Salida porque ya registraste tu salida definitiva de planta hoy (${asistenciaDia.hora_salida} hrs).`);
+    }
+    // HUECO 3: Si tiene un retardo que todavía está en_firmas (esperando autorización), no puede pedir salida hasta que se autorice su entrada
+    if (retardoPrevio && retardoPrevio.estado_general === 'en_firmas') {
+      throw new Error(`Tienes un pase de Retardo (${retardoPrevio.folio}) pendiente de autorización. Podrás solicitar una Salida una vez que tu entrada haya sido autorizada.`);
+    }
+    // HUECO 2: No permitir 2 salidas activas el mismo día (a menos que una salida temporal previa ya haya reingresado por Caseta)
+    const salidaAbierta = salidasPrevias.find(s => !/\[REINGRESO CASETA:/i.test(String(s.observaciones || '')));
+    if (salidaAbierta) {
+      throw new Error(`Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para esta fecha. No es posible duplicar pases de salida.`);
+    }
+  }
+
+  // 5) Si pide FALTA o VACACIONES pero hoy ya entró a planta o ya tiene sello en Caseta -> Bloquear
+  if (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') {
+    if (asistenciaDia?.hora_entrada) {
+      throw new Error(`No es posible registrar una ${tipoPermiso} para esta fecha porque ya tienes registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
+    }
+    if (salidasPrevias.some(s => tieneSelloFisicoCaseta(s))) {
+      throw new Error(`No es posible registrar una ${tipoPermiso} porque ya tienes movimientos registrados en Caseta para esta fecha.`);
+    }
+    if (retardoPrevio && tieneSelloFisicoCaseta(retardoPrevio)) {
       throw new Error(`No es posible registrar una ${tipoPermiso} para hoy porque ya tienes un registro de llegada en Caseta (${retardoPrevio.folio}).`);
     }
-    if (tipoPermiso === 'falta' && !tieneSelloFisicoCaseta(retardoPrevio)) {
+    // Si tenía un retardo o salida previa ese día SIN sello físico de caseta y ahora reporta Falta, cancelar el pase previo no utilizado
+    const pasesSinSello = [...(retardoPrevio ? [retardoPrevio] : []), ...salidasPrevias].filter(p => !tieneSelloFisicoCaseta(p));
+    for (const pPrev of pasesSinSello) {
       await supabase
         .from('permisos')
         .update({
           estado_general: 'rechazado',
           pago: 'Cancelado',
-          observaciones: `${retardoPrevio.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de Falta del mismo día`
+          observaciones: `${pPrev.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de ${tipoPermiso.toUpperCase()} del mismo día`
         })
-        .eq('id', retardoPrevio.id);
+        .eq('id', pPrev.id);
     }
   }
 
