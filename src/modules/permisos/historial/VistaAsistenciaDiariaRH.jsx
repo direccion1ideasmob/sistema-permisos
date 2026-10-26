@@ -23,6 +23,14 @@ const formatearFechaCorta = (fechaYYYYMMDD) => {
   return `${dias[fechaObj.getDay()]}, ${String(d).padStart(2, '0')} ${meses[m - 1]} ${y}`;
 };
 
+const obtenerNominaEmpleado = (emp) => {
+  const tp = String(emp?.tipo_personal || '').toLowerCase();
+  const nomDepto = String(emp?.departamentos?.nombre || '').toLowerCase();
+  if (tp.includes('admin') || nomDepto.includes('admin') || nomDepto.includes('rh') || nomDepto.includes('recursos humanos')) return 'administracion';
+  if (tp.includes('obra') || nomDepto.includes('obra')) return 'obra';
+  return 'produccion';
+};
+
 const moverFechaDias = (fechaYYYYMMDD, dias) => {
   const [y, m, d] = fechaYYYYMMDD.split('-').map(Number);
   const dt = new Date(y, m - 1, d, 12, 0, 0);
@@ -37,7 +45,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   const hoyStr = obtenerFechaLocalHoy();
   const [fecha, setFecha] = useState(hoyStr);
   const [busqueda, setBusqueda] = useState('');
-  const [deptoFiltro, setDeptoFiltro] = useState('');
+  const [nominaFiltro, setNominaFiltro] = useState('todas');
   const [estadoFiltro, setEstadoFiltro] = useState('todos');
   const [mostrarOpcionesRH, setMostrarOpcionesRH] = useState(false);
   const inputFechaRef = useRef(null);
@@ -108,7 +116,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   const basePorDeptoYBusqueda = [...empleados]
     .sort((a, b) => compararPorApellidoPaterno(a, b))
     .filter((emp) => {
-    if (deptoFiltro && String(emp.departamento_id) !== String(deptoFiltro)) return false;
+    if (nominaFiltro !== 'todas' && obtenerNominaEmpleado(emp) !== nominaFiltro) return false;
     const termino = busqueda.toLowerCase().trim();
     if (termino) {
       const matchNombre = (emp.nombre_completo || '').toLowerCase().includes(termino) || formatearApellidosNombre(emp.nombre_completo).toLowerCase().includes(termino);
@@ -456,19 +464,19 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
               className="vad-btn-neutral"
               title="Filtros de asistencia y horarios RH"
               style={{
-                borderColor: (mostrarOpcionesRH || deptoFiltro || estadoFiltro !== 'todos') ? c.accent : c.border,
-                background: (mostrarOpcionesRH || deptoFiltro || estadoFiltro !== 'todos') ? c.accentSoft : c.bg,
-                color: (mostrarOpcionesRH || deptoFiltro || estadoFiltro !== 'todos') ? c.accent : c.text
+                borderColor: (mostrarOpcionesRH || nominaFiltro !== 'todas' || estadoFiltro !== 'todos') ? c.accent : c.border,
+                background: (mostrarOpcionesRH || nominaFiltro !== 'todas' || estadoFiltro !== 'todos') ? c.accentSoft : c.bg,
+                color: (mostrarOpcionesRH || nominaFiltro !== 'todas' || estadoFiltro !== 'todos') ? c.accent : c.text
               }}
             >
               <SlidersHorizontal size={14} />
               <span className="vad-btn-label-hide-mobile">Filtros</span>
-              {(deptoFiltro || estadoFiltro !== 'todos') && (
+              {(nominaFiltro !== 'todas' || estadoFiltro !== 'todos') && (
                 <span style={{
                   background: c.accent, color: '#fff', fontSize: '10.5px',
                   fontWeight: '800', padding: '1px 5px', borderRadius: '999px'
                 }}>
-                  {[Boolean(deptoFiltro), estadoFiltro !== 'todos'].filter(Boolean).length}
+                  {[nominaFiltro !== 'todas', estadoFiltro !== 'todos'].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -575,17 +583,17 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
 
           <div>
             <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: c.textMuted, marginBottom: '4px', textTransform: 'uppercase' }}>
-              Departamento
+              Tipo de Nómina
             </label>
             <select
-              value={deptoFiltro}
-              onChange={(e) => setDeptoFiltro(e.target.value)}
+              value={nominaFiltro}
+              onChange={(e) => setNominaFiltro(e.target.value)}
               className="vad-select-clean"
             >
-              <option value="">Todos los departamentos</option>
-              {departamentos.map((d) => (
-                <option key={d.id} value={d.id}>{d.nombre}</option>
-              ))}
+              <option value="todas">Todas las nóminas</option>
+              <option value="produccion">Producción</option>
+              <option value="administracion">Administración</option>
+              <option value="obra">Obra</option>
             </select>
           </div>
 
@@ -605,10 +613,10 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                 <RefreshCw size={13.5} /> Actualizar
               </button>
 
-              {(deptoFiltro || estadoFiltro !== 'todos') && (
+              {(nominaFiltro !== 'todas' || estadoFiltro !== 'todos') && (
                 <button
                   type="button"
-                  onClick={() => { setDeptoFiltro(''); setEstadoFiltro('todos'); }}
+                  onClick={() => { setNominaFiltro('todas'); setEstadoFiltro('todos'); }}
                   className="vad-btn-neutral"
                   style={{ color: c.textMuted }}
                 >

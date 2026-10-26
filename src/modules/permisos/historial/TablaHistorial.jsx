@@ -661,7 +661,7 @@ export default function TablaHistorial({
           {esControlRH && (
             <div>
               <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
-                Nómina
+                Tipo de Nómina
               </label>
               <select
                 value={nominaFiltro}
@@ -672,22 +672,6 @@ export default function TablaHistorial({
                 <option value="produccion">Producción</option>
                 <option value="administracion">Administración</option>
                 <option value="obra">Obra</option>
-              </select>
-            </div>
-          )}
-
-          {esControlRH && departamentos.length > 0 && (
-            <div>
-              <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
-                Departamento
-              </label>
-              <select
-                value={deptoFiltro}
-                onChange={(e) => { setDeptoFiltro(e.target.value); setPaginaActual(1); }}
-                className="th-gradual-select"
-              >
-                <option value="todos">Todos los departamentos</option>
-                {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
               </select>
             </div>
           )}
