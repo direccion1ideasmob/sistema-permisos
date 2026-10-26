@@ -51,26 +51,27 @@ export default function ControlHistorial() {
     if (usuario?.id) cargarTodasSolicitudes();
   }, [usuario?.id, cargarTodasSolicitudes]);
 
+  const bgActivoTab = modoOscuro ? '#27272a' : '#0f172a';
+
   const selectorModo = (
     <div style={{
       display: 'inline-flex',
-      background: c.bg,
+      background: c.surfaceCard,
       border: `1px solid ${c.border}`,
-      borderRadius: '8px',
-      padding: '2px',
-      gap: '2px',
+      borderRadius: '9px',
+      padding: '3px',
+      gap: '3px',
       flexShrink: 0
     }}>
       <button
         type="button"
         onClick={() => setPestanaRH('permisos')}
         style={{
-          height: '30px', padding: '0 12px', borderRadius: '6px', border: 'none',
-          background: pestanaRH === 'permisos' ? c.surfaceCard : 'transparent',
-          color: pestanaRH === 'permisos' ? c.text : c.textMuted,
-          fontWeight: pestanaRH === 'permisos' ? '800' : '600',
+          height: '28px', padding: '0 12px', borderRadius: '6px', border: 'none',
+          background: pestanaRH === 'permisos' ? bgActivoTab : 'transparent',
+          color: pestanaRH === 'permisos' ? '#ffffff' : c.textMuted,
+          fontWeight: '700',
           fontSize: '12.5px', cursor: 'pointer',
-          boxShadow: pestanaRH === 'permisos' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
           transition: 'all 0.15s ease'
         }}
       >
@@ -80,12 +81,11 @@ export default function ControlHistorial() {
         type="button"
         onClick={() => setPestanaRH('asistencia_diaria')}
         style={{
-          height: '30px', padding: '0 12px', borderRadius: '6px', border: 'none',
-          background: pestanaRH === 'asistencia_diaria' ? c.surfaceCard : 'transparent',
-          color: pestanaRH === 'asistencia_diaria' ? c.text : c.textMuted,
-          fontWeight: pestanaRH === 'asistencia_diaria' ? '800' : '600',
+          height: '28px', padding: '0 12px', borderRadius: '6px', border: 'none',
+          background: pestanaRH === 'asistencia_diaria' ? bgActivoTab : 'transparent',
+          color: pestanaRH === 'asistencia_diaria' ? '#ffffff' : c.textMuted,
+          fontWeight: '700',
           fontSize: '12.5px', cursor: 'pointer',
-          boxShadow: pestanaRH === 'asistencia_diaria' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
           transition: 'all 0.15s ease'
         }}
       >
