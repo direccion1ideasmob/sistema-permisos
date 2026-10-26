@@ -3,6 +3,7 @@ import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethosc
 import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
 import { obtenerHoraLimiteTolerancia, obtenerHoraSalidaOficial } from '../../vigilancia/services/vigilanciaService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
+import { supabase } from '../../../core/api/supabaseClient';
 
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOscuro }) {
   const sesionActual = JSON.parse(localStorage.getItem("permisos_sesion") || '{}');
@@ -12,11 +13,12 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const sedeId = usuario?.sede_id || sesionActual?.sede_id;
 
   const hoy = new Date();
-  const fechaHoy = hoy.toISOString().split('T')[0];
+  const formatearLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const fechaHoy = formatearLocal(hoy);
   
   const hace7Dias = new Date(hoy);
   hace7Dias.setDate(hoy.getDate() - 7);
-  const minDate = hace7Dias.toISOString().split('T')[0];
+  const minDate = formatearLocal(hace7Dias);
 
   const [tipoPermiso, setTipoPermiso] = useState('');
   const [naturaleza, setNaturaleza] = useState('');
@@ -33,6 +35,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [motivo, setMotivo] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [alertaReincidencia, setAlertaReincidencia] = useState(false);
+  const [bloqueoFechaActiva, setBloqueoFechaActiva] = useState(null);
 
   const tema = obtenerTemaGlobal(modoOscuro);
   const t = {
@@ -127,6 +130,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     e.preventDefault();
     if (!e.target.reportValidity()) return;
 
+    if (bloqueoFechaActiva) return alert(bloqueoFechaActiva);
     if (!tipoPermiso) return alert("Por favor, selecciona el Tipo de Movimiento / Permiso.");
     if (tipoPermiso !== 'vacaciones' && !naturaleza) return alert("Por favor, selecciona la Naturaleza del Asunto.");
     if (!motivo.trim()) return alert("Por favor escribe la justificación del pase.");
@@ -441,6 +445,13 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             </div>
           </div>
 
+          {bloqueoFechaActiva && (
+            <div style={{ padding: '14px 16px', borderRadius: '12px', background: t.dangerSoft, border: `1.5px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45', fontWeight: '700' }}>
+              <ShieldAlert size={20} color={t.danger} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>{bloqueoFechaActiva}</span>
+            </div>
+          )}
+
           {alertaReincidencia && tipoPermiso === 'retardo' && (
             <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
               <Info size={19} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -551,7 +562,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           </div>
 
           <button 
-            type="submit" disabled={guardando || !tipoPermiso}
+            type="submit" disabled={guardando || !tipoPermiso || Boolean(bloqueoFechaActiva)}
             style={{
               padding: '15px', borderRadius: '12px', border: 'none',
               backgroundColor: !tipoPermiso ? t.surface : (esRetardoUrgente ? t.danger : t.accent), 
