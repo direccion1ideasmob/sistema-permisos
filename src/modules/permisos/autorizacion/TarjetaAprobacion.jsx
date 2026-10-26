@@ -155,7 +155,8 @@ export default function TarjetaAprobacion({
     if (t === 'salida') return { color: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.09)', border: 'rgba(14, 165, 233, 0.28)', text: 'Salida' };
     return { color: c.accent, bg: c.accentSoft, border: c.border, text: aTitulo(t) };
   };
-  const estilo = getEstiloTipo(tipo);
+  const baseEstilo = getEstiloTipo(tipo);
+  const estilo = tipo === 'falta' && esDictamenRegreso ? { ...baseEstilo, text: 'Falta (Retardo)' } : baseEstilo;
 
   const avalesPrevios = [];
   if (nombreSubarea) avalesPrevios.push(formatearNombreCorto(nombreSubarea));

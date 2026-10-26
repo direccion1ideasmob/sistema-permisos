@@ -145,8 +145,16 @@ export default function ModalExportarExcel({
         return false;
       }
 
-      if (tipoPermiso !== 'todos' && (p.tipo_permiso || '').toLowerCase() !== tipoPermiso) {
-        return false;
+      if (tipoPermiso !== 'todos') {
+        const tPerm = (p.tipo_permiso || '').toLowerCase();
+        const esRegCasa = (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '');
+        if (tipoPermiso === 'falta_retardo') {
+          if (!(tPerm === 'falta' && esRegCasa)) return false;
+        } else if (tipoPermiso === 'falta') {
+          if (tPerm !== 'falta' || esRegCasa) return false;
+        } else if (tPerm !== tipoPermiso) {
+          return false;
+        }
       }
 
       if (dictamen !== 'todos') {
@@ -471,6 +479,7 @@ export default function ModalExportarExcel({
                 <option value="salida">Salidas Anticipadas</option>
                 <option value="retardo">Retardos</option>
                 <option value="falta">Faltas</option>
+                <option value="falta_retardo">Faltas por Retardo (Se regresa)</option>
                 <option value="vacaciones">Vacaciones</option>
               </select>
             </div>

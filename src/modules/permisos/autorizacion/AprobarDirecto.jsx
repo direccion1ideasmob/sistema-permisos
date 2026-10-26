@@ -32,7 +32,13 @@ export default function AprobarDirecto() {
     try {
       const data = await obtenerPermisoPorId(permisoId);
 
-      if (data.firma_1_estado === 'autorizado') {
+      const seRegresoPrev = (data.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(data.observaciones || '');
+      if (seRegresoPrev) {
+        setMensajeResultado({
+          tipo: 'info',
+          texto: `Esta solicitud (${data.folio}) ya fue dictaminada como Regreso a Casa (Falta por retardo).`
+        });
+      } else if (data.firma_1_estado === 'autorizado') {
         setMensajeResultado({
           tipo: 'info',
           texto: `Esta solicitud (${data.folio}) ya fue autorizada por Jefatura.`
@@ -77,8 +83,14 @@ export default function AprobarDirecto() {
 
     setProcesando(true);
     try {
+      const eraRetardo = (permiso?.tipo_permiso || '').toLowerCase() === 'retardo';
       await rechazarPermisoDirectoJefatura(permiso, motivoRechazo);
-      setMensajeResultado({ tipo: 'rechazado', texto: `El pase ${permiso.folio} ha sido rechazado.` });
+      setMensajeResultado({
+        tipo: 'rechazado',
+        texto: eraRetardo
+          ? 'Se dictaminó Regreso a Casa (convertido a Falta por retardo sin goce) y se notificó a Caseta.'
+          : `El pase ${permiso.folio} ha sido rechazado.`
+      });
     } catch (err) {
       alert("Error al rechazar: " + err.message);
     } finally {

@@ -88,8 +88,10 @@ export default function ModalRechazoPermiso({
             />
           </div>
 
-          <div style={{ fontSize: '13.5px', color: c.textMuted, fontStyle: 'italic' }}>
-            * Esta explicación se le enviará directamente al colaborador en su notificación.
+          <div style={{ fontSize: '13.5px', color: c.textMuted, fontStyle: 'italic', lineHeight: 1.45 }}>
+            {esRetardo
+              ? '* Al confirmar, este registro se convertirá automáticamente en Falta (Por retardo) sin goce de sueldo, se generará su folio oficial y se ordenará a Caseta retirar al colaborador.'
+              : '* Esta explicación se le enviará directamente al colaborador en su notificación.'}
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
