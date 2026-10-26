@@ -1,3 +1,4 @@
+import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
 import React, { useState, useEffect } from 'react';
 import {
   Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2, User, Stethoscope, Briefcase
@@ -375,7 +376,7 @@ export default function TarjetaAprobacion({
           <img src={urlFoto} alt="" className="ta-avatar" />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="ta-name">
-              {aTitulo(u.nombre_completo || 'Colaborador')}
+              {formatearApellidosNombre(u.nombre_completo || 'Colaborador')}
             </div>
             <div className="ta-subtitle">
               {subtituloFicha}

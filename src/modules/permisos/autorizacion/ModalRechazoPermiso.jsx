@@ -1,3 +1,4 @@
+import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
 import React, { useState } from 'react';
 import { XCircle, X } from 'lucide-react';
 
@@ -31,7 +32,9 @@ export default function ModalRechazoPermiso({
         borderRadius: '20px',
         width: '100%',
         maxWidth: '500px',
-        padding: '28px 30px',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        padding: '22px 20px',
         boxShadow: '0 25px 60px rgba(0,0,0,0.55)',
         boxSizing: 'border-box',
         display: 'flex',
@@ -52,7 +55,7 @@ export default function ModalRechazoPermiso({
                 {esRetardo ? 'REGRESAR A CASA (SIN ACCESO)' : 'RECHAZAR SOLICITUD'}
               </div>
               <div style={{ fontSize: '14.5px', color: c.textMuted, fontWeight: '600', marginTop: '3px' }}>
-                {solicitud.tipo_permiso?.toUpperCase()} • <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo}</strong>
+                {solicitud.tipo_permiso?.toUpperCase()} • <strong style={{ color: c.text }}>{formatearApellidosNombre(solicitud.usuarios?.nombre_completo)}</strong>
               </div>
             </div>
           </div>

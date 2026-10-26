@@ -1,3 +1,4 @@
+import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
 import React, { useState, useEffect } from 'react';
 import { X, Check, Banknote, Receipt, Clock, UserCog, MessageSquare, ShieldCheck, CornerUpLeft } from 'lucide-react';
 import { parsearDatosObservaciones } from '../historial/TablaHistorial';
@@ -55,11 +56,13 @@ export default function ModalDictamenAprobar({
           border-radius: 22px;
           width: 100%;
           max-width: 540px;
-          padding: 30px 32px;
+          max-height: 90vh;
+          overflow-y: auto;
+          padding: 26px 28px;
           box-sizing: border-box;
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 18px;
           box-shadow: 0 25px 60px rgba(0,0,0,0.55);
           font-family: "Inter", system-ui, -apple-system, sans-serif;
         }
@@ -74,9 +77,10 @@ export default function ModalDictamenAprobar({
           margin-top: 4px;
         }
         @media (max-width: 520px) {
-          .modal-dictamen-container { padding: 20px !important; border-radius: 16px !important; }
-          .grid-opciones-dictamen { gap: 10px !important; }
-          .botones-accion-dictamen { flex-direction: column !important; }
+          .modal-dictamen-container { padding: 16px 14px !important; border-radius: 16px !important; gap: 14px !important; }
+          .grid-opciones-dictamen { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+          .botones-accion-dictamen { flex-direction: column-reverse !important; gap: 8px !important; }
+          .botones-accion-dictamen button { width: 100% !important; padding: 12px !important; }
         }
       `}</style>
 
@@ -95,7 +99,7 @@ export default function ModalDictamenAprobar({
                 Resolución de Pase
               </div>
               <div style={{ fontSize: '15px', color: c.textMuted, marginTop: '6px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span>Evaluando a <strong style={{ color: c.text }}>{solicitud.usuarios?.nombre_completo}</strong></span>
+                <span>Evaluando a <strong style={{ color: c.text }}>{formatearApellidosNombre(solicitud.usuarios?.nombre_completo)}</strong></span>
                 <span style={{ background: c.accentSoft, color: c.accent, padding: '3px 9px', borderRadius: '6px', fontWeight: '800', fontSize: '12.5px', letterSpacing: '0.03em' }}>
                   {solicitud.tipo_permiso?.toUpperCase()}
                 </span>

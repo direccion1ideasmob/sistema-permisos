@@ -1,3 +1,4 @@
+import { formatearApellidosNombre, compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   obtenerDatosCaseta,
@@ -107,11 +108,13 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
     return 'ausentes';
   };
 
-  const basePorDeptoYBusqueda = empleados.filter((emp) => {
+  const basePorDeptoYBusqueda = [...empleados]
+    .sort((a, b) => compararPorApellidoPaterno(a.nombre_completo, b.nombre_completo))
+    .filter((emp) => {
     if (deptoFiltro && String(emp.departamento_id) !== String(deptoFiltro)) return false;
     const termino = busqueda.toLowerCase().trim();
     if (termino) {
-      const matchNombre = (emp.nombre_completo || '').toLowerCase().includes(termino);
+      const matchNombre = (emp.nombre_completo || '').toLowerCase().includes(termino) || formatearApellidosNombre(emp.nombre_completo).toLowerCase().includes(termino);
       const matchNum = String(emp.numero_empleado || '').toLowerCase().includes(termino);
       if (!matchNombre && !matchNum) return false;
     }
@@ -266,6 +269,24 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
           background: ${modoOscuro ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
         }
         @media (max-width: 768px) {
+          .vad-toolbar-card {
+            padding: 10px !important;
+          }
+          .vad-row-top {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 8px !important;
+          }
+          .vad-seg-bar {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            box-sizing: border-box !important;
+          }
+          .vad-seg-btn {
+            justify-content: center !important;
+            width: 100% !important;
+          }
           .vad-item-row {
             grid-template-columns: 1fr auto;
             gap: 8px;
@@ -473,7 +494,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                   />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {emp.nombre_completo}
+                      {formatearApellidosNombre(emp.nombre_completo)}
                     </div>
                     <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>#{emp.numero_empleado}</span>

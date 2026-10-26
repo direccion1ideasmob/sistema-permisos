@@ -1,3 +1,4 @@
+import { compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 
@@ -71,7 +72,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   if (resEmpleados.error) throw resEmpleados.error;
   if (resPermisos.error) throw resPermisos.error;
 
-  const empleadosSede = resEmpleados.data || [];
+  const empleadosSede = (resEmpleados.data || []).slice().sort((a, b) => compararPorApellidoPaterno(a.nombre_completo, b.nombre_completo));
   const idsSede = new Set(empleadosSede.map(e => e.id));
 
   // Filtrar permisos que correspondan a la sede y a la fecha consultada (o rango de vacaciones)
@@ -279,6 +280,12 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   (resAsistencias.data || []).forEach(a => {
     mapaAsistencias[a.usuario_id] = a;
   });
+
+  const ordenarPasesPorApellido = (arr) => arr.sort((a, b) => compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo));
+  ordenarPasesPorApellido(retenidosEnEspera);
+  ordenarPasesPorApellido(pasesPorCruzar);
+  ordenarPasesPorApellido(personalFuera);
+  ordenarPasesPorApellido(crucesCompletadosHoy);
 
   return {
     retenidosEnEspera,

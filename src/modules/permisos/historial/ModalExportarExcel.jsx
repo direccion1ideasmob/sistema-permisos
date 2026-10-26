@@ -1,3 +1,4 @@
+import { formatearApellidosNombre, compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, FileSpreadsheet, Download, Search, Users, Calendar, Filter } from 'lucide-react';
 import { supabase } from '../../../core/api/supabaseClient';
@@ -105,12 +106,12 @@ export default function ModalExportarExcel({
         mapa.set(uid, {
           id: uid,
           numero: u.numero_empleado || 'S/N',
-          nombre: u.nombre_completo,
+          nombre: formatearApellidosNombre(u.nombre_completo),
           depto: u.departamentos?.nombre || 'General'
         });
       }
     });
-    return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return Array.from(mapa.values()).sort((a, b) => compararPorApellidoPaterno(a.nombre, b.nombre));
   }, [registrosBase]);
 
   const sugerenciasColaboradores = useMemo(() => {
@@ -157,6 +158,9 @@ export default function ModalExportarExcel({
         }
       }
 
+      const esCanceladoExcel = (p.pago || '').toLowerCase() === 'cancelado' || /CANCELADO por/i.test(p.observaciones || '');
+      if (esCanceladoExcel) return false;
+
       if (dictamen !== 'todos') {
         if (dictamen === 'rechazado') {
           if (p.estado_general !== 'rechazado') return false;
@@ -195,7 +199,8 @@ export default function ModalExportarExcel({
         'DICTAMEN PAGO', 'ESTADO', 'MOTIVO'
       ];
 
-      const filas = datosFiltrados.map(p => {
+      const ordenadosExcel = [...datosFiltrados].sort((a, b) => compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo));
+      const filas = ordenadosExcel.map(p => {
         const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, supervisorSubarea } = parsearDatosObservaciones(p.observaciones);
         const esFaltaPorRetardo = (p.tipo_permiso || '').toLowerCase() === 'falta' && ((p.pago || '').toLowerCase().includes('regresa') || Boolean(horaRegresadoCaseta));
         const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
@@ -205,7 +210,7 @@ export default function ModalExportarExcel({
           `"${p.folio || ''}"`,
           `"${p.fecha_elaboracion || ''}"`,
           `"${p.usuarios?.numero_empleado || ''}"`,
-          `"${p.usuarios?.nombre_completo || ''}"`,
+          `"${formatearApellidosNombre(p.usuarios?.nombre_completo || '')}"`,
           `"${p.usuarios?.tipo_personal || p.usuarios?.departamentos?.clasificacion || ''}"`,
           `"${p.usuarios?.departamentos?.nombre || ''}"`,
           `"${p.usuarios?.area || ''}"`,

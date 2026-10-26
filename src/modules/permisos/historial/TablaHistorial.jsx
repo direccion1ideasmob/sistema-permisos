@@ -1,5 +1,6 @@
+import { formatearApellidosNombre, compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import React, { useState, useMemo } from 'react';
-import { cancelarSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
+import { cancelarSolicitudPermiso, tieneSelloFisicoCaseta, depurarPermisosCanceladosRH } from '../services/permisosService';
 import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
   FileSpreadsheet, RotateCcw, CheckCircle2, XCircle, ChevronDown, ChevronUp,
@@ -213,7 +214,12 @@ export default function TablaHistorial({
 
   const solicitudesProcesadas = useMemo(() => {
     const term = busqueda.toLowerCase().trim();
-    const ordenadas = [...solicitudesEnPeriodo].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const ordenadas = [...solicitudesEnPeriodo].sort((a, b) => {
+      const fa = String(a.fecha_permiso || '').slice(0, 10);
+      const fb = String(b.fecha_permiso || '').slice(0, 10);
+      if (fa !== fb) return fb.localeCompare(fa);
+      return compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo);
+    });
 
     return ordenadas.filter(s => {
       const u = s.usuarios || {};
@@ -243,9 +249,14 @@ export default function TablaHistorial({
           return false;
         }
       }
-      if (filtroEstado === 'autorizado' && !esAut) return false;
-      if (filtroEstado === 'rechazado' && ((s.estado_general !== 'rechazado' && !esRegresadoFiltro) || esCancelado)) return false;
-      if (filtroEstado === 'cancelado' && !esCancelado) return false;
+      if (filtroEstado === 'cancelado') {
+        if (!esCancelado) return false;
+      } else {
+        // Por defecto los cancelados no ensucian la bandeja principal de RH
+        if (esCancelado) return false;
+        if (filtroEstado === 'autorizado' && !esAut) return false;
+        if (filtroEstado === 'rechazado' && (s.estado_general !== 'rechazado' && !esRegresadoFiltro)) return false;
+      }
 
       return true;
     });
@@ -442,6 +453,26 @@ export default function TablaHistorial({
           display: none;
         }
         @media (max-width: 768px) {
+          .th-single-toolbar {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            padding: 10px !important;
+            gap: 8px !important;
+          }
+          .th-toolbar-left {
+            flex: 1 1 auto !important;
+            flex-wrap: wrap !important;
+            width: 100% !important;
+          }
+          .th-search-minimal {
+            flex: 1 1 100% !important;
+            max-width: 100% !important;
+            order: 2;
+          }
+          .th-toolbar-right {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
           .th-desktop-table-view {
             display: none !important;
           }
@@ -591,6 +622,26 @@ export default function TablaHistorial({
             )}
           </div>
 
+          {esControlRH && filtroEstado === 'cancelado' && solicitudesProcesadas.length > 0 && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm(`¿Deseas eliminar definitivamente de la base de datos los ${solicitudesProcesadas.length} registros cancelados que se muestran en pantalla?\n\nEsta acción limpia los folios REQ- cancelados que no afectan nómina.`)) return;
+                try {
+                  await depurarPermisosCanceladosRH(solicitudesProcesadas.map(x => x.id));
+                  if (onRecargar) onRecargar();
+                } catch (err) {
+                  alert('Error al depurar cancelados: ' + err.message);
+                }
+              }}
+              className="th-neutral-btn"
+              style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)' }}
+            >
+              <XCircle size={13.5} />
+              <span>Depurar cancelados ({solicitudesProcesadas.length})</span>
+            </button>
+          )}
+
           {esControlRH && onAbrirExportar && (
             <button
               type="button"
@@ -669,10 +720,10 @@ export default function TablaHistorial({
               onChange={(e) => { setFiltroEstado(e.target.value); setPaginaActual(1); }}
               className="th-gradual-select"
             >
-              <option value="todos">Todos los estados</option>
+              <option value="todos">Activos / Oficiales (Sin cancelados)</option>
               <option value="autorizado">Solo autorizados</option>
               <option value="rechazado">Solo rechazados / regresados</option>
-              <option value="cancelado">Solo cancelados</option>
+              <option value="cancelado">Bitácora de cancelados</option>
             </select>
           </div>
         </div>
@@ -805,7 +856,7 @@ export default function TablaHistorial({
 
                           <td style={{ padding: '11px 14px', verticalAlign: 'middle', overflow: 'hidden' }}>
                             <div style={{ fontWeight: '700', color: c.text, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {u.nombre_completo || 'Colaborador'}
+                              {formatearApellidosNombre(u.nombre_completo || 'Colaborador')}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '12px', color: textSecundario }}>
                               <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700', color: c.text }}>
@@ -862,6 +913,7 @@ export default function TablaHistorial({
                           {esControlRH && (
                             <td style={{ padding: '11px 14px 11px 8px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                {!esCancelado && (
                                 <button
                                   onClick={() => onSeleccionarPapeleta && onSeleccionarPapeleta([s])}
                                   style={{
@@ -872,6 +924,7 @@ export default function TablaHistorial({
                                 >
                                   <Printer size={13} color={textSecundario} /> Papeleta
                                 </button>
+                                )}
                                 <button
                                   onClick={() => toggleExpandir(s.id)}
                                   title="Ver detalles"
@@ -1005,7 +1058,7 @@ export default function TablaHistorial({
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13.5px', fontWeight: '700', color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {u.nombre_completo}
+                      {formatearApellidosNombre(u.nombre_completo || 'Colaborador')}
                     </span>
                     <span style={{ fontSize: '11px', fontWeight: '700', color: esCancelado ? textSecundario : esAut ? '#16a34a' : '#ef4444' }}>
                       {esCancelado ? 'Cancelado' : esAut ? (s.pago || 'Autorizado') : 'Rechazado'}

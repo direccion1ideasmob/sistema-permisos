@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase } from 'lucide-react';
+import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase, Lock } from 'lucide-react';
 import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
 import { obtenerHoraLimiteTolerancia, obtenerHoraSalidaOficial } from '../../vigilancia/services/vigilanciaService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
 import { supabase } from '../../../core/api/supabaseClient';
+import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
 
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOscuro }) {
   const sesionActual = JSON.parse(localStorage.getItem("permisos_sesion") || '{}');
@@ -15,7 +16,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const hoy = new Date();
   const formatearLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const fechaHoy = formatearLocal(hoy);
-  
+
   const hace7Dias = new Date(hoy);
   hace7Dias.setDate(hoy.getDate() - 7);
   const minDate = formatearLocal(hace7Dias);
@@ -35,7 +36,11 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [motivo, setMotivo] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [alertaReincidencia, setAlertaReincidencia] = useState(false);
+
+  // Estado completo de bloqueos del día para deshabilitar botones e inputs sin dejar escribir en vano
   const [bloqueoFechaActiva, setBloqueoFechaActiva] = useState(null);
+  const [jornadaTotalmenteCerrada, setJornadaTotalmenteCerrada] = useState(false);
+  const [tiposBloqueadosMapa, setTiposBloqueadosMapa] = useState({});
 
   const tema = obtenerTemaGlobal(modoOscuro);
   const t = {
@@ -46,6 +51,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   useEffect(() => {
     if (!userId || !fechaPermiso) {
       setBloqueoFechaActiva(null);
+      setJornadaTotalmenteCerrada(false);
+      setTiposBloqueadosMapa({});
       return;
     }
     let cancelado = false;
@@ -83,25 +90,71 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         const retardoHoy = activos.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
         const salidasHoy = activos.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
         const salidaAbierta = salidasHoy.find(s => !/\[REINGRESO CASETA:/i.test(String(s.observaciones || '')));
+        const tieneSelloRetardo = retardoHoy && /\[(?:LLEGADA EN PUERTA|ENTRADA CASETA|REINGRESO CASETA):/i.test(retardoHoy.observaciones || '');
 
+        const mapaBloqueos = {};
+
+        // 1. Bloqueos de día completo (nada se puede pedir para esta fecha)
         if (regCasa) {
-          setBloqueoFechaActiva(`Jornada cerrada para el ${fechaPermiso}: Ya cuentas con un dictamen de retiro en puerta (Falta por retardo • Folio ${regCasa.folio}). No es posible solicitar otro permiso ni salida en esta fecha.`);
-        } else if (faltaOVac) {
-          setBloqueoFechaActiva(`Ya cuentas con un registro de ${(faltaOVac.tipo_permiso || '').toUpperCase()} (${faltaOVac.folio}) para el ${fechaPermiso}. No es posible registrar otro permiso en la misma fecha.`);
-        } else if (tipoPermiso === 'retardo' && retardoHoy) {
-          setBloqueoFechaActiva(`Ya tienes un pase de Retardo (${retardoHoy.folio}) registrado para el ${fechaPermiso}.`);
-        } else if (tipoPermiso === 'retardo' && asistHoy?.hora_entrada) {
-          setBloqueoFechaActiva(`Ya cuentas con registro de entrada en planta (${asistHoy.hora_entrada} hrs) el ${fechaPermiso}. No es posible solicitar un Retardo.`);
-        } else if (tipoPermiso === 'retardo' && salidasHoy.length > 0) {
-          setBloqueoFechaActiva(`Ya tienes un pase de Salida (${salidasHoy[0].folio}) para el ${fechaPermiso}. No es posible solicitar un Retardo.`);
-        } else if (tipoPermiso === 'salida' && asistHoy?.hora_salida) {
-          setBloqueoFechaActiva(`Ya registraste tu salida definitiva de planta (${asistHoy.hora_salida} hrs) el ${fechaPermiso}.`);
-        } else if (tipoPermiso === 'salida' && retardoHoy && retardoHoy.estado_general === 'en_firmas') {
-          setBloqueoFechaActiva(`Tienes un pase de Retardo (${retardoHoy.folio}) pendiente de autorización. Podrás solicitar una Salida una vez que se autorice tu acceso.`);
-        } else if (tipoPermiso === 'salida' && salidaAbierta) {
-          setBloqueoFechaActiva(`Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para el ${fechaPermiso}.`);
-        } else if ((tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') && asistHoy?.hora_entrada) {
-          setBloqueoFechaActiva(`No es posible registrar ${tipoPermiso.toUpperCase()} para el ${fechaPermiso} porque ya tienes registro de entrada en planta (${asistHoy.hora_entrada} hrs).`);
+          const msg = `Jornada cerrada para el ${fechaPermiso}: Ya cuentas con un dictamen de retiro en puerta (Falta por retardo • Folio ${regCasa.folio}). No es posible solicitar otro permiso ni salida en esta fecha.`;
+          setJornadaTotalmenteCerrada(true);
+          setTiposBloqueadosMapa({ salida: msg, retardo: msg, falta: msg, vacaciones: msg });
+          setBloqueoFechaActiva(msg);
+          if (tipoPermiso) setTipoPermiso('');
+          return;
+        }
+
+        if (faltaOVac) {
+          const msg = `Jornada cubierta para el ${fechaPermiso}: Ya cuentas con un registro de ${(faltaOVac.tipo_permiso || '').toUpperCase()} (${faltaOVac.folio}). No es posible registrar otro permiso en la misma fecha.`;
+          setJornadaTotalmenteCerrada(true);
+          setTiposBloqueadosMapa({ salida: msg, retardo: msg, falta: msg, vacaciones: msg });
+          setBloqueoFechaActiva(msg);
+          if (tipoPermiso) setTipoPermiso('');
+          return;
+        }
+
+        if (asistHoy?.hora_salida) {
+          const msg = `Jornada concluida el ${fechaPermiso}: Ya registraste tu salida definitiva de planta (${asistHoy.hora_salida} hrs).`;
+          setJornadaTotalmenteCerrada(true);
+          setTiposBloqueadosMapa({ salida: msg, retardo: msg, falta: msg, vacaciones: msg });
+          setBloqueoFechaActiva(msg);
+          if (tipoPermiso) setTipoPermiso('');
+          return;
+        }
+
+        // 2. Bloqueos parciales por tipo de movimiento
+        if (retardoHoy) {
+          mapaBloqueos.retardo = `Ya tienes un pase de Retardo (${retardoHoy.folio}) registrado para el ${fechaPermiso}.`;
+        } else if (asistHoy?.hora_entrada) {
+          mapaBloqueos.retardo = `Ya cuentas con registro de entrada en planta (${asistHoy.hora_entrada} hrs) el ${fechaPermiso}.`;
+        } else if (salidasHoy.length > 0) {
+          mapaBloqueos.retardo = `Ya tienes un pase de Salida (${salidasHoy[0].folio}) para el ${fechaPermiso}.`;
+        }
+
+        if (retardoHoy && retardoHoy.estado_general === 'en_firmas') {
+          mapaBloqueos.salida = `Tienes un pase de Retardo (${retardoHoy.folio}) pendiente de autorización. Podrás solicitar Salida cuando se autorice tu acceso.`;
+        } else if (salidaAbierta) {
+          mapaBloqueos.salida = `Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para el ${fechaPermiso}.`;
+        }
+
+        if (asistHoy?.hora_entrada) {
+          mapaBloqueos.falta = `Ya tienes registro de entrada en planta (${asistHoy.hora_entrada} hrs) el ${fechaPermiso}.`;
+          mapaBloqueos.vacaciones = `Ya tienes registro de entrada en planta (${asistHoy.hora_entrada} hrs) el ${fechaPermiso}.`;
+        } else if (tieneSelloRetardo) {
+          mapaBloqueos.falta = `Ya tienes llegada registrada en Caseta (${retardoHoy.folio}) el ${fechaPermiso}.`;
+          mapaBloqueos.vacaciones = `Ya tienes llegada registrada en Caseta (${retardoHoy.folio}) el ${fechaPermiso}.`;
+        }
+
+        const todosBloqueados = ['salida', 'retardo', 'falta', 'vacaciones'].every(k => Boolean(mapaBloqueos[k]));
+        setJornadaTotalmenteCerrada(todosBloqueados);
+        setTiposBloqueadosMapa(mapaBloqueos);
+
+        if (todosBloqueados) {
+          setBloqueoFechaActiva(mapaBloqueos.salida || mapaBloqueos.retardo || 'No hay movimientos disponibles para esta fecha.');
+          if (tipoPermiso) setTipoPermiso('');
+        } else if (tipoPermiso && mapaBloqueos[tipoPermiso]) {
+          setBloqueoFechaActiva(mapaBloqueos[tipoPermiso]);
+          setTipoPermiso('');
         } else {
           setBloqueoFechaActiva(null);
         }
@@ -154,7 +207,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     if (naturaleza === 'Asunto de Trabajo') return false;
     const [hLim, mLim] = (horaLimiteRH || '07:15').split(':').map(Number);
     const minLimiteRH = (isNaN(hLim) ? 7 : hLim) * 60 + (isNaN(mLim) ? 15 : mLim);
-    const minCorteAnticipado = Math.max(0, minLimiteRH - 90); // 1 hora y media antes de la tolerancia de RH
+    const minCorteAnticipado = Math.max(0, minLimiteRH - 90);
     const minActuales = hoy.getHours() * 60 + hoy.getMinutes();
     return minActuales >= minCorteAnticipado;
   })();
@@ -197,8 +250,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     e.preventDefault();
     if (!e.target.reportValidity()) return;
 
-    if (bloqueoFechaActiva) return alert(bloqueoFechaActiva);
+    if (bloqueoFechaActiva || jornadaTotalmenteCerrada) return alert(bloqueoFechaActiva || 'No es posible registrar permisos en esta fecha.');
     if (!tipoPermiso) return alert("Por favor, selecciona el Tipo de Movimiento / Permiso.");
+    if (tiposBloqueadosMapa[tipoPermiso]) return alert(tiposBloqueadosMapa[tipoPermiso]);
     if (tipoPermiso !== 'vacaciones' && !naturaleza) return alert("Por favor, selecciona la Naturaleza del Asunto.");
     if (!motivo.trim()) return alert("Por favor escribe la justificación del pase.");
     if (!userId || !deptoId) return alert("Error: Sesión incompleta. Vuelve a iniciar sesión.");
@@ -278,12 +332,12 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       });
 
       alert(`✅ Solicitud enviada correctamente a revisión.\n(Tu folio oficial se asignará al concluir las firmas)`);
-      
+
       setTipoPermiso('');
       setNaturaleza('');
       setMotivo('');
       setRegresaMismoDia(false);
-      
+
       if (onSolicitudCreada) onSolicitudCreada();
     } catch (err) {
       alert("Error al enviar solicitud: " + err.message);
@@ -371,16 +425,6 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           display: block;
           -webkit-appearance: none;
           appearance: none;
-        };
-          background: ${t.inputBg};
-          color: ${t.text};
-          font-size: 15px;
-          font-weight: 600;
-          outline: none;
-          transition: all 0.2s;
-          box-sizing: border-box;
-          font-family: inherit;
-          -webkit-appearance: none;
         }
         .zinc-input:focus {
           border-color: ${t.accent};
@@ -408,8 +452,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 9px;
-          padding: 16px 10px;
+          gap: 8px;
+          padding: 14px 10px;
           border-radius: 14px;
           border: 1.5px solid ${t.border};
           background: ${t.surface};
@@ -421,18 +465,6 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           text-align: center;
           box-sizing: border-box;
           min-width: 0;
-        };
-          background: ${t.surface};
-          color: ${t.textMuted};
-          font-size: 14px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          text-align: center;
-          min-width: 0;
-        }
-        .pill-movimiento:active {
-          transform: scale(0.98);
         }
         @media (max-width: 760px) {
           .form-card-container {
@@ -462,9 +494,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             gap: 14px;
           }
           .pill-movimiento {
-            padding: 14px 8px;
+            padding: 12px 8px;
             font-size: 13px;
-            gap: 7px;
+            gap: 6px;
           }
           .zinc-input {
             padding: 12px 13px;
@@ -477,7 +509,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         <div className="form-header-row">
           <div>
             <div className="form-title-main">NUEVA SOLICITUD DE PASE</div>
-            <div className="form-subtitle-user">{sesionActual.nombre_completo || usuario?.nombre_completo}</div>
+            <div className="form-subtitle-user">{formatearApellidosNombre(sesionActual.nombre_completo || usuario?.nombre_completo)}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '11.5px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Elaboración</div>
@@ -486,112 +518,35 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label className="zinc-label">1. Tipo de Movimiento / Permiso</label>
-            <div className="grid-responsivo-tipos">
-              {catalogoTipos.map(item => {
-                const Icono = item.icon;
-                const activo = tipoPermiso === item.key;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setTipoPermiso(item.key)}
-                    className="pill-movimiento"
-                    style={activo ? {
-                      borderColor: item.color,
-                      backgroundColor: item.bg,
-                      color: item.color
-                    } : {}}
-                  >
-                    <Icono size={23} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {bloqueoFechaActiva && (
-            <div style={{ padding: '14px 16px', borderRadius: '12px', background: t.dangerSoft, border: `1.5px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45', fontWeight: '700' }}>
-              <ShieldAlert size={20} color={t.danger} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <span>{bloqueoFechaActiva}</span>
-            </div>
-          )}
-
-          {alertaReincidencia && tipoPermiso === 'retardo' && (
-            <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
-              <Info size={19} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span><strong>Atención:</strong> El sistema detecta incidencias previas de retardo en tu historial reciente. Esta información será anexada para la evaluación de tu Jefatura y Recursos Humanos.</span>
-            </div>
-          )}
-
-          {esRetardoUrgente && (
-            <div style={{ padding: '13px 15px', borderRadius: '11px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
-              <ShieldAlert size={19} color={t.danger} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span><strong>AVISO DE RETARDO DEL DÍA:</strong> Estás registrando un retardo con menos de 1 hora y media de anticipación al límite de entrada ({horaLimiteRH} hrs). Tu Jefatura y Recursos Humanos recibirán la notificación para autorizar tu acceso.</span>
-            </div>
-          )}
-
-          {tipoPermiso && tipoPermiso !== 'vacaciones' && (
-            <div>
-              <label className="zinc-label">2. Naturaleza del Asunto</label>
-              <div className="grid-responsivo-naturaleza">
-                {catalogoNaturaleza.map(item => {
-                  const nat = item.label;
-                  const IconoNat = item.icon;
-                  const activa = naturaleza === nat;
-                  return (
-                    <button
-                      key={nat}
-                      type="button"
-                      onClick={() => setNaturaleza(nat)}
-                      style={{
-                        padding: '13px 14px',
-                        borderRadius: '11px',
-                        border: `1.5px solid ${activa ? t.text : t.border}`,
-                        background: activa ? (modoOscuro ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)') : t.surface,
-                        color: activa ? t.text : t.textMuted,
-                        fontSize: '14px',
-                        fontWeight: activa ? '800' : '700',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <IconoNat size={17} color={activa ? t.text : t.textMuted} strokeWidth={2} />
-                      <span>{nat}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
+          {/* PASO 1: FECHA (SIEMPRE DISPONIBLE PARA CAMBIAR DE DÍA SI HOY ESTÁ CERRADO) */}
           <div className="grid-responsivo-fechas">
             <div style={{ minWidth: 0 }}>
-              <label className="zinc-label">{tipoPermiso === 'vacaciones' ? 'Fecha Inicio *' : 'Fecha en que aplica el pase *'}</label>
-              <input type="date" required className="zinc-input" min={minDate} value={fechaPermiso} onChange={e => setFechaPermiso(e.target.value)} />
+              <label className="zinc-label">{tipoPermiso === 'vacaciones' ? '1. Fecha de Inicio *' : '1. Fecha en que aplica el pase *'}</label>
+              <input
+                type="date"
+                required
+                className="zinc-input"
+                min={minDate}
+                value={fechaPermiso}
+                onChange={e => setFechaPermiso(e.target.value)}
+              />
             </div>
 
-            {tipoPermiso === 'vacaciones' && (
+            {!jornadaTotalmenteCerrada && tipoPermiso === 'vacaciones' && (
               <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Fecha Fin *</label>
                 <input type="date" required className="zinc-input" min={fechaPermiso} value={fechaFinVacaciones} onChange={e => setFechaFinVacaciones(e.target.value)} />
               </div>
             )}
 
-            {tipoPermiso === 'retardo' && (
+            {!jornadaTotalmenteCerrada && tipoPermiso === 'retardo' && (
               <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Hora Estimada de Llegada *</label>
                 <input type="time" required min={horaLimiteRH} className="zinc-input" value={horaLlegadaRetardo} onChange={e => setHoraLlegadaRetardo(e.target.value)} />
               </div>
             )}
 
-            {tipoPermiso === 'salida' && (
+            {!jornadaTotalmenteCerrada && tipoPermiso === 'salida' && (
               <div style={{ minWidth: 0 }}>
                 <label className="zinc-label">Hora en que te retiras *</label>
                 <input type="time" required className="zinc-input" value={horaSalida} onChange={e => setHoraSalida(e.target.value)} />
@@ -599,48 +554,170 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
             )}
           </div>
 
-          {tipoPermiso === 'salida' && (
-            <div style={{ padding: '14px 16px', borderRadius: '12px', background: t.surface, border: `1.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <input type="checkbox" id="checkRegresa" checked={regresaMismoDia} onChange={e => setRegresaMismoDia(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#0ea5e9', cursor: 'pointer', flexShrink: 0 }} />
-                <label htmlFor="checkRegresa" style={{ fontSize: '14.5px', color: t.text, cursor: 'pointer', fontWeight: '700', lineHeight: 1.35 }}>
-                  ¿Regresas a laborar en el mismo turno? (Salida y reingreso)
-                </label>
-              </div>
-
-              {regresaMismoDia && (
-                <div style={{ marginTop: '2px', minWidth: 0 }}>
-                  <label className="zinc-label">Hora estimada de retorno al puesto *</label>
-                  <input type="time" required className="zinc-input" value={horaRegreso} onChange={e => setHoraRegreso(e.target.value)} />
+          {bloqueoFechaActiva && (
+            <div style={{ padding: '14px 16px', borderRadius: '12px', background: t.dangerSoft, border: `1.5px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45', fontWeight: '700' }}>
+              <ShieldAlert size={20} color={t.danger} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <div>
+                <div>{bloqueoFechaActiva}</div>
+                <div style={{ fontSize: '12px', fontWeight: '600', opacity: 0.9, marginTop: '4px' }}>
+                  Si necesitas programar un permiso para otro día, cambia la fecha en el campo superior.
                 </div>
-              )}
+              </div>
             </div>
           )}
 
+          {/* PASO 2: TARJETAS DE TIPO DE PERMISO (SE DESHABILITAN LAS QUE NO APLICAN EN ESA FECHA) */}
           <div>
-            <label className="zinc-label">Motivo / Justificación *</label>
-            <textarea 
-              required rows={4}
-              placeholder={tipoPermiso === 'vacaciones' ? "Ej. Vacaciones correspondientes al periodo..." : "Explica detalladamente la razón de tu solicitud..."}
-              value={motivo} onChange={e => setMotivo(e.target.value)}
-              className="zinc-input"
-              style={{ height: 'auto', resize: 'vertical', lineHeight: '1.5' }}
-            />
+            <label className="zinc-label">2. Tipo de Movimiento / Permiso</label>
+            <div className="grid-responsivo-tipos">
+              {catalogoTipos.map(item => {
+                const Icono = item.icon;
+                const activo = tipoPermiso === item.key;
+                const motivoBloqueoItem = tiposBloqueadosMapa[item.key];
+                const deshabilitado = Boolean(jornadaTotalmenteCerrada || motivoBloqueoItem);
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    disabled={deshabilitado}
+                    title={motivoBloqueoItem || item.label}
+                    onClick={() => {
+                      if (deshabilitado) return;
+                      setBloqueoFechaActiva(null);
+                      setTipoPermiso(item.key);
+                    }}
+                    className="pill-movimiento"
+                    style={
+                      deshabilitado
+                        ? {
+                            opacity: 0.38,
+                            cursor: 'not-allowed',
+                            background: t.bg,
+                            borderColor: t.border
+                          }
+                        : activo
+                        ? {
+                            borderColor: item.color,
+                            backgroundColor: item.bg,
+                            color: item.color
+                          }
+                        : {}
+                    }
+                  >
+                    <Icono size={22} />
+                    <span>{item.label}</span>
+                    {deshabilitado && (
+                      <span style={{ fontSize: '10.5px', fontWeight: '800', color: t.danger, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <Lock size={11} /> No disponible
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <button 
-            type="submit" disabled={guardando || !tipoPermiso || Boolean(bloqueoFechaActiva)}
-            style={{
-              padding: '15px', borderRadius: '12px', border: 'none',
-              backgroundColor: !tipoPermiso ? t.surface : (esRetardoUrgente ? t.danger : t.accent), 
-              color: !tipoPermiso ? t.textMuted : '#ffffff',
-              fontSize: '15px', fontWeight: '800', cursor: !tipoPermiso ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s', 
-              boxShadow: !tipoPermiso ? 'none' : (esRetardoUrgente ? '0 4px 14px rgba(239, 68, 68, 0.3)' : `0 4px 14px ${t.accentSoft}`)
-            }}
-          >
-            <Send size={18} /> {guardando ? 'Registrando en sistema...' : (esRetardoUrgente ? 'ENVIAR AVISO DE URGENCIA' : 'FIRMAR Y ENVIAR SOLICITUD')}
-          </button>
+          {/* SI EL DÍA NO ESTÁ CERRADO Y YA ELIGIÓ UN TIPO DE PERMISO VÁLIDO, MOSTRAR EL RESTO DEL FORMULARIO */}
+          {!jornadaTotalmenteCerrada && tipoPermiso && !tiposBloqueadosMapa[tipoPermiso] && (
+            <>
+              {alertaReincidencia && tipoPermiso === 'retardo' && (
+                <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
+                  <Info size={19} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span><strong>Atención:</strong> El sistema detecta incidencias previas de retardo en tu historial reciente. Esta información será anexada para la evaluación de tu Jefatura y Recursos Humanos.</span>
+                </div>
+              )}
+
+              {esRetardoUrgente && (
+                <div style={{ padding: '13px 15px', borderRadius: '11px', background: t.dangerSoft, border: `1px solid ${t.danger}`, fontSize: '13.5px', color: t.danger, display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
+                  <ShieldAlert size={19} color={t.danger} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span><strong>AVISO DE RETARDO DEL DÍA:</strong> Estás registrando un retardo con menos de 1 hora y media de anticipación al límite de entrada ({horaLimiteRH} hrs). Tu Jefatura y Recursos Humanos recibirán la notificación para autorizar tu acceso.</span>
+                </div>
+              )}
+
+              {tipoPermiso !== 'vacaciones' && (
+                <div>
+                  <label className="zinc-label">3. Naturaleza del Asunto</label>
+                  <div className="grid-responsivo-naturaleza">
+                    {catalogoNaturaleza.map(item => {
+                      const nat = item.label;
+                      const IconoNat = item.icon;
+                      const activa = naturaleza === nat;
+                      return (
+                        <button
+                          key={nat}
+                          type="button"
+                          onClick={() => setNaturaleza(nat)}
+                          style={{
+                            padding: '13px 14px',
+                            borderRadius: '11px',
+                            border: `1.5px solid ${activa ? t.text : t.border}`,
+                            background: activa ? (modoOscuro ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)') : t.surface,
+                            color: activa ? t.text : t.textMuted,
+                            fontSize: '14px',
+                            fontWeight: activa ? '800' : '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <IconoNat size={17} color={activa ? t.text : t.textMuted} strokeWidth={2} />
+                          <span>{nat}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {tipoPermiso === 'salida' && (
+                <div style={{ padding: '14px 16px', borderRadius: '12px', background: t.surface, border: `1.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input type="checkbox" id="checkRegresa" checked={regresaMismoDia} onChange={e => setRegresaMismoDia(e.target.checked)} style={{ width: '18px', height: '18px', accentColor: '#0ea5e9', cursor: 'pointer', flexShrink: 0 }} />
+                    <label htmlFor="checkRegresa" style={{ fontSize: '14.5px', color: t.text, cursor: 'pointer', fontWeight: '700', lineHeight: 1.35 }}>
+                      ¿Regresas a laborar en el mismo turno? (Salida y reingreso)
+                    </label>
+                  </div>
+
+                  {regresaMismoDia && (
+                    <div style={{ marginTop: '2px', minWidth: 0 }}>
+                      <label className="zinc-label">Hora estimada de retorno al puesto *</label>
+                      <input type="time" required className="zinc-input" value={horaRegreso} onChange={e => setHoraRegreso(e.target.value)} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="zinc-label">Motivo / Justificación *</label>
+                <textarea
+                  required rows={4}
+                  placeholder={tipoPermiso === 'vacaciones' ? "Ej. Vacaciones correspondientes al periodo..." : "Explica detalladamente la razón de tu solicitud..."}
+                  value={motivo} onChange={e => setMotivo(e.target.value)}
+                  className="zinc-input"
+                  style={{ height: 'auto', resize: 'vertical', lineHeight: '1.5' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={guardando || !tipoPermiso || Boolean(bloqueoFechaActiva) || jornadaTotalmenteCerrada}
+                style={{
+                  padding: '15px', borderRadius: '12px', border: 'none',
+                  backgroundColor: esRetardoUrgente ? t.danger : t.accent,
+                  color: '#ffffff',
+                  fontSize: '15px', fontWeight: '800', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s',
+                  boxShadow: esRetardoUrgente ? '0 4px 14px rgba(239, 68, 68, 0.3)' : `0 4px 14px ${t.accentSoft}`
+                }}
+              >
+                <Send size={18} /> {guardando ? 'Registrando en sistema...' : (esRetardoUrgente ? 'ENVIAR AVISO DE URGENCIA' : 'FIRMAR Y ENVIAR SOLICITUD')}
+              </button>
+            </>
+          )}
         </form>
       </div>
     </>

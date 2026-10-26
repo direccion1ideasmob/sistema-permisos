@@ -111,19 +111,36 @@ export default function ControlHoraCorteRH({ usuario, c }) {
         <span>{horaCorte} – {horaSalida}</span>
       </button>
 
+      <style>{`
+        .rh-reloj-popover {
+          position: absolute;
+          top: 40px;
+          right: 0;
+          z-index: 9999;
+          width: 266px;
+          box-sizing: border-box;
+        }
+        @media (max-width: 640px) {
+          .rh-reloj-popover {
+            position: fixed !important;
+            top: 76px !important;
+            left: 12px !important;
+            right: 12px !important;
+            width: auto !important;
+            max-width: 340px !important;
+            margin: 0 auto !important;
+          }
+        }
+      `}</style>
       {abierto && (
         <div
+          className="rh-reloj-popover"
           style={{
-            position: 'absolute',
-            top: '40px',
-            right: 0,
-            zIndex: 9999,
             background: c?.surfaceCard || '#ffffff',
             border: `1.5px solid ${c?.border || '#cbd5e1'}`,
             borderRadius: '12px',
             padding: '12px 14px',
-            width: '260px',
-            boxShadow: '0 12px 28px rgba(0,0,0,0.18)',
+            boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
             display: 'flex',
             flexDirection: 'column',
             gap: '10px'

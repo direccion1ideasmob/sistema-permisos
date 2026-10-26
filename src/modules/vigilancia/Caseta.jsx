@@ -1,3 +1,4 @@
+import { formatearApellidosNombre } from '../../core/utils/ordenNombre';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthContext';
@@ -398,7 +399,7 @@ export default function Caseta() {
                         <AvatarColaborador u={p.usuarios} />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                            {p.usuarios?.nombre_completo}
+                            {formatearApellidosNombre(p.usuarios?.nombre_completo)}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px', fontSize: '11.5px', fontWeight: '700' }}>
                             <span style={{ color: '#d97706', background: 'rgba(245,158,11,0.14)', padding: '1.5px 6px', borderRadius: '4px' }}>
@@ -475,7 +476,7 @@ export default function Caseta() {
                         </div>
 
                         <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                          {p.usuarios?.nombre_completo}
+                          {formatearApellidosNombre(p.usuarios?.nombre_completo)}
                         </div>
 
                         {esSalida && p.horarioProgramado && (
@@ -537,7 +538,7 @@ export default function Caseta() {
                     <AvatarColaborador u={p.usuarios} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
-                        {p.usuarios?.nombre_completo}
+                        {formatearApellidosNombre(p.usuarios?.nombre_completo)}
                       </div>
                       <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700', marginTop: '2px' }}>
                         #{p.usuarios?.numero_empleado} • Fuera con pase temporal
@@ -592,7 +593,7 @@ export default function Caseta() {
                     <AvatarColaborador u={p.usuarios} size={34} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {p.usuarios?.nombre_completo}
+                        {formatearApellidosNombre(p.usuarios?.nombre_completo)}
                       </div>
                       <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600' }}>
                         #{p.usuarios?.numero_empleado} • {p.folio}
@@ -718,7 +719,7 @@ export default function Caseta() {
 
             <div>
               <div style={{ fontSize: '19px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
-                {modalConfirmacion.emp?.nombre_completo}
+                {formatearApellidosNombre(modalConfirmacion.emp?.nombre_completo)}
               </div>
               <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '5px' }}>
                 #{modalConfirmacion.emp?.numero_empleado}
@@ -972,7 +973,7 @@ export default function Caseta() {
                       <AvatarColaborador u={emp} size={40} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: '14.5px', fontWeight: '900', color: c.text }}>
-                          {emp.nombre_completo}
+                          {formatearApellidosNombre(emp.nombre_completo)}
                         </div>
                         {inc && (
                           <span style={{
@@ -1087,7 +1088,7 @@ export default function Caseta() {
                     <AvatarColaborador u={emp} size={40} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {emp.nombre_completo}
+                        {formatearApellidosNombre(emp.nombre_completo)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
@@ -1221,7 +1222,7 @@ export default function Caseta() {
                     <AvatarColaborador u={emp} size={40} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {emp.nombre_completo}
+                        {formatearApellidosNombre(emp.nombre_completo)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>

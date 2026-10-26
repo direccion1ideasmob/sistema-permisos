@@ -1,3 +1,4 @@
+import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
 import React, { useRef, useState, useEffect } from 'react';
 import { X, Printer, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../../core/api/supabaseClient';
@@ -362,7 +363,7 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                   }}>
                     <div>
                       <span style={{ fontSize: '9px', fontWeight: '900', color: '#475569', display: 'block', marginBottom: '2px' }}>COLABORADOR</span>
-                      <strong style={{ fontSize: '12px', color: '#0f172a', display: 'block' }}>{p.usuarios?.nombre_completo}</strong>
+                      <strong style={{ fontSize: '12px', color: '#0f172a', display: 'block' }}>{formatearApellidosNombre(p.usuarios?.nombre_completo)}</strong>
                       <span style={{ fontSize: '10.5px', color: '#15803d', fontWeight: '800', marginTop: '1px', display: 'block' }}>#{p.usuarios?.numero_empleado}</span>
                     </div>
                     <div>

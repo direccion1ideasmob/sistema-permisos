@@ -1,3 +1,4 @@
+import { compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import ControlHoraCorteRH from './ControlHoraCorteRH';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -126,7 +127,9 @@ export default function Aprobaciones() {
     ['autorizado', 'rechazado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)
   );
 
-  const listadoActual = tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesTransito;
+  const listadoActual = (tabActiva === 'pendientes' ? solicitudesPendientes : solicitudesTransito)
+    .slice()
+    .sort((a, b) => compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo));
 
   return (
     <div className="aprobaciones-container aprob-main-wrap" style={{ maxWidth: tabActiva === 'historial' ? '100%' : '1060px', margin: '0 auto' }}>
@@ -187,7 +190,12 @@ export default function Aprobaciones() {
       `}</style>
 
       {/* BARRA SEGMENTADA SIMÉTRICA */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}><ControlHoraCorteRH usuario={usuario} c={c} /></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '15px', fontWeight: '900', color: c.text, letterSpacing: '-0.01em' }}>
+          {esRH ? 'Control de Autorizaciones RH' : 'Bandeja de Autorizaciones'}
+        </span>
+        <ControlHoraCorteRH usuario={usuario} c={c} />
+      </div>
       <div className="tabs-aprobacion-bar aprob-tabs-bar">
         <button
           onClick={() => setTabActiva('pendientes')}
