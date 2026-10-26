@@ -284,6 +284,7 @@ export default function TablaHistorial({
   };
 
   const cantidadFiltrosSecundarios = [
+    modoPeriodo === 'semana',
     nominaFiltro !== 'todas',
     deptoFiltro !== 'todos',
     tipoFiltro !== 'todos',
@@ -362,7 +363,7 @@ export default function TablaHistorial({
           width: 100%;
           box-sizing: border-box;
         }
-        /* UNA SOLA BARRA SUPERIOR NEUTRA Y SILENCIOSA */
+        /* BARRA COMPACTA Y EMPAQUETADA (1 FILA EN 14", 2 FILAS EN CELULAR) */
         .th-single-toolbar {
           display: flex;
           align-items: center;
@@ -370,17 +371,22 @@ export default function TablaHistorial({
           gap: 8px;
           background: ${c.surfaceCard};
           border: 1px solid ${c.border};
-          border-radius: 11px;
+          border-radius: 12px;
           padding: 8px 12px;
-          flex-wrap: wrap;
           box-sizing: border-box;
         }
-        .th-toolbar-left {
+        .th-top-bar-row {
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 8px;
-          flex: 1 1 320px;
-          min-width: 0;
+          width: 100%;
+        }
+        .th-actions-pack {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
         }
         .th-search-minimal {
           display: flex;
@@ -392,8 +398,8 @@ export default function TablaHistorial({
           padding: 0 10px;
           height: 34px;
           flex: 1;
-          max-width: 340px;
-          min-width: 160px;
+          max-width: 360px;
+          min-width: 180px;
           box-sizing: border-box;
         }
         .th-neutral-btn {
@@ -408,6 +414,7 @@ export default function TablaHistorial({
           cursor: pointer;
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 6px;
           white-space: nowrap;
           box-sizing: border-box;
@@ -415,12 +422,6 @@ export default function TablaHistorial({
         }
         .th-neutral-btn:hover {
           border-color: ${textSecundario};
-        }
-        .th-toolbar-right {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
         }
         /* PANEL GRADUAL DE FILTROS (OCULTO POR DEFECTO) */
         .th-gradual-filters {
@@ -460,40 +461,30 @@ export default function TablaHistorial({
             padding: 10px !important;
             gap: 8px !important;
           }
-          .th-toolbar-left {
-            display: grid !important;
-            grid-template-columns: 1fr auto !important;
-            align-items: center !important;
-            gap: 8px !important;
-            width: 100% !important;
-            flex: none !important;
-          }
-          .th-search-minimal {
-            grid-column: 1 / -1 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            order: 3 !important;
-          }
-          .th-toolbar-right {
+          .th-top-bar-row {
             display: flex !important;
-            flex-wrap: nowrap !important;
             align-items: center !important;
             justify-content: space-between !important;
             gap: 6px !important;
             width: 100% !important;
-            box-sizing: border-box !important;
           }
-          .th-toolbar-right > div {
-            flex: 1 1 0% !important;
+          .th-search-minimal {
+            width: 100% !important;
+            max-width: 100% !important;
             min-width: 0 !important;
-            justify-content: space-between !important;
-            box-sizing: border-box !important;
-            padding: 0 6px !important;
+            height: 36px !important;
           }
-          .th-toolbar-right .th-neutral-btn {
-            flex: 0 0 auto !important;
-            padding: 0 10px !important;
-            font-size: 11.5px !important;
+          .th-btn-label-hide-mobile {
+            display: none !important;
+          }
+          .th-icon-only-mobile {
+            padding: 0 !important;
+            width: 34px !important;
+            height: 34px !important;
+          }
+          .th-gradual-filters {
+            grid-template-columns: 1fr !important;
+            padding: 10px !important;
           }
           .th-desktop-table-view {
             display: none !important;
@@ -503,9 +494,6 @@ export default function TablaHistorial({
             flex-direction: column;
             gap: 7px;
             width: 100%;
-          }
-          .th-search-minimal {
-            max-width: none;
           }
           .th-mcard {
             background: ${c.surfaceCard};
@@ -519,12 +507,13 @@ export default function TablaHistorial({
         }
       `}</style>
 
-      {/* 1. BARRA ÚNICA, NEUTRA Y ORDENADA */}
+      {/* 1. BARRA EMPAQUETADA Y SIMÉTRICA */}
       <div className="th-single-toolbar">
-        <div className="th-toolbar-left">
+        <div className="th-top-bar-row">
           {selectorModo}
 
-          <div className="th-search-minimal">
+          {/* Buscador en medio para laptop 14", baja al renglón 2 en móvil */}
+          <div className="th-search-minimal" style={{ display: window.innerWidth <= 768 ? 'none' : 'flex' }}>
             <Search size={14} color={textSecundario} style={{ flexShrink: 0 }} />
             <input
               type="text"
@@ -544,143 +533,131 @@ export default function TablaHistorial({
             )}
           </div>
 
-          {/* Botón discreto de Filtros (Revelación Gradual) */}
-          <button
-            type="button"
-            onClick={() => setMostrarPanelFiltros(prev => !prev)}
-            className="th-neutral-btn"
-            style={{
-              borderColor: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.text : c.border,
-              background: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.surface : c.bg
-            }}
-          >
-            <SlidersHorizontal size={13.5} color={textSecundario} />
-            <span>Filtros</span>
-            {cantidadFiltrosSecundarios > 0 && (
-              <span style={{
-                background: c.text, color: c.surfaceCard, fontSize: '10.5px',
-                fontWeight: '800', padding: '1px 6px', borderRadius: '999px'
-              }}>
-                {cantidadFiltrosSecundarios}
-              </span>
+          <div className="th-actions-pack">
+            {esControlRH && seleccionados.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
+                className="th-neutral-btn"
+                style={{ color: c.accent, borderColor: c.accent }}
+                title="Imprimir papeletas seleccionadas"
+              >
+                <Printer size={14} />
+                <span>({seleccionados.length})</span>
+              </button>
             )}
-          </button>
 
-          {hayFiltrosActivos && (
             <button
               type="button"
-              onClick={limpiarFiltros}
-              title="Restablecer filtros"
+              onClick={() => setMostrarPanelFiltros(prev => !prev)}
+              className="th-neutral-btn"
+              title="Abrir filtros y periodo"
               style={{
-                height: '34px', padding: '0 9px', borderRadius: '8px',
-                border: 'none', background: 'transparent', color: textSecundario,
-                fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: '4px'
+                borderColor: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.accent : c.border,
+                background: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.accentSoft : c.bg,
+                color: (mostrarPanelFiltros || cantidadFiltrosSecundarios > 0) ? c.accent : c.text
               }}
             >
-              <RotateCcw size={12.5} /> Limpiar
+              <SlidersHorizontal size={14} />
+              <span className="th-btn-label-hide-mobile">Filtros</span>
+              {cantidadFiltrosSecundarios > 0 && (
+                <span style={{
+                  background: c.accent, color: '#fff', fontSize: '10.5px',
+                  fontWeight: '800', padding: '1px 5px', borderRadius: '999px'
+                }}>
+                  {cantidadFiltrosSecundarios}
+                </span>
+              )}
+            </button>
+
+            {esControlRH && onAbrirExportar && (
+              <button
+                type="button"
+                onClick={onAbrirExportar}
+                className="th-neutral-btn th-icon-only-mobile"
+                title="Exportar a Excel"
+              >
+                <FileSpreadsheet size={15} color={c.accent} />
+                <span className="th-btn-label-hide-mobile">Exportar</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Renglón 2 exclusivo para celular: Buscador de ancho completo */}
+        <div className="th-search-minimal" style={{ display: window.innerWidth <= 768 ? 'flex' : 'none' }}>
+          <Search size={14} color={textSecundario} style={{ flexShrink: 0 }} />
+          <input
+            type="text"
+            placeholder="Buscar colaborador, folio o #nómina..."
+            value={busqueda}
+            onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }}
+            style={{ border: 'none', background: 'transparent', outline: 'none', color: c.text, fontSize: '12.5px', width: '100%', fontWeight: '500' }}
+          />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda('')}
+              style={{ background: 'none', border: 'none', color: textSecundario, cursor: 'pointer', display: 'flex', padding: 0 }}
+            >
+              <X size={13} />
             </button>
           )}
         </div>
+      </div>
 
-        {/* Lado derecho: Selector de Periodo sobrio + Imprimir selección + Exportar discreto */}
-        <div className="th-toolbar-right">
-          {esControlRH && seleccionados.length > 0 && (
-            <button
-              type="button"
-              onClick={() => onSeleccionarPapeleta(solicitudes.filter(s => seleccionados.includes(s.id)))}
-              className="th-neutral-btn"
-              style={{ color: c.accent, borderColor: c.accent }}
-            >
-              <Printer size={13.5} /> Imprimir ({seleccionados.length})
-            </button>
-          )}
-
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '4px',
-            height: '34px', padding: '0 6px', borderRadius: '8px',
-            background: c.bg, border: `1px solid ${c.border}`
-          }}>
+      {/* 2. PANEL EMPAQUETADO DE FILTROS (INCLUYE PERIODO POR SEMANA, NÓMINA, DEPTO, TIPO, RESOLUCIÓN Y LIMPIAR) */}
+      {mostrarPanelFiltros && (
+        <div className="th-gradual-filters">
+          <div>
+            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
+              Periodo ({solicitudesProcesadas.length} reg.)
+            </label>
             {modoPeriodo === 'semana' ? (
-              <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', height: '34px', padding: '0 6px', borderRadius: '7px', background: c.bg, border: `1px solid ${c.border}` }}>
                 <button
                   type="button"
                   onClick={() => { setOffsetSemana(prev => prev - 1); setPaginaActual(1); }}
-                  style={{ width: '24px', height: '24px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ width: '24px', height: '24px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: c.text, padding: '0 4px', whiteSpace: 'nowrap' }}>
-                  Sem {infoSemana.numSemana} <span style={{ color: textSecundario, fontWeight: '500' }}>({infoSemana.etiquetaRango})</span>
+                <span style={{ fontSize: '11.5px', fontWeight: '700', color: c.text, whiteSpace: 'nowrap' }}>
+                  Sem {infoSemana.numSemana} ({infoSemana.etiquetaRango})
                 </span>
                 <button
                   type="button"
                   onClick={() => { setOffsetSemana(prev => prev + 1); setPaginaActual(1); }}
-                  style={{ width: '24px', height: '24px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ width: '24px', height: '24px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <ChevronRight size={14} />
                 </button>
                 <button
                   type="button"
                   onClick={() => { setModoPeriodo('todo'); setPaginaActual(1); }}
-                  style={{ height: '24px', padding: '0 8px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.surfaceCard, color: textSecundario, fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
+                  style={{ height: '22px', padding: '0 6px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.surfaceCard, color: textSecundario, fontSize: '10.5px', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  Ver todos
+                  Todos
                 </button>
-              </>
+              </div>
             ) : (
-              <>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: c.text, padding: '0 6px', whiteSpace: 'nowrap' }}>
-                  Todos ({solicitudesProcesadas.length})
-                </span>
-                <button
-                  type="button"
-                  onClick={() => { setModoPeriodo('semana'); setOffsetSemana(0); setPaginaActual(1); }}
-                  style={{ height: '24px', padding: '0 8px', borderRadius: '5px', border: `1px solid ${c.border}`, background: c.surfaceCard, color: textSecundario, fontSize: '11px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
-                  Filtrar por semana
-                </button>
-              </>
+              <select
+                value="todo"
+                onChange={(e) => {
+                  if (e.target.value === 'semana') {
+                    setModoPeriodo('semana');
+                    setOffsetSemana(0);
+                    setPaginaActual(1);
+                  }
+                }}
+                className="th-gradual-select"
+              >
+                <option value="todo">Todo el historial ({solicitudesProcesadas.length})</option>
+                <option value="semana">Filtrar por semana...</option>
+              </select>
             )}
           </div>
 
-          {esControlRH && filtroEstado === 'cancelado' && solicitudesProcesadas.length > 0 && (
-            <button
-              type="button"
-              onClick={async () => {
-                if (!window.confirm(`¿Deseas eliminar definitivamente de la base de datos los ${solicitudesProcesadas.length} registros cancelados que se muestran en pantalla?\n\nEsta acción limpia los folios REQ- cancelados que no afectan nómina.`)) return;
-                try {
-                  await depurarPermisosCanceladosRH(solicitudesProcesadas.map(x => x.id));
-                  if (onRecargar) onRecargar();
-                } catch (err) {
-                  alert('Error al depurar cancelados: ' + err.message);
-                }
-              }}
-              className="th-neutral-btn"
-              style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)' }}
-            >
-              <XCircle size={13.5} />
-              <span>Depurar cancelados ({solicitudesProcesadas.length})</span>
-            </button>
-          )}
-
-          {esControlRH && onAbrirExportar && (
-            <button
-              type="button"
-              onClick={onAbrirExportar}
-              className="th-neutral-btn"
-              title="Exportar registros a Excel"
-            >
-              <FileSpreadsheet size={14} color={c.accent} />
-              <span>Exportar</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 2. PANEL GRADUAL DE FILTROS (SOLO SE ABRE AL TOCAR "FILTROS") */}
-      {mostrarPanelFiltros && (
-        <div className="th-gradual-filters">
           {esControlRH && (
             <div>
               <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: textSecundario, marginBottom: '4px', textTransform: 'uppercase' }}>
@@ -748,6 +725,40 @@ export default function TablaHistorial({
               <option value="cancelado">Bitácora de cancelados</option>
             </select>
           </div>
+
+          {(hayFiltrosActivos || (esControlRH && filtroEstado === 'cancelado' && solicitudesProcesadas.length > 0)) && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
+              {hayFiltrosActivos && (
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="th-neutral-btn"
+                  style={{ flex: 1, color: textSecundario }}
+                >
+                  <RotateCcw size={13} /> Restablecer filtros
+                </button>
+              )}
+              {esControlRH && filtroEstado === 'cancelado' && solicitudesProcesadas.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm(`¿Deseas eliminar definitivamente de la base de datos los ${solicitudesProcesadas.length} registros cancelados que se muestran en pantalla?\n\nEsta acción limpia los folios REQ- cancelados que no afectan nómina.`)) return;
+                    try {
+                      await depurarPermisosCanceladosRH(solicitudesProcesadas.map(x => x.id));
+                      if (onRecargar) onRecargar();
+                    } catch (err) {
+                      alert('Error al depurar cancelados: ' + err.message);
+                    }
+                  }}
+                  className="th-neutral-btn"
+                  style={{ flex: 1, color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)' }}
+                >
+                  <XCircle size={13.5} />
+                  <span>Depurar ({solicitudesProcesadas.length})</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

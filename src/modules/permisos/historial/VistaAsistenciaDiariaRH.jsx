@@ -11,7 +11,7 @@ import {
 import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import {
   Calendar, Search, RefreshCw, Download,
-  Clock, CheckCircle2, X, Undo2, ChevronLeft, ChevronRight, Check, LogOut
+  Clock, CheckCircle2, X, Undo2, ChevronLeft, ChevronRight, Check, LogOut, SlidersHorizontal, RotateCcw
 } from 'lucide-react';
 
 const formatearFechaCorta = (fechaYYYYMMDD) => {
@@ -19,7 +19,6 @@ const formatearFechaCorta = (fechaYYYYMMDD) => {
   const [y, m, d] = fechaYYYYMMDD.split('-').map(Number);
   const fechaObj = new Date(y, m - 1, d);
   const texto = fechaObj.toLocaleDateString('es-MX', {
-    weekday: 'short',
     day: '2-digit',
     month: 'short',
     year: 'numeric'
@@ -43,6 +42,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   const [busqueda, setBusqueda] = useState('');
   const [deptoFiltro, setDeptoFiltro] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('todos');
+  const [mostrarOpcionesRH, setMostrarOpcionesRH] = useState(false);
   const inputFechaRef = useRef(null);
 
   const [empleados, setEmpleados] = useState([]);
@@ -205,40 +205,51 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
           background: ${c.surfaceCard};
           border: 1px solid ${c.border};
           border-radius: 12px;
-          padding: 10px 14px;
+          padding: 8px 12px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
+          box-sizing: border-box;
         }
-        .vad-row-top {
+        .vad-row-1 {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
-          flex-wrap: wrap;
+          gap: 8px;
+          width: 100%;
+        }
+        .vad-row-2 {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          width: 100%;
         }
         .vad-seg-bar {
-          display: inline-flex;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           background: ${c.bg};
           border: 1px solid ${c.border};
-          border-radius: 9px;
-          padding: 3px;
+          border-radius: 8px;
+          padding: 2px;
           gap: 2px;
-          flex-wrap: wrap;
+          box-sizing: border-box;
         }
         .vad-seg-btn {
-          height: 30px;
-          padding: 0 11px;
+          height: 28px;
+          padding: 0 8px;
           border-radius: 6px;
           border: none;
           background: transparent;
           color: ${c.textMuted};
-          font-size: 12px;
+          font-size: 11.5px;
           font-weight: 700;
           cursor: pointer;
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          justify-content: center;
+          gap: 4px;
+          white-space: nowrap;
           transition: all 0.15s ease;
         }
         .vad-seg-btn.active {
@@ -246,6 +257,18 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
           color: ${c.text};
           font-weight: 800;
           box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .vad-drawer-panel {
+          background: ${c.surfaceCard};
+          border: 1px solid ${c.border};
+          border-radius: 10px;
+          padding: 10px 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          box-sizing: border-box;
         }
         .vad-table-container {
           background: ${c.surfaceCard};
@@ -270,67 +293,28 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         }
         @media (max-width: 768px) {
           .vad-toolbar-card {
-            padding: 10px !important;
-            gap: 8px !important;
+            padding: 9px 10px !important;
+            gap: 7px !important;
           }
-          .vad-row-top {
-            display: flex !important;
+          .vad-row-2 {
             flex-direction: column !important;
             align-items: stretch !important;
-            gap: 8px !important;
-          }
-          .vad-top-left-group {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: stretch !important;
-            gap: 8px !important;
-            width: 100% !important;
-          }
-          .vad-date-nav {
-            width: 100% !important;
-            justify-content: space-between !important;
-            box-sizing: border-box !important;
-            height: 36px !important;
-          }
-          .vad-date-btn {
-            flex: 1 !important;
-            justify-content: center !important;
-            white-space: nowrap !important;
-            font-size: 12px !important;
+            gap: 7px !important;
           }
           .vad-seg-bar {
             width: 100% !important;
-            display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 4px !important;
-            padding: 4px !important;
-            box-sizing: border-box !important;
           }
           .vad-seg-btn {
-            justify-content: center !important;
-            width: 100% !important;
-            white-space: nowrap !important;
-            font-size: 11.5px !important;
-            padding: 0 6px !important;
-            height: 32px !important;
+            font-size: 11px !important;
+            padding: 0 4px !important;
           }
-          .vad-actions-right {
-            width: 100% !important;
-            display: grid !important;
-            grid-template-columns: 1fr auto auto !important;
-            gap: 6px !important;
-            align-items: center !important;
+          .vad-hide-mobile {
+            display: none !important;
           }
-          .vad-row-search {
+          .vad-drawer-panel {
             flex-direction: column !important;
             align-items: stretch !important;
-            gap: 8px !important;
           }
-          .vad-select-depto {
-            width: 100% !important;
-            box-sizing: border-box !important;
-          }
-          /* En móvil: 1 sola fila compacta por colaborador (sin doble piso) */
           .vad-item-row {
             display: flex !important;
             align-items: center !important;
@@ -353,93 +337,73 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         }
       `}</style>
 
-      {/* BARRA DE CONTROL EMPAQUETADA EN UN SOLO BLOQUE LIMPIO */}
+      {/* BARRA ULTRA COMPACTA Y EMPAQUETADA (2 RENGLONES LIMPIOS) */}
       <div className="vad-toolbar-card">
-        {/* FILA 1: SELECTOR MODO + NAVEGADOR DE FECHA + SEGMENTOS DE ESTATUS + CORTE Y EXPORTAR */}
-        <div className="vad-row-top">
-          <div className="vad-top-left-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {/* RENGLÓN 1: [Permisos | Asistencia] <---> [< Fecha >] + [🎛️] + [📥] */}
+        <div className="vad-row-1">
           {selectorModo}
-          {/* Selector de Fecha con flechas anterior / siguiente */}
-          <div className="vad-date-nav" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '9px', padding: '3px' }}>
-            <button
-              type="button"
-              onClick={() => setFecha(moverFechaDias(fecha, -1))}
-              title="Día anterior"
-              style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <ChevronLeft size={15} />
-            </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
-                else inputFechaRef.current?.focus();
-              }}
-              className="vad-date-btn" style={{ height: '28px', padding: '0 10px', border: 'none', background: 'transparent', color: c.text, fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
-            >
-              <Calendar size={13.5} color={c.accent} />
-              <span>{formatearFechaCorta(fecha)}</span>
-              {fecha === hoyStr && (
-                <span style={{ fontSize: '10px', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '1px 6px', borderRadius: '4px' }}>
-                  HOY
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fecha < hoyStr && setFecha(moverFechaDias(fecha, 1))}
-              disabled={fecha >= hoyStr}
-              title="Día siguiente"
-              style={{ width: '28px', height: '28px', borderRadius: '6px', border: 'none', background: 'transparent', color: c.text, opacity: fecha >= hoyStr ? 0.3 : 1, cursor: fecha >= hoyStr ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <ChevronRight size={15} />
-            </button>
-
-            <input
-              ref={inputFechaRef}
-              type="date"
-              value={fecha}
-              max={hoyStr}
-              onChange={(e) => e.target.value && setFecha(e.target.value)}
-              style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
-            />
-          </div>
-          </div>
-
-          {/* Segmentos de Estatus (Contadores 100% coherentes) */}
-          <div className="vad-seg-bar">
-            {[
-              { id: 'todos', label: 'Todos', count: basePorDeptoYBusqueda.length, dot: null },
-              { id: 'presentes', label: 'En Planta', count: totalPresentes, dot: '#16a34a' },
-              { id: 'justificados', label: 'Justificados', count: totalJustificados, dot: '#0284c7' },
-              { id: 'ausentes', label: 'Sin Registro', count: totalAusentes, dot: '#ef4444' }
-            ].map((tab) => (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '2px', height: '34px', boxSizing: 'border-box' }}>
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setEstadoFiltro(tab.id)}
-                className={`vad-seg-btn ${estadoFiltro === tab.id ? 'active' : ''}`}
+                onClick={() => setFecha(moverFechaDias(fecha, -1))}
+                title="Día anterior"
+                style={{ width: '24px', height: '28px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                {tab.dot && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: tab.dot }} />}
-                <span>{tab.label}</span>
-                <span style={{ fontSize: '11px', opacity: 0.75 }}>({tab.count})</span>
+                <ChevronLeft size={14} />
               </button>
-            ))}
-          </div>
 
-          {/* Acciones derechas: Hora Corte + Recargar + Exportar */}
-          <div className="vad-actions-right" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ControlHoraCorteRH usuario={usuario} c={c} />
+              <button
+                type="button"
+                onClick={() => {
+                  if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
+                  else inputFechaRef.current?.focus();
+                }}
+                style={{ height: '28px', padding: '0 6px', border: 'none', background: 'transparent', color: c.text, fontSize: '11.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+              >
+                <Calendar size={12.5} color={c.accent} className="vad-hide-mobile" />
+                <span>{formatearFechaCorta(fecha)}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fecha < hoyStr && setFecha(moverFechaDias(fecha, 1))}
+                disabled={fecha >= hoyStr}
+                title="Día siguiente"
+                style={{ width: '24px', height: '28px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, opacity: fecha >= hoyStr ? 0.3 : 1, cursor: fecha >= hoyStr ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <ChevronRight size={14} />
+              </button>
+
+              <input
+                ref={inputFechaRef}
+                type="date"
+                value={fecha}
+                max={hoyStr}
+                onChange={(e) => e.target.value && setFecha(e.target.value)}
+                style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
+              />
+            </div>
 
             <button
               type="button"
-              onClick={cargarAsistenciaDia}
-              title="Actualizar"
-              style={{ width: '34px', height: '34px', borderRadius: '8px', border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={() => setMostrarOpcionesRH(prev => !prev)}
+              title="Departamento y Relojes RH"
+              style={{
+                height: '34px', padding: '0 9px', borderRadius: '8px',
+                border: `1px solid ${(mostrarOpcionesRH || deptoFiltro) ? c.accent : c.border}`,
+                background: (mostrarOpcionesRH || deptoFiltro) ? c.accentSoft : c.bg,
+                color: (mostrarOpcionesRH || deptoFiltro) ? c.accent : c.text,
+                fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+              }}
             >
-              <RefreshCw size={14} />
+              <SlidersHorizontal size={14} />
+              <span className="vad-hide-mobile">Filtros</span>
+              {deptoFiltro && (
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: c.accent }} />
+              )}
             </button>
 
             <button
@@ -447,31 +411,31 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
               onClick={exportarCSV}
               title={puedeExportarDia ? 'Descargar corte en Excel' : 'Disponible al concluir la jornada o en días anteriores'}
               style={{
-                height: '34px', padding: '0 12px', borderRadius: '8px',
+                height: '34px', padding: '0 9px', borderRadius: '8px',
                 border: `1px solid ${puedeExportarDia ? c.accent : c.border}`,
                 background: puedeExportarDia ? c.accent : c.bg,
                 color: puedeExportarDia ? '#fff' : c.textMuted,
                 fontSize: '12px', fontWeight: '800', cursor: puedeExportarDia ? 'pointer' : 'not-allowed',
-                display: 'inline-flex', alignItems: 'center', gap: '6px'
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
               }}
             >
-              <Download size={13.5} />
-              <span>{puedeExportarDia ? 'Exportar' : 'Al cierre'}</span>
+              <Download size={14} />
+              <span className="vad-hide-mobile">{puedeExportarDia ? 'Exportar' : 'Al cierre'}</span>
             </button>
           </div>
         </div>
 
-        {/* FILA 2: BUSCADOR + FILTRO DE DEPARTAMENTO */}
-        <div className="vad-row-search" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
+        {/* RENGLÓN 2: BUSCADOR + PÍLDORAS COMPACTAS DE ESTATUS EN 1 SOLA LÍNEA */}
+        <div className="vad-row-2">
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
             <input
               type="text"
               placeholder="Buscar apellido, nombre o #nómina..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{
-                width: '100%', height: '34px', padding: '0 28px 0 32px', borderRadius: '8px',
+                width: '100%', height: '34px', padding: '0 28px 0 31px', borderRadius: '8px',
                 border: `1px solid ${c.border}`, background: c.bg, color: c.text,
                 fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
               }}
@@ -487,23 +451,84 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
             )}
           </div>
 
-          <select
-            className="vad-select-depto"
-            value={deptoFiltro}
-            onChange={(e) => setDeptoFiltro(e.target.value)}
-            style={{
-              height: '34px', padding: '0 10px', borderRadius: '8px',
-              border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-              fontSize: '12.5px', fontWeight: '600', outline: 'none'
-            }}
-          >
-            <option value="">Todos los departamentos</option>
-            {departamentos.map((d) => (
-              <option key={d.id} value={d.id}>{d.nombre}</option>
+          <div className="vad-seg-bar">
+            {[
+              { id: 'todos', label: 'Todos', count: basePorDeptoYBusqueda.length, dot: null },
+              { id: 'presentes', label: 'Planta', count: totalPresentes, dot: '#16a34a' },
+              { id: 'justificados', label: 'Justif.', count: totalJustificados, dot: '#0284c7' },
+              { id: 'ausentes', label: 'Faltas', count: totalAusentes, dot: '#ef4444' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setEstadoFiltro(tab.id)}
+                className={`vad-seg-btn ${estadoFiltro === tab.id ? 'active' : ''}`}
+              >
+                {tab.dot && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: tab.dot, flexShrink: 0 }} />}
+                <span>{tab.label}</span>
+                <span style={{ fontSize: '10.5px', opacity: 0.75 }}>({tab.count})</span>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
       </div>
+
+      {/* CAJÓN DESPLEGABLE DE FILTROS Y HERRAMIENTAS DE RH (OCULTO POR DEFECTO) */}
+      {mostrarOpcionesRH && (
+        <div className="vad-drawer-panel">
+          <div style={{ flex: 1, minWidth: '180px' }}>
+            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: c.textMuted, marginBottom: '4px', textTransform: 'uppercase' }}>
+              Filtrar por Departamento
+            </label>
+            <select
+              value={deptoFiltro}
+              onChange={(e) => setDeptoFiltro(e.target.value)}
+              style={{
+                width: '100%', height: '34px', padding: '0 10px', borderRadius: '8px',
+                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                fontSize: '12.5px', fontWeight: '600', outline: 'none', boxSizing: 'border-box'
+              }}
+            >
+              <option value="">Todos los departamentos</option>
+              {departamentos.map((d) => (
+                <option key={d.id} value={d.id}>{d.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+            <ControlHoraCorteRH usuario={usuario} c={c} />
+
+            <button
+              type="button"
+              onClick={cargarAsistenciaDia}
+              style={{
+                height: '34px', padding: '0 11px', borderRadius: '8px',
+                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: '5px'
+              }}
+            >
+              <RefreshCw size={13.5} /> Actualizar
+            </button>
+
+            {deptoFiltro && (
+              <button
+                type="button"
+                onClick={() => setDeptoFiltro('')}
+                style={{
+                  height: '34px', padding: '0 10px', borderRadius: '8px',
+                  border: 'none', background: 'transparent', color: c.textMuted,
+                  fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: '4px'
+                }}
+              >
+                <RotateCcw size={12.5} /> Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* LISTA EMPAQUETADA EN TABLA COMPACTA */}
       {cargando ? (
