@@ -1,0 +1,81 @@
+=== src\core\auth\Login.jsx ===
+29: localStorage.setItem("permisos_sesion", JSON.stringify({
+48: const msj = encodeURIComponent(`Hola RH, solicito apoyo para restaurar mi PIN de acceso al sistema ERP.`);
+83: <div style={styles.footerBox}>
+84: <span style={styles.footerLine1}>RH CONTROL &amp; MANAGEMENT SYSTEM V1.0 • © 2026</span>
+85: <span style={styles.footerLine2}>
+86: POWERED BY <strong style={styles.footerStrong}>ING. ALEJANDRO VALENZO</strong>
+177: footerBox: {
+187: footerLine1: {
+193: footerLine2: {
+199: footerStrong: {
+=== src\core\layout\Layout.jsx ===
+19: const guardado = localStorage.getItem('tema_sistema');
+27: localStorage.setItem('tema_sistema', modoOscuro ? 'oscuro' : 'claro');
+60: const sesionLocal = JSON.parse(localStorage.getItem('permisos_sesion') || '{}');
+62: // 1. Si el empleado fue dado de baja en el sistema -> Expulsar
+79: localStorage.setItem('permisos_sesion', JSON.stringify(datosSincronizados));
+173: <footer style={{
+194: <span>RH CONTROL &amp; MANAGEMENT SYSTEM V1.0 &nbsp;•&nbsp; © 2026</span>
+196: </footer>
+=== src\modules\directorio\ModalColaborador.jsx ===
+57: if (!formData.correo || formData.correo.endsWith('@mobiliarium.com')) {
+58: nuevoEstado.correo = usuarioBase ? `${usuarioBase}@mobiliarium.com` : '';
+138: .modal-footer { padding: 16px 28px; background: ${c.surfaceCard}; border-top: 1px solid ${c.border}; display: flex; justify-content: flex-end; gap: 12px; }
+260: <input autoFocus type="text" className="clean-input" placeholder="Ej. SISTEMAS..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value.toUpperCase()})} />
+311: <span className="section-title">Accesos al Sistema ERP</span>
+316: <label className="clean-label">Rol en el Sistema *</label>
+338: <div className="modal-footer">
+=== src\modules\inicio\Inicio.jsx ===
+8: const modoOscuro = localStorage.getItem('tema_sistema') === 'oscuro';
+22: alt="Logo Ideas Mobiliarium"
+31: Bienvenido al sistema oficial de permisos. Selecciona una opción del menú lateral para comenzar.
+=== src\modules\permisos\autorizacion\AprobarDirecto.jsx ===
+7: } from '../services/permisosService';
+221: <div style={s.footer}>IDEAS MOBILIARIUM • CONTROL ERP</div>
+243: footer: { fontSize: '9px', color: '#a3a3a3', letterSpacing: '0.04em', marginTop: '16px' }
+=== src\modules\permisos\historial\ModalExportarExcel.jsx ===
+34: .from('permisos')
+238: link.setAttribute('download', `Reporte_Permisos_RH_${clasificacion}_${new Date().toISOString().split('T')[0]}.csv`);
+319: .excel-footer-row {
+329: .excel-footer-btns {
+347: .excel-footer-row {
+351: .excel-footer-btns {
+354: .excel-footer-btns button {
+578: <div className="excel-footer-row">
+586: <div className="excel-footer-btns">
+=== src\modules\permisos\historial\ModalGuiaRapidaRH.jsx ===
+20: { id: 'rh_historial', label: '2. Control / Historial', icono: FileBarChart },
+47: ['En Retardos ("Permitir Acceso" / "Regresar a Casa")', 'La tarjeta muestra la hora de llegada a caseta y cuántos retardos previos tiene el trabajador. • Si presionas "Permitir Acceso": eliges la condición de pago y el sistema registra automáticamente su entrada en la asistencia del día. • Si presionas "Regresar a Casa": escribes el motivo, el registro se convierte en "Falta (Retardo) Sin goce" con Folio Oficial y ordena a Caseta retirar al colaborador.'],
+55: titulo: 'Switch Superior: [ Permisos | Asistencia ]',
+57: ['Cambio de Vista', 'Ubicado arriba a la izquierda en "Control / Historial". Alterna entre la tabla histórica de permisos y el pase de lista diario.']
+61: titulo: '1. Vista "Permisos"',
+99: ['Dar de Alta (Botón "+ NUEVO")', 'Abre la ventana "Nuevo Colaborador". • Al escribir Nombre y Apellido Paterno, el sistema autocompleta el "Usuario Login" (ej. juan.perez) y el "Correo Institucional" (@mobiliarium.com), pero ambos campos se pueden borrar y editar manualmente. • Permite tomar foto con cámara o subir archivo, cargar imagen de "Subir Firma" (para las papeletas PDF) y definir su PIN (mínimo 6 caracteres).'],
+100: ['Crear Nuevas Sedes, Deptos, Áreas o Puestos', 'Tanto al crear un colaborador como al editar su expediente, en los selectores de Sede, Departamento, Subdepto/Área y Puesto puedes elegir la última opción "+ Crear Nueva..." para registrar uno nuevo en el momento (el sistema muestra coincidencias existentes para evitar duplicados).'],
+102: ['Tramitar Baja, Reactivar o Eliminar Definitivo', 'Con el candado abierto (🔓), al final del expediente lateral tienes 3 acciones laborales: • "Tramitar Baja": pide escribir la palabra BAJA, elegir Fecha Efectiva y Motivo de Separación (pasa a inactivo pero conserva todo su historial de permisos y asistencias). • "Reactivar": disponible si el colaborador está en baja. • "Eliminar Registro y Fotos": pide escribir ELIMINAR y borra permanentemente al usuario, su foto y su firma de la base de datos.']
+110: ['Pestaña "Entrada" (Regla de 3 letras)', 'El guardia debe escribir al menos 3 letras del apellido, nombre o # de empleado. Por seguridad, si hay más de 3 coincidencias el sistema pide escribir una letra más. Luego toca el botón verde "✓" y en la ventana con fotografía presiona "Confirmar".'],
+111: ['Si el trabajador llega tarde (Recuadro "🔔 En puerta")', 'Si pasa después de la Tolerancia de Entrada configurada por RH, el sistema no lo mete a planta y lo coloca arriba en "🔔 En puerta (En espera y Resoluciones)" con leyenda "En espera de RH". • Si RH autoriza: aparece el botón verde "Dar Paso a Planta" (o se registra su entrada si RH ya lo dictaminó en vivo). • Si RH ordena regresarlo: aparece el botón rojo "Confirmar Retiro".'],
+119: ['Pestaña "En Puerta"', 'Muestra los permisos autorizados listos para cruzar y los retenidos en espera de RH. Según el caso, el guardia presiona: • "Confirmar Salida" (azul, para pases de salida anticipada). • "Dar Acceso" (verde, para entradas/retardos autorizados). • "Confirmar Retiro" (rojo, cuando RH ordena que se regrese a casa).'],
+129: ['Paso 1: Fecha', 'Selecciona primero la fecha (permite hasta 7 días hacia atrás o fechas futuras). El sistema revisa en tiempo real si en esa fecha ya tienes incidencias o registros en caseta.'],
+135: titulo: 'Módulo "Mis Permisos"',
+151: titulo: 'Reglas y Cierres Automáticos del Sistema',
+154: ['2. Reporte de Falta cancela Retardo previo', 'Si un colaborador solicitó una "Llegada Tarde" para hoy pero antes de entrar a planta registra una "Falta Programada" para el mismo día, el sistema cancela automáticamente el retardo previo ("Sustituido por reporte de FALTA").'],
+155: ['3. Entrada física en Caseta cancela Falta previa', 'Si el colaborador tenía una Falta registrada para hoy pero sí se presenta en Caseta y se registra su entrada (o retardo en puerta), el sistema cancela la falta previa en automático.'],
+157: ['5. Ordenamiento Alfabético Estándar', 'En todas las pantallas del sistema, buscadores, papeletas y archivos Excel descargables, los nombres se muestran y ordenan siempre por Apellido Paterno, Apellido Materno y Nombre.']
+214: Guía Operativa del Sistema (RH)
+=== src\modules\permisos\historial\ModalPapeletaPDF.jsx ===
+7: export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
+11: let listaPermisos = [];
+13: listaPermisos = permiso;
+14: } else if (Array.isArray(permisos)) {
+15: listaPermisos = permisos;
+17: listaPermisos = [permiso];
+23: listaPermisos.forEach(p => {
+48: if (listaPermisos.length > 0) {
+51: }, [permiso, permisos]);
+53: if (listaPermisos.length === 0) return null;
+80: <title>Impresión de Permisos - Ideas Mobiliarium</title>
+249: PAPELETA OFICIAL • <span style={{ color: '#16a34a' }}>{listaPermisos.length === 1 ? listaPermisos[0].folio : `${listaPermisos.length} SELECCIONADAS`}</span>
+278: {listaPermisos.map((p, index) => {
+341: <div style={{ fontSize: '16px', fontWeight: '900', letterSpacing: '0.03em', color: '#0f172a' }}>IDEAS MOBILIARIUM</div>
+342: <div style={{ fontSize: '11px', color: '#334155', fontWeight: '700', marginTop: '2px' }}>Formato oficial de control de pases y permisos</div>

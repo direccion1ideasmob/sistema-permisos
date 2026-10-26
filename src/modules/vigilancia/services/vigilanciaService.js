@@ -775,7 +775,8 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
   let estadoFirma3 = rhFinalId ? (rhFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
 
   const esRetardoAdmin = rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin');
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || esRetardoAdmin) {
+  const omitirPedroPorTenerJefe = esRetardoAdmin && estadoFirma1 === 'pendiente';
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || omitirPedroPorTenerJefe) {
     estadoFirma2 = 'omitido';
   }
 
