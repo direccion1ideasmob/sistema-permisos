@@ -305,6 +305,12 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
       updates.estado_general === 'autorizado' ||
       seRegresaDictamen;
 
+    if (yaResolvioJefeORH && !seRegresaDictamen) {
+      try {
+        await registrarCheckCaseta(solicitud.id, 'entrada');
+      } catch (_) {}
+    }
+
     if (yaResolvioJefeORH) {
       try {
         const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);

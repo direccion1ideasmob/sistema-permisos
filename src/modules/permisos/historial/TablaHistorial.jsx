@@ -476,7 +476,7 @@ export default function TablaHistorial({
           }
           .th-toolbar-right {
             display: flex !important;
-            flex-wrap: wrap !important;
+            flex-wrap: nowrap !important;
             align-items: center !important;
             justify-content: space-between !important;
             gap: 6px !important;
@@ -484,15 +484,16 @@ export default function TablaHistorial({
             box-sizing: border-box !important;
           }
           .th-toolbar-right > div {
-            flex: 1 1 auto !important;
+            flex: 1 1 0% !important;
             min-width: 0 !important;
             justify-content: space-between !important;
             box-sizing: border-box !important;
+            padding: 0 6px !important;
           }
           .th-toolbar-right .th-neutral-btn {
-            flex-shrink: 0 !important;
-            padding: 0 9px !important;
-            font-size: 12px !important;
+            flex: 0 0 auto !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
           }
           .th-desktop-table-view {
             display: none !important;
@@ -1081,8 +1082,20 @@ export default function TablaHistorial({
                     <span style={{ fontSize: '13.5px', fontWeight: '700', color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {formatearApellidosNombre(u.nombre_completo || 'Colaborador', u)}
                     </span>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: esCancelado ? textSecundario : esAut ? '#16a34a' : '#ef4444' }}>
-                      {esCancelado ? 'Cancelado' : esAut ? (s.pago || 'Autorizado') : 'Rechazado'}
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      color: esCancelado
+                        ? textSecundario
+                        : seRegresoCasa
+                        ? '#d97706'
+                        : !esAut
+                        ? '#ef4444'
+                        : pagoLow.includes('sin goce')
+                        ? '#d97706'
+                        : '#16a34a'
+                    }}>
+                      {esCancelado ? 'Cancelado' : seRegresoCasa ? 'Se regresa' : esAut ? (s.pago || 'Autorizado') : 'Rechazado'}
                     </span>
                   </div>
                   <div style={{ fontSize: '11.5px', color: textSecundario, display: 'flex', gap: '6px', flexWrap: 'wrap' }}>

@@ -277,6 +277,53 @@ export default function Caseta() {
       justify-content: center;
       gap: 6px;
       white-space: nowrap;
+      box-sizing: border-box;
+    }
+    .caseta-search-box {
+      padding: 12px 14px;
+      border-radius: 14px;
+    }
+    .caseta-search-input {
+      width: 100%;
+      height: 48px;
+      padding: 0 40px 0 42px;
+      border-radius: 11px;
+      font-size: 15px;
+      font-weight: 700;
+      box-sizing: border-box;
+      outline: none;
+    }
+    .caseta-refresh-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 11px;
+      flex-shrink: 0;
+    }
+    .caseta-puerta-item {
+      border-radius: 11px;
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-sizing: border-box;
+      width: 100%;
+    }
+    .caseta-puerta-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .caseta-list-item {
+      border-radius: 11px;
+      padding: 10px 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      box-sizing: border-box;
+      width: 100%;
     }
     @media (max-width: 768px) {
       .caseta-wrap {
@@ -297,19 +344,46 @@ export default function Caseta() {
       .caseta-tabs-bar .tab-btn svg {
         display: none !important;
       }
-      .caseta-card {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 11px 12px;
-        gap: 9px;
+      .caseta-search-box {
+        padding: 10px !important;
+        border-radius: 12px !important;
       }
-      .caseta-card-actions {
-        width: 100%;
-        justify-content: stretch;
+      .caseta-search-input {
+        height: 42px !important;
+        padding: 0 34px 0 36px !important;
+        font-size: 13.5px !important;
+        border-radius: 10px !important;
+      }
+      .caseta-refresh-btn {
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 10px !important;
+      }
+      .caseta-card,
+      .caseta-puerta-item {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 11px 12px !important;
+        gap: 9px !important;
+      }
+      .caseta-card-actions,
+      .caseta-puerta-actions {
+        width: 100% !important;
+        justify-content: stretch !important;
+      }
+      .caseta-card-actions > button,
+      .caseta-puerta-actions > button {
+        flex: 1 !important;
+        width: 100% !important;
+        justify-content: center !important;
       }
       .caseta-btn-action {
-        width: 100%;
-        height: 36px;
+        width: 100% !important;
+        height: 38px !important;
+      }
+      .caseta-list-item {
+        padding: 9px 11px !important;
+        gap: 8px !important;
       }
     }
   `;
@@ -399,7 +473,7 @@ export default function Caseta() {
                         <AvatarColaborador u={p.usuarios} />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                            {formatearApellidosNombre(p.usuarios?.nombre_completo)}
+                            {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px', fontSize: '11.5px', fontWeight: '700' }}>
                             <span style={{ color: '#d97706', background: 'rgba(245,158,11,0.14)', padding: '1.5px 6px', borderRadius: '4px' }}>
@@ -476,7 +550,7 @@ export default function Caseta() {
                         </div>
 
                         <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                          {formatearApellidosNombre(p.usuarios?.nombre_completo)}
+                          {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
                         </div>
 
                         {esSalida && p.horarioProgramado && (
@@ -538,7 +612,7 @@ export default function Caseta() {
                     <AvatarColaborador u={p.usuarios} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
-                        {formatearApellidosNombre(p.usuarios?.nombre_completo)}
+                        {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
                       </div>
                       <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700', marginTop: '2px' }}>
                         #{p.usuarios?.numero_empleado} • Fuera con pase temporal
@@ -593,7 +667,7 @@ export default function Caseta() {
                     <AvatarColaborador u={p.usuarios} size={34} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {formatearApellidosNombre(p.usuarios?.nombre_completo)}
+                        {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
                       </div>
                       <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600' }}>
                         #{p.usuarios?.numero_empleado} • {p.folio}
@@ -668,10 +742,7 @@ export default function Caseta() {
   const recientesEnPlanta = todosEnPlanta.filter((emp) => mapaIncidenciasHoy[emp.id]?.tipo === 'salida_fuera');
 
   const coincidenciasEnPlanta = termino
-    ? todosEnPlanta.filter((emp) =>
-        (emp.nombre_completo || '').toLowerCase().includes(termino) ||
-        String(emp.numero_empleado || '').toLowerCase().includes(termino)
-      )
+    ? todosEnPlanta.filter((emp) => coincidePorInicioDePalabra(emp, termino))
     : todosEnPlanta;
 
   return (
@@ -731,7 +802,7 @@ export default function Caseta() {
 
             <div>
               <div style={{ fontSize: '15.5px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
-                {formatearApellidosNombre(modalConfirmacion.emp?.nombre_completo)}
+                {formatearApellidosNombre(modalConfirmacion.emp?.nombre_completo, modalConfirmacion.emp)}
               </div>
               <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '5px' }}>
                 #{modalConfirmacion.emp?.numero_empleado}
@@ -820,47 +891,42 @@ export default function Caseta() {
         </button>
       </div>
 
-      {/* BUSCADOR GRANDE DE TEXTO (MÍNIMO 3 LETRAS) */}
-      <div style={{
-        background: c.surfaceCard,
-        border: `2px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
-        borderRadius: '16px',
-        padding: '14px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        boxShadow: tieneMinimo3Letras ? '0 6px 20px rgba(22,163,74,0.12)' : 'none'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
+      {/* BUSCADOR PROPORCIONADO PARA CELULAR Y LAPTOP 14" */}
+      <div
+        className="caseta-search-box"
+        style={{
+          background: c.surfaceCard,
+          border: `1.5px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          boxShadow: tieneMinimo3Letras ? '0 4px 16px rgba(22,163,74,0.10)' : 'none'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
             <Search
-              size={22}
+              size={17}
               style={{
                 position: 'absolute',
-                left: '16px',
+                left: '12px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: tieneMinimo3Letras ? c.accent : c.textMuted
+                color: tieneMinimo3Letras ? c.accent : c.textMuted,
+                pointerEvents: 'none'
               }}
             />
             <input
               ref={inputBusquedaRef}
               type="text"
-              placeholder="Nombre o apellido (mín. 3 letras)..."
+              className="caseta-search-input"
+              placeholder="Buscar por apellido o nombre..."
               value={busquedaTexto}
               onChange={(e) => setBusquedaTexto(e.target.value)}
               style={{
-                width: '100%',
-                height: '56px',
-                padding: '0 48px 0 48px',
-                borderRadius: '13px',
-                border: `2px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
+                border: `1.5px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
                 background: c.bg,
-                color: c.text,
-                fontSize: '19px',
-                fontWeight: '800',
-                boxSizing: 'border-box',
-                outline: 'none'
+                color: c.text
               }}
             />
             {busquedaTexto && (
@@ -895,21 +961,18 @@ export default function Caseta() {
           <button
             onClick={cargarDatos}
             title="Actualizar"
+            className="caseta-refresh-btn"
             style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '13px',
               border: `1.5px solid ${c.border}`,
               background: c.bg,
               color: c.text,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
+              justifyContent: 'center'
             }}
           >
-            <RefreshCw size={20} />
+            <RefreshCw size={17} />
           </button>
         </div>
 
@@ -965,31 +1028,25 @@ export default function Caseta() {
                 return (
                   <div
                     key={emp.id}
+                    className="caseta-puerta-item"
                     style={{
                       background: esAutorizado
                         ? (modoOscuro ? 'rgba(22,163,74,0.14)' : '#f0fdf4')
                         : esRegresa
                         ? (modoOscuro ? 'rgba(239,68,68,0.14)' : '#fef2f2')
                         : c.bg,
-                      border: `2px solid ${esAutorizado ? '#16a34a' : (esRegresa ? '#ef4444' : '#f59e0b')}`,
-                      borderRadius: '11px',
-                      padding: '10px 13px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '10px',
-                      flexWrap: 'wrap'
+                      border: `1.5px solid ${esAutorizado ? '#16a34a' : (esRegresa ? '#ef4444' : '#f59e0b')}`
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
                       <AvatarColaborador u={emp} size={40} />
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '14.5px', fontWeight: '900', color: c.text }}>
-                          {formatearApellidosNombre(emp.nombre_completo)}
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: c.text, lineHeight: 1.25 }}>
+                          {formatearApellidosNombre(emp.nombre_completo, emp)}
                         </div>
                         {inc && (
                           <span style={{
-                            fontSize: '11px', fontWeight: '900', padding: '2px 8px', borderRadius: '6px',
+                            fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '6px',
                             color: inc.color, background: inc.bg, display: 'inline-block', marginTop: '3px'
                           }}>
                             {inc.etiqueta}
@@ -998,7 +1055,7 @@ export default function Caseta() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div className="caseta-puerta-actions">
                       {tipoInc === 'retardo_en_espera' ? null : esRegresa ? (
                         <button
                           type="button"
@@ -1092,7 +1149,7 @@ export default function Caseta() {
                     <AvatarColaborador u={emp} size={40} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {formatearApellidosNombre(emp.nombre_completo)}
+                        {formatearApellidosNombre(emp.nombre_completo, emp)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
@@ -1226,7 +1283,7 @@ export default function Caseta() {
                     <AvatarColaborador u={emp} size={40} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {formatearApellidosNombre(emp.nombre_completo)}
+                        {formatearApellidosNombre(emp.nombre_completo, emp)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>

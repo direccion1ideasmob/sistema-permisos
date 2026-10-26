@@ -467,7 +467,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
             <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
             <input
               type="text"
-              placeholder="Buscar por nombre o # de empleado..."
+              placeholder="Buscar apellido, nombre o #nómina..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{
@@ -546,9 +546,11 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                     </div>
                     <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>#{emp.numero_empleado}</span>
-                      <span className="vad-mobile-inline-status" style={{ fontWeight: '700', color: tieneEntrada ? (esTarde ? '#d97706' : '#16a34a') : (inc?.tipo === 'retardo_regresa' ? '#ef4444' : c.textMuted) }}>
-                        · {tieneEntrada ? `Ent: ${reg.hora_entrada}${tieneSalida ? ' / Sal: ' + reg.hora_salida : ''}` : (inc?.tipo === 'ausencia_autorizada' ? 'Justificado' : inc?.tipo === 'retardo_regresa' ? 'Falta (Se regresó)' : 'Sin entrada')}
-                      </span>
+                      {!etiquetaIncLimpia && (
+                        <span className="vad-mobile-inline-status" style={{ fontWeight: '700', color: tieneEntrada ? (esTarde ? '#d97706' : '#16a34a') : c.textMuted }}>
+                          · {tieneEntrada ? `Ent: ${reg.hora_entrada}${tieneSalida ? ' / Sal: ' + reg.hora_salida : ''}` : 'Sin entrada'}
+                        </span>
+                      )}
                       {etiquetaIncLimpia && (
                         <span style={{ color: inc.color, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           · {etiquetaIncLimpia}
