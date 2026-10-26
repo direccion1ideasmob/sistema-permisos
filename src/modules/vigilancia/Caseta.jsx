@@ -1134,6 +1134,26 @@ export default function Caseta() {
                           <CornerUpLeft size={15} /> Confirmar Retiro
                         </button>
                       )
+                    ) : tipoInc === 'retardo_autorizado' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSellarPase(inc.paseId, 'entrada')}
+                        disabled={Boolean(procesandoId)}
+                        style={{
+                          height: '42px', padding: '0 16px', borderRadius: '10px', border: 'none',
+                          background: '#16a34a', color: '#fff', fontSize: '12.5px', fontWeight: '900',
+                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
+                        }}
+                      >
+                        <Check size={17} strokeWidth={3} /> Dar Paso
+                      </button>
+                    ) : tipoInc === 'ausencia_autorizada' ? (
+                      <span style={{
+                        fontSize: '11.5px', fontWeight: '800', color: inc.color,
+                        background: inc.bg, padding: '6px 10px', borderRadius: '8px'
+                      }}>
+                        {inc.etiqueta}
+                      </span>
                     ) : (
                       <button
                         type="button"

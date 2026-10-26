@@ -4,7 +4,8 @@ import {
   registrarAsistenciaLista,
   deshacerEntradaReciente,
   obtenerFechaLocalHoy,
-  obtenerHoraLimiteTolerancia
+  obtenerHoraLimiteTolerancia,
+  obtenerHoraSalidaOficial
 } from '../../vigilancia/services/vigilanciaService';
 import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import {
@@ -49,12 +50,14 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState(null);
   const [horaLimiteCorte, setHoraLimiteCorte] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
+  const [horaSalidaOficial, setHoraSalidaOficial] = useState(() => localStorage.getItem('hora_salida_oficial_rh') || '17:00');
 
   const cargarAsistenciaDia = useCallback(async () => {
     setCargando(true);
     try {
       const sedeFiltro = usuario?.rol === 'superadmin' ? null : (usuario?.sede_id || null);
       obtenerHoraLimiteTolerancia().then(h => h && setHoraLimiteCorte(h));
+      obtenerHoraSalidaOficial().then(hSal => hSal && setHoraSalidaOficial(hSal));
       const data = await obtenerDatosCaseta(sedeFiltro, fecha);
       setEmpleados(data.empleadosSede || []);
       setMapaAsistencias(data.mapaAsistencias || {});
@@ -127,8 +130,11 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
 
   // Regla de cierre de día para exportar
   const esDiaAnterior = fecha < hoyStr;
-  const horaActualNum = new Date().getHours();
-  const jornadaHoyCerrada = totalPresentes > 0 && (totalConSalida === totalPresentes || horaActualNum >= 18);
+  const ahoraReloj = new Date();
+  const minActuales = ahoraReloj.getHours() * 60 + ahoraReloj.getMinutes();
+  const [hSalOf, mSalOf] = (horaSalidaOficial || '17:00').split(':').map(Number);
+  const minSalOficial = (isNaN(hSalOf) ? 17 : hSalOf) * 60 + (isNaN(mSalOf) ? 0 : mSalOf);
+  const jornadaHoyCerrada = minActuales >= minSalOficial || (totalPresentes > 0 && totalConSalida === totalPresentes);
   const puedeExportarDia = esDiaAnterior || jornadaHoyCerrada;
 
   const exportarCSV = () => {
@@ -156,7 +162,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
       if (reg?.hora_entrada) {
         estado = reg.hora_entrada > horaLimiteCorte ? 'ASISTIO (RETARDO)' : 'ASISTIO PUNTUAL';
       } else if (inc?.tipo === 'retardo_regresa') {
-        estado = 'REGRESADO EN PUERTA';
+        estado = 'FALTA (REGRESADO EN PUERTA POR RETARDO)';
       } else if (inc?.tipo === 'ausencia_autorizada') {
         estado = 'AUSENCIA JUSTIFICADA';
       }
@@ -514,7 +520,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                     </span>
                   ) : inc?.tipo === 'retardo_regresa' ? (
                     <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#ef4444', background: 'rgba(239,68,68,0.10)', padding: '3px 8px', borderRadius: '6px' }}>
-                      Se retiró
+                      Falta (Se regresó)
                     </span>
                   ) : (
                     <span style={{ fontSize: '11.5px', fontWeight: '600', color: c.textMuted }}>
@@ -559,7 +565,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                         </>
                       )
                     ) : (
-                      inc?.tipo !== 'ausencia_autorizada' && (
+                      inc?.tipo !== 'ausencia_autorizada' && inc?.tipo !== 'retardo_regresa' && (
                         <button
                           type="button"
                           onClick={() => handleMarcarDesdeRH(emp.id, 'entrada')}

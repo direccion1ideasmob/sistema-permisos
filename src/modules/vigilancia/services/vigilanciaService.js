@@ -613,14 +613,35 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
 
   if (errEmp || !emp) throw new Error('No se encontró la información del colaborador.');
 
-  // 1. Verificar si ya tiene un permiso de retardo hoy en la tabla permisos
-  const { data: existentes } = await supabase
+  // 1. Verificar si ya tiene un permiso hoy (retardo activo, falta por regreso a casa o ausencia)
+  const { data: pasesHoyCheck } = await supabase
     .from('permisos')
     .select('*')
     .eq('usuario_id', usuarioId)
-    .eq('fecha_permiso', hoyStr)
-    .eq('tipo_permiso', 'retardo')
+    .lte('fecha_permiso', hoyStr)
     .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
+
+  const activosHoy = (pasesHoyCheck || []).filter(p => {
+    const fin = p.fecha_fin || p.fecha_permiso;
+    if (!(p.fecha_permiso <= hoyStr && fin >= hoyStr)) return false;
+    const pagoL = String(p.pago || '').toLowerCase();
+    const obsL = String(p.observaciones || '');
+    return pagoL !== 'cancelado' && !/CANCELADO por/i.test(obsL);
+  });
+
+  const yaRegresadoHoy = activosHoy.find(p =>
+    (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '')
+  );
+  if (yaRegresadoHoy) {
+    throw new Error(`El colaborador ya cuenta con dictamen de retiro a casa hoy (Falta por retardo • Folio ${yaRegresadoHoy.folio}). No puede registrarse entrada.`);
+  }
+
+  const vacacionesHoy = activosHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'vacaciones');
+  if (vacacionesHoy) {
+    throw new Error(`El colaborador tiene Vacaciones autorizadas hoy (${vacacionesHoy.folio}).`);
+  }
+
+  const existentes = activosHoy.filter(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
 
   if (existentes && existentes.length > 0) {
     const paseActual = existentes[0];
@@ -809,10 +830,21 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
     .eq('fecha_permiso', hoyStr)
     .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
 
-  const retardoHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
-  const faltaHoy = (pasesHoy || []).find(p => (p.tipo_permiso || '').toLowerCase() === 'falta');
+  const pasesVigentesHoy = (pasesHoy || []).filter(p => {
+    const pagoL = String(p.pago || '').toLowerCase();
+    const obsL = String(p.observaciones || '');
+    return pagoL !== 'cancelado' && !/CANCELADO por/i.test(obsL);
+  });
+  const regresadoHoy = pasesVigentesHoy.find(p =>
+    (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '')
+  );
+  const retardoHoy = pasesVigentesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+  const faltaHoy = pasesVigentesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'falta' && p.id !== regresadoHoy?.id);
 
   if (tipoMarca === 'entrada') {
+    if (regresadoHoy) {
+      throw new Error('Este colaborador ya fue regresado a casa hoy (Falta por retardo). No es posible registrarle entrada.');
+    }
     // CASO A: Llega en tiempo (<= hora límite de RH) o RH lo valida directamente desde su panel
     if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {
       if (retardoHoy && retardoHoy.estado_general !== 'completado_caseta') {

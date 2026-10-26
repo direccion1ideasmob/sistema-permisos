@@ -762,7 +762,10 @@ export default function MisPermisos() {
                         const esSinGoce = pagoLower.includes('sin goce');
                         const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, motivoRechazo, notasFlujo } = parsearDatosObservaciones(p.observaciones);
                         const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
-                        const estilo = getEstiloTipo(p.tipo_permiso);
+                        const baseEstilo = getEstiloTipo(p.tipo_permiso);
+                        const estilo = (p.tipo_permiso || '').toLowerCase() === 'falta' && seRegreso
+                          ? { ...baseEstilo, label: 'FALTA (RETARDO)' }
+                          : baseEstilo;
                         const fechaTxt = p.fecha_fin && p.fecha_fin !== p.fecha_permiso
                           ? `${formatearFechaCorta(p.fecha_permiso)} al ${formatearFechaCorta(p.fecha_fin)}`
                           : formatearFechaCorta(p.fecha_permiso);

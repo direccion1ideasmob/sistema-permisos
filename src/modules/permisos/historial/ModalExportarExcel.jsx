@@ -189,6 +189,7 @@ export default function ModalExportarExcel({
 
       const filas = datosFiltrados.map(p => {
         const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, supervisorSubarea } = parsearDatosObservaciones(p.observaciones);
+        const esFaltaPorRetardo = (p.tipo_permiso || '').toLowerCase() === 'falta' && ((p.pago || '').toLowerCase().includes('regresa') || Boolean(horaRegresadoCaseta));
         const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
         const jefeTxt = [supervisorSubarea, p.firmante1?.nombre_completo].filter(Boolean).join(' / ');
 
@@ -201,12 +202,12 @@ export default function ModalExportarExcel({
           `"${p.usuarios?.departamentos?.nombre || ''}"`,
           `"${p.usuarios?.area || ''}"`,
           `"${p.usuarios?.puesto || ''}"`,
-          `"${(p.tipo_permiso || '').toUpperCase()}"`,
+          `"${esFaltaPorRetardo ? 'FALTA (POR RETARDO)' : (p.tipo_permiso || '').toUpperCase()}"`,
           `"${categoria || 'General'}"`,
           `"${p.fecha_permiso || ''}${p.fecha_fin && p.fecha_fin !== p.fecha_permiso ? ' al ' + p.fecha_fin : ''}"`,
           `"${horarioSolicitado}"`,
           `"${horaSalidaCaseta || ''}"`,
-          `"${horaEntradaCaseta || ''}"`,
+          `"${horaEntradaCaseta || (horaRegresadoCaseta ? 'Regresado: ' + horaRegresadoCaseta : '')}"`,
           `"${jefeTxt}"`,
           `"${p.firmante2?.nombre_completo || ''}"`,
           `"${p.firmante3?.nombre_completo || ''}"`,
