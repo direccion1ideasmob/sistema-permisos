@@ -36,6 +36,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [motivo, setMotivo] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [alertaReincidencia, setAlertaReincidencia] = useState(false);
+  const [recargarBloqueosTick, setRecargarBloqueosTick] = useState(0);
 
   // Estado completo de bloqueos del día para deshabilitar botones e inputs sin dejar escribir en vano
   const [bloqueoFechaActiva, setBloqueoFechaActiva] = useState(null);
@@ -143,6 +144,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         } else if (tieneSelloRetardo) {
           mapaBloqueos.falta = `Ya tienes llegada registrada en Caseta (${retardoHoy.folio}) el ${fechaPermiso}.`;
           mapaBloqueos.vacaciones = `Ya tienes llegada registrada en Caseta (${retardoHoy.folio}) el ${fechaPermiso}.`;
+        } else if (salidasHoy.length > 0) {
+          mapaBloqueos.falta = `Ya cuentas con un pase de Salida Anticipada (${salidasHoy[0].folio}) para el ${fechaPermiso}. No puedes registrar Falta el mismo día.`;
+          mapaBloqueos.vacaciones = `Ya cuentas con un pase de Salida Anticipada (${salidasHoy[0].folio}) para el ${fechaPermiso}. No puedes registrar Vacaciones el mismo día.`;
         }
 
         const todosBloqueados = ['salida', 'retardo', 'falta', 'vacaciones'].every(k => Boolean(mapaBloqueos[k]));
@@ -161,7 +165,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       } catch (_) {}
     })();
     return () => { cancelado = true; };
-  }, [userId, fechaPermiso, fechaFinVacaciones, tipoPermiso]);
+  }, [userId, fechaPermiso, fechaFinVacaciones, tipoPermiso, recargarBloqueosTick]);
 
   useEffect(() => {
     obtenerHoraLimiteTolerancia().then((h) => {
@@ -337,6 +341,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       setNaturaleza('');
       setMotivo('');
       setRegresaMismoDia(false);
+      setRecargarBloqueosTick(prev => prev + 1);
 
       if (onSolicitudCreada) onSolicitudCreada();
     } catch (err) {

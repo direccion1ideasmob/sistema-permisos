@@ -599,14 +599,14 @@ export const crearNuevaSolicitudPermiso = async ({
     if (asistenciaDia?.hora_entrada) {
       throw new Error(`No es posible registrar una ${tipoPermiso} para esta fecha porque ya tienes registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
     }
-    if (salidasPrevias.some(s => tieneSelloFisicoCaseta(s))) {
-      throw new Error(`No es posible registrar una ${tipoPermiso} porque ya tienes movimientos registrados en Caseta para esta fecha.`);
+    if (salidasPrevias.length > 0) {
+      throw new Error(`No es posible registrar una ${tipoPermiso} porque ya cuentas con un pase de Salida Anticipada (${salidasPrevias[0].folio}) para esta fecha.`);
     }
     if (retardoPrevio && tieneSelloFisicoCaseta(retardoPrevio)) {
       throw new Error(`No es posible registrar una ${tipoPermiso} para hoy porque ya tienes un registro de llegada en Caseta (${retardoPrevio.folio}).`);
     }
-    // Si tenía un retardo o salida previa ese día SIN sello físico de caseta y ahora reporta Falta, cancelar el pase previo no utilizado
-    const pasesSinSello = [...(retardoPrevio ? [retardoPrevio] : []), ...salidasPrevias].filter(p => !tieneSelloFisicoCaseta(p));
+    // Si tenía un aviso de retardo previo ese día SIN sello físico de caseta y ahora reporta Falta, cancelar únicamente el retardo previo
+    const pasesSinSello = (retardoPrevio && !tieneSelloFisicoCaseta(retardoPrevio)) ? [retardoPrevio] : [];
     for (const pPrev of pasesSinSello) {
       await supabase
         .from('permisos')
