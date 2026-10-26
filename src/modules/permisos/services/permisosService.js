@@ -36,26 +36,36 @@ export const escalarPermisoAGerencia = async (permiso) => {
   }
 };
 
-// 3. VERIFICAR REINCIDENCIA DE RETARDOS (Últimos 15 días)
+// 3. VERIFICAR REINCIDENCIA DE RETARDOS (Últimos 15 días, incluyendo retardos donde fue regresado a casa)
 export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fechaBase = new Date()) => {
   if (!usuarioId) return 0;
   const fechaLimite = new Date(fechaBase);
   fechaLimite.setDate(fechaLimite.getDate() - 15);
+  const fechaMinStr = `${fechaLimite.getFullYear()}-${String(fechaLimite.getMonth() + 1).padStart(2, '0')}-${String(fechaLimite.getDate()).padStart(2, '0')}`;
 
   let query = supabase
     .from('permisos')
-    .select('id', { count: 'exact', head: true })
+    .select('id, tipo_permiso, estado_general, pago, observaciones')
     .eq('usuario_id', usuarioId)
-    .eq('tipo_permiso', 'retardo')
-    .neq('estado_general', 'rechazado')
-    .gte('fecha_permiso', fechaLimite.toISOString().split('T')[0]);
+    .gte('fecha_permiso', fechaMinStr);
 
   if (permisoId) {
     query = query.neq('id', permisoId);
   }
 
-  const { count } = await query;
-  return count || 0;
+  const { data } = await query;
+  const total = (data || []).filter(p => {
+    const pagoL = String(p.pago || '').toLowerCase();
+    const obsL = String(p.observaciones || '');
+    if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL)) return false;
+    const tipoL = (p.tipo_permiso || '').toLowerCase();
+    const fueRegresado = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
+    if (tipoL === 'retardo' && p.estado_general !== 'rechazado') return true;
+    if (tipoL === 'falta' && fueRegresado) return true;
+    return false;
+  }).length;
+
+  return total;
 };
 
 // 4. OBTENER TODAS LAS SOLICITUDES PARA BANDEJA DE APROBACIONES
@@ -428,8 +438,10 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
 
   const tipoPaseR = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
   await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
-    titulo: `❌ ${tipoPaseR} Rechazado`,
-    mensaje: `Motivo: ${motivoRechazo}`,
+    titulo: esRetardoRech ? '↩️ Acceso no autorizado (Se regresa)' : `❌ ${tipoPaseR} Rechazado`,
+    mensaje: esRetardoRech
+      ? `Falta por retardo (${updates.folio || solicitud.folio}) • Motivo: ${motivoRechazo}`
+      : `Motivo: ${motivoRechazo}`,
     urlDestino: '/mis-permisos'
   });
 };
@@ -905,15 +917,24 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
 
 // 14. RECHAZAR DESDE LINK RÁPIDO DE JEFATURA (AprobarDirecto)
 export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => {
+  const esRet = (permiso.tipo_permiso || '').toLowerCase() === 'retardo';
+  let folioOficial = permiso.folio;
+  if (esRet && String(permiso.folio || '').startsWith('REQ-')) {
+    const nominaEmp = (permiso.usuarios?.tipo_personal || permiso.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
+    const letra = nominaEmp.includes('admin') ? 'A' : (nominaEmp.includes('obra') ? 'O' : 'P');
+    const anio = new Date().getFullYear().toString().slice(-2);
+    folioOficial = await generarFolioOficial(letra, anio);
+  }
   const { error } = await supabase
     .from('permisos')
     .update({
-      firma_1_estado: (permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? 'autorizado' : 'rechazado',
+      folio: folioOficial,
+      firma_1_estado: esRet ? 'autorizado' : 'rechazado',
       firma_2_estado: permiso.firma_2_estado === 'pendiente' ? 'omitido' : permiso.firma_2_estado,
       firma_3_estado: permiso.firma_3_estado === 'pendiente' ? 'omitido' : permiso.firma_3_estado,
-      estado_general: (permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? 'autorizado' : 'rechazado',
-      ...((permiso.tipo_permiso || '').toLowerCase() === 'retardo' ? { tipo_permiso: 'falta', pago: 'Sin goce (Se regresa)', total_horas: 8 } : {}),
-      observaciones: `${permiso.observaciones || ''} | Rechazado por Jefatura: ${motivoRechazo.trim()}`
+      estado_general: esRet ? 'autorizado' : 'rechazado',
+      ...(esRet ? { tipo_permiso: 'falta', pago: 'Sin goce (Se regresa)', total_horas: 8 } : {}),
+      observaciones: `${permiso.observaciones || ''} | ${esRet ? 'Nota Dictamen (Jefatura): Se regresa a casa — ' : 'Rechazado por Jefatura: '}${motivoRechazo.trim()}`
     })
     .eq('id', permiso.id);
 

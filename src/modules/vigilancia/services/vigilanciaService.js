@@ -476,7 +476,7 @@ export const sincronizarCierreTurnoAutomatico = async () => {
     const [{ data: pases }, { data: asistencias }] = await Promise.all([
       supabase
         .from('permisos')
-        .select('id, usuario_id, fecha_permiso, tipo_permiso, estado_general, pago, observaciones, total_horas')
+        .select('id, folio, usuario_id, fecha_permiso, tipo_permiso, estado_general, pago, observaciones, total_horas, usuarios:usuario_id (tipo_personal, departamentos:departamento_id (clasificacion))')
         .gte('fecha_permiso', fechaMin)
         .lte('fecha_permiso', hoy)
         .in('tipo_permiso', ['retardo', 'salida'])
@@ -514,13 +514,27 @@ export const sincronizarCierreTurnoAutomatico = async () => {
         const siLlego = Boolean(horaEntradaCaseta || horaLlegadaPuerta || regAsist?.hora_entrada);
         if (!seRegreso && !siLlego) {
           const nuevaObs = `${obs} | [Convertido a Falta: Solicitó retardo pero no se presentó en todo el turno]`.replace(/^\s*\|\s*/, '');
+          let folioFinal = p.folio;
+          if (String(p.folio || '').startsWith('REQ-')) {
+            const nominaEmp = (p.usuarios?.tipo_personal || p.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
+            const pref = nominaEmp.includes('admin') ? 'A' : (nominaEmp.includes('obra') ? 'O' : 'P');
+            const anio2 = new Date().getFullYear().toString().slice(-2);
+            const { data: ult } = await supabase.from('permisos').select('folio').ilike('folio', `${pref}-${anio2}-%`).order('created_at', { ascending: false }).limit(1);
+            let cons = 1;
+            if (ult && ult[0]?.folio) {
+              const num = parseInt(ult[0].folio.split('-')[2], 10);
+              if (!isNaN(num)) cons = num + 1;
+            }
+            folioFinal = `${pref}-${anio2}-${String(cons).padStart(4, '0')}`;
+          }
           await supabase
             .from('permisos')
             .update({
+              folio: folioFinal,
               tipo_permiso: 'falta',
               pago: 'Sin goce de sueldo',
               total_horas: 8,
-              estado_general: ['autorizado', 'aprobado', 'completado_caseta'].includes(p.estado_general) ? 'autorizado' : p.estado_general,
+              estado_general: 'autorizado',
               observaciones: nuevaObs
             })
             .eq('id', p.id);
@@ -943,5 +957,30 @@ export const deshacerEntradaReciente = async (usuarioId) => {
   if (reg) {
     await supabase.from("asistencias_caseta").delete().eq("id", reg.id);
   }
+
+  // Si tenía un pase de retardo hoy que se había marcado con [ENTRADA CASETA:...], revertir ese sello
+  const { data: pasesRet } = await supabase
+    .from("permisos")
+    .select("id, estado_general, observaciones")
+    .eq("usuario_id", usuarioId)
+    .eq("fecha_permiso", hoyStr)
+    .eq("tipo_permiso", "retardo");
+
+  for (const pr of (pasesRet || [])) {
+    if (/\[ENTRADA CASETA:/i.test(pr.observaciones || "")) {
+      const obsLimpia = String(pr.observaciones || "")
+        .replace(/\s*\|\s*\[ENTRADA CASETA:\s*[^\]]+\]/ig, "")
+        .replace(/\[ENTRADA CASETA:\s*[^\]]+\]\s*\|?\s*/ig, "")
+        .trim();
+      await supabase
+        .from("permisos")
+        .update({
+          estado_general: pr.estado_general === "completado_caseta" ? "autorizado" : pr.estado_general,
+          observaciones: obsLimpia
+        })
+        .eq("id", pr.id);
+    }
+  }
+
   return { ok: true };
 };

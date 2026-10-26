@@ -231,7 +231,17 @@ export default function TablaHistorial({
 
       if (nominaFiltro !== 'todas' && obtenerNominaPermiso(s) !== nominaFiltro) return false;
       if (deptoFiltro !== 'todos' && String(u.departamento_id) !== String(deptoFiltro)) return false;
-      if (tipoFiltro !== 'todos' && (s.tipo_permiso || '').toLowerCase() !== tipoFiltro) return false;
+      if (tipoFiltro !== 'todos') {
+        const tPerm = (s.tipo_permiso || '').toLowerCase();
+        const esRegCasa = (s.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(s.observaciones || '');
+        if (tipoFiltro === 'falta_retardo') {
+          if (!(tPerm === 'falta' && esRegCasa)) return false;
+        } else if (tipoFiltro === 'falta') {
+          if (tPerm !== 'falta' || esRegCasa) return false;
+        } else if (tPerm !== tipoFiltro) {
+          return false;
+        }
+      }
       if (filtroEstado === 'autorizado' && !esAut) return false;
       if (filtroEstado === 'rechazado' && (s.estado_general !== 'rechazado' || esCancelado)) return false;
       if (filtroEstado === 'cancelado' && !esCancelado) return false;
@@ -644,6 +654,7 @@ export default function TablaHistorial({
               <option value="salida">Salida anticipada</option>
               <option value="retardo">Retardo</option>
               <option value="falta">Falta</option>
+              <option value="falta_retardo">Falta por retardo (Se regresa)</option>
               <option value="vacaciones">Vacaciones</option>
             </select>
           </div>
@@ -720,19 +731,24 @@ export default function TablaHistorial({
                     const esAlertaPago = seRegresoCasa || pagoLow.includes('sin goce');
                     const seleccionado = seleccionados.includes(s.id);
                     const expandido = expandidos.includes(s.id);
-                    const tipo = (s.tipo_permiso || '').toLowerCase();
-                    const aplicaCaseta = tipo === 'salida' || tipo === 'retardo';
-                    const estiloTipo = getEstiloTipo(s.tipo_permiso);
-
                     const {
                       horarioSolicitado,
                       horaSalidaCaseta,
                       horaEntradaCaseta,
+                      horaLlegadaPuerta,
                       horaRegresadoCaseta,
                       supervisorSubarea,
                       motivoRechazo,
                       notasFlujo
                     } = parsearDatosObservaciones(s.observaciones);
+
+                    const tipo = (s.tipo_permiso || '').toLowerCase();
+                    const esFaltaPorRetardo = tipo === 'falta' && (seRegresoCasa || Boolean(horaRegresadoCaseta));
+                    const aplicaCaseta = tipo === 'salida' || tipo === 'retardo' || esFaltaPorRetardo;
+                    const baseEstiloTipo = getEstiloTipo(s.tipo_permiso);
+                    const estiloTipo = esFaltaPorRetardo
+                      ? { ...baseEstiloTipo, label: 'Falta (Retardo)' }
+                      : baseEstiloTipo;
 
                     const { categoria, texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
@@ -741,9 +757,10 @@ export default function TablaHistorial({
                         return <span style={{ fontSize: '12px', color: textSecundario }}>—</span>;
                       }
                       if (horaRegresadoCaseta || seRegresoCasa) {
+                        const horaMostrar = horaRegresadoCaseta || horaLlegadaPuerta || 'Se retiró';
                         return (
                           <span style={{ fontSize: '12px', fontWeight: '700', color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CornerUpLeft size={12.5} /> {horaRegresadoCaseta || 'Se retiró'}
+                            <CornerUpLeft size={12.5} /> {horaMostrar}
                           </span>
                         );
                       }
@@ -971,7 +988,10 @@ export default function TablaHistorial({
               const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
               const seRegresoCasa = pagoLow.includes('regresa');
               const expandido = expandidos.includes(s.id);
-              const estiloTipo = getEstiloTipo(s.tipo_permiso);
+              const baseEstiloM = getEstiloTipo(s.tipo_permiso);
+              const estiloTipo = (s.tipo_permiso || '').toLowerCase() === 'falta' && seRegresoCasa
+                ? { ...baseEstiloM, label: 'Falta (Retardo)' }
+                : baseEstiloM;
               const { horarioSolicitado, motivoRechazo, notasFlujo } = parsearDatosObservaciones(s.observaciones);
               const { texto: motivoTexto } = limpiarMotivo(s.asunto_motivo);
 
