@@ -218,6 +218,7 @@ export default function TablaHistorial({
     return ordenadas.filter(s => {
       const u = s.usuarios || {};
       const esCancelado = (s.pago || '').toLowerCase() === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+      const esRegresadoFiltro = (s.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(s.observaciones || '');
       const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
 
       if (term) {
@@ -243,7 +244,7 @@ export default function TablaHistorial({
         }
       }
       if (filtroEstado === 'autorizado' && !esAut) return false;
-      if (filtroEstado === 'rechazado' && (s.estado_general !== 'rechazado' || esCancelado)) return false;
+      if (filtroEstado === 'rechazado' && ((s.estado_general !== 'rechazado' && !esRegresadoFiltro) || esCancelado)) return false;
       if (filtroEstado === 'cancelado' && !esCancelado) return false;
 
       return true;

@@ -157,6 +157,21 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   if (solicitud.usuario_id === usuario.id && usuario.rol !== "superadmin") {
     throw new Error("Por control interno, no puedes autorizar ni dictaminar tu propia solicitud.");
   }
+
+  // Verificación en vivo anti-colisión (evita doble dictamen simultáneo entre Jefe y RH)
+  const { data: actualBD, error: errCheck } = await supabase
+    .from('permisos')
+    .select('id, folio, tipo_permiso, estado_general, pago, observaciones, firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado')
+    .eq('id', solicitud.id)
+    .single();
+
+  if (errCheck || !actualBD) {
+    throw new Error('No se pudo verificar el estado actual de la solicitud.');
+  }
+  if (['autorizado', 'aprobado', 'completado_caseta', 'rechazado', 'cancelado'].includes(actualBD.estado_general)) {
+    throw new Error(`Esta solicitud ya fue dictaminada hace unos instantes (Folio ${actualBD.folio} • ${actualBD.pago || actualBD.estado_general}). Actualiza tu bandeja.`);
+  }
+  solicitud = { ...solicitud, ...actualBD };
   const esFirmante1Actual =
     solicitud.firma_1_estado === 'pendiente' &&
     (solicitud.firma_1_id === usuario.id || ['encargado', 'jefe_area'].includes(usuario.rol));
@@ -364,6 +379,19 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
 // 7. RECHAZAR SOLICITUD O DICTAMINAR REGRESO A CASA (Aprobaciones)
 export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRechazo }) => {
+  const { data: actualBD, error: errCheck } = await supabase
+    .from('permisos')
+    .select('id, folio, tipo_permiso, estado_general, pago, observaciones, firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado')
+    .eq('id', solicitud.id)
+    .single();
+
+  if (errCheck || !actualBD) {
+    throw new Error('No se pudo verificar el estado actual de la solicitud.');
+  }
+  if (['autorizado', 'aprobado', 'completado_caseta', 'rechazado', 'cancelado'].includes(actualBD.estado_general)) {
+    throw new Error(`Esta solicitud ya fue dictaminada hace unos instantes (Folio ${actualBD.folio} • ${actualBD.pago || actualBD.estado_general}). Actualiza tu bandeja.`);
+  }
+  solicitud = { ...solicitud, ...actualBD };
   const esFirmante1 = ['encargado', 'jefe_area'].includes(usuario.rol) || solicitud.firma_1_id === usuario.id;
   const esGerente = solicitud.firma_2_id === usuario.id;
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh' || usuario.rol === 'superadmin';
@@ -827,7 +855,22 @@ export const obtenerPermisoPorId = async (permisoId) => {
 
 // 13. AUTORIZAR DESDE LINK RÁPIDO DE JEFATURA (AprobarDirecto)
 export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => {
-  let updates = { pago: dictamenPago };
+  const { data: actualBD } = await supabase
+    .from('permisos')
+    .select('id, folio, tipo_permiso, estado_general, pago, observaciones, firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado')
+    .eq('id', permiso.id)
+    .maybeSingle();
+
+  if (actualBD && ['autorizado', 'aprobado', 'completado_caseta', 'rechazado', 'cancelado'].includes(actualBD.estado_general)) {
+    throw new Error(`Esta solicitud ya fue dictaminada previamente (Folio ${actualBD.folio}).`);
+  }
+  if (actualBD) permiso = { ...permiso, ...actualBD };
+
+  const esRetRegresa = (permiso.tipo_permiso || '').toLowerCase() === 'retardo' && String(dictamenPago || '').toLowerCase().includes('regresa');
+  let updates = {
+    pago: esRetRegresa ? 'Sin goce (Se regresa)' : dictamenPago,
+    ...(esRetRegresa ? { tipo_permiso: 'falta', total_horas: 8 } : {})
+  };
   let siguientesEnFirmar = [];
   let etiquetaNotificacion = "Gerencia";
 
@@ -846,7 +889,20 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
     }
   }
 
-  if (siguientesEnFirmar.length === 0) {
+  if (esRetRegresa) {
+    updates.firma_1_estado = 'autorizado';
+    if (permiso.firma_2_estado === 'pendiente') updates.firma_2_estado = 'omitido';
+    if (permiso.firma_3_estado === 'pendiente') updates.firma_3_estado = 'omitido';
+    updates.estado_general = 'autorizado';
+    siguientesEnFirmar = [];
+    etiquetaNotificacion = "Caseta de Vigilancia (Retiro de planta)";
+    if (String(permiso.folio || '').startsWith('REQ-')) {
+      const nominaEmp = (permiso.usuarios?.tipo_personal || permiso.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
+      const letra = nominaEmp.includes('admin') ? 'A' : (nominaEmp.includes('obra') ? 'O' : 'P');
+      const anio = new Date().getFullYear().toString().slice(-2);
+      updates.folio = await generarFolioOficial(letra, anio);
+    }
+  } else if (siguientesEnFirmar.length === 0) {
     updates.firma_1_estado = 'autorizado';
     if (permiso.firma_2_estado === 'pendiente' && permiso.firma_2_id) {
       siguientesEnFirmar.push(permiso.firma_2_id);

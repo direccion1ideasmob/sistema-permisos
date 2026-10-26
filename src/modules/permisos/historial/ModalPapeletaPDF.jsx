@@ -413,7 +413,9 @@ export default function ModalPapeletaPDF({ permiso, permisos, onClose }) {
                         <strong style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>N/A</strong>
                       ) : seRegresaTrabajador ? (
                         <strong style={{ color: '#b45309', fontSize: '11px', display: 'block' }}>
-                          {horaRegresadoCaseta ? `Retirado: ${horaRegresadoCaseta}` : 'Sin acceso'}
+                          {horaRegresadoCaseta
+                            ? `Retirado: ${horaRegresadoCaseta}`
+                            : (horaLlegadaPuerta ? `En puerta: ${horaLlegadaPuerta} (Se retira)` : 'Sin acceso')}
                         </strong>
                       ) : (horaSalidaCaseta || horaEntradaCaseta) ? (
                         <strong style={{ color: '#15803d', fontSize: '11px', display: 'block' }}>

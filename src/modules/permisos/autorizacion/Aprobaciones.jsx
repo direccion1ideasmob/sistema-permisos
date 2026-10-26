@@ -13,6 +13,7 @@ import TarjetaAprobacion from './TarjetaAprobacion';
 import ModalDictamenAprobar from './ModalDictamenAprobar';
 import ModalRechazoPermiso from './ModalRechazoPermiso';
 import TablaHistorial from '../historial/TablaHistorial';
+import ModalPapeletaPDF from '../historial/ModalPapeletaPDF';
 import { Inbox, Radar, Archive } from 'lucide-react';
 
 export default function Aprobaciones() {
@@ -24,6 +25,7 @@ export default function Aprobaciones() {
 
   const [solicitudAprobar, setSolicitudAprobar] = useState(null);
   const [solicitudRechazar, setSolicitudRechazar] = useState(null);
+  const [papeletaSeleccionada, setPapeletaSeleccionada] = useState(null);
 
   const [modoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   const c = obtenerTemaAprobaciones(modoOscuro);
@@ -232,7 +234,7 @@ export default function Aprobaciones() {
           Cargando solicitudes...
         </div>
       ) : (!esRH && tabActiva === 'historial') ? (
-        <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} />
+        <TablaHistorial solicitudes={solicitudesHistorial} c={c} modoOscuro={modoOscuro} onSeleccionarPapeleta={(p) => setPapeletaSeleccionada(p)} />
       ) : listadoActual.length === 0 ? (
         <div style={{
           textAlign: 'center', padding: '44px 20px', color: c.textMuted, fontSize: '14.5px', fontWeight: '600',
@@ -268,6 +270,13 @@ export default function Aprobaciones() {
         c={c}
         modoOscuro={modoOscuro}
       />
+
+      {papeletaSeleccionada && (
+        <ModalPapeletaPDF
+          permiso={papeletaSeleccionada}
+          onClose={() => setPapeletaSeleccionada(null)}
+        />
+      )}
 
       <ModalRechazoPermiso
         solicitud={solicitudRechazar}
