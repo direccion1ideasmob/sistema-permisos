@@ -686,15 +686,16 @@ export const crearNuevaSolicitudPermiso = async ({
   let estadoFirma3 = rhFinalId ? (rhFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
 
   // REGLA GERENCIA ADMIN (Pedro Simón):
-  // En retardos de Administración, solo interviene cuando es ANTICIPADO (!esRetardoUrgente) o por ASUNTO DE TRABAJO.
-  // Si es un retardo del mismo día fuera del tiempo de anticipación, lo ven directo Jefe de Área -> RH sin notificar a Pedro.
+  // En retardos de Administración, si el colaborador SÍ tiene Jefe de Área que lo revise (estadoFirma1 === 'pendiente'),
+  // se omite a Pedro Simón (pasa de Jefe de Área -> RH).
+  // Pedro Simón SOLO autoriza retardos de quienes NO tienen Jefe de Área arriba (o son Jefes de Área que le reportan directo a él).
   const esDivisionAdmin = rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin');
-  const esTrabajo = (naturaleza || '').toLowerCase().includes('trabajo');
-  const omitirGerenteAdminPorRetardoDia =
-    tipoPermiso === 'retardo' && esDivisionAdmin && Boolean(esRetardoUrgente) && !esTrabajo;
+  const tieneJefeRevisor = estadoFirma1 === 'pendiente';
+  const omitirGerenteAdminPorRetardo =
+    tipoPermiso === 'retardo' && esDivisionAdmin && tieneJefeRevisor;
 
-  // FUSIÓN INTELIGENTE: Si la división ya es comandada por José Coca (RH / Vigilancia) o aplica omisión de retardo del día en Admin
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || omitirGerenteAdminPorRetardoDia) {
+  // FUSIÓN INTELIGENTE: Si la división ya es comandada por José Coca (RH / Vigilancia) o aplica omisión de retardo en Admin con Jefe
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || omitirGerenteAdminPorRetardo) {
     estadoFirma2 = 'omitido';
   }
 
