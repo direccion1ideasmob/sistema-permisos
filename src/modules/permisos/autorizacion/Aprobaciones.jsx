@@ -190,9 +190,9 @@ export default function Aprobaciones() {
       `}</style>
 
       {/* BARRA SEGMENTADA SIMÉTRICA */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '15px', fontWeight: '900', color: c.text, letterSpacing: '-0.01em' }}>
-          {esRH ? 'Control de Autorizaciones RH' : 'Bandeja de Autorizaciones'}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '6px', flexWrap: 'nowrap' }}>
+        <span style={{ fontSize: '14px', fontWeight: '900', color: c.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {esRH ? 'Autorizaciones RH' : 'Autorizaciones'}
         </span>
         <ControlHoraCorteRH usuario={usuario} c={c} />
       </div>

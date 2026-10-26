@@ -79,6 +79,9 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   const pasesDelDia = (resPermisos.data || []).filter(p => {
     const perteneceSede = !sedeId || p.usuarios?.sede_id === sedeId || idsSede.has(p.usuario_id);
     if (!perteneceSede) return false;
+    const pagoL = String(p.pago || '').toLowerCase();
+    const obsL = String(p.observaciones || '');
+    if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL)) return false;
     const fin = p.fecha_fin || p.fecha_permiso;
     return p.fecha_permiso <= fechaTarget && fin >= fechaTarget;
   });
@@ -660,6 +663,12 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
   const vacacionesHoy = activosHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'vacaciones');
   if (vacacionesHoy) {
     throw new Error(`El colaborador tiene Vacaciones autorizadas hoy (${vacacionesHoy.folio}).`);
+  }
+
+  // Si tenía una Falta ordinaria programada hoy pero sí se presentó en caseta, cancelamos la falta previa
+  const faltaOrdinariaHoy = activosHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'falta' && p.id !== yaRegresadoHoy?.id);
+  if (faltaOrdinariaHoy) {
+    await cancelarPasePorInasistenciaOCambio(faltaOrdinariaHoy.id, `Se presentó a laborar en puerta (${horaActual} hrs)`);
   }
 
   const existentes = activosHoy.filter(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');

@@ -106,6 +106,9 @@ export default function TarjetaAprobacion({
     }
 
     const mLlegadaP = obs.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+    if (mLlegadaP && /^Puerta:/i.test(horarioRaw)) {
+      horarioRaw = '';
+    }
     const mEntradaC = obs.match(/\[(?:ENTRADA|REINGRESO) CASETA:\s*([^\]]+)\]/i);
     const mSalidaC = obs.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
     const mRetiroC = obs.match(/\[REGRESADO EN PUERTA:\s*([^\]]+)\]/i);
@@ -339,15 +342,20 @@ export default function TarjetaAprobacion({
             width: 100%;
             margin-left: 0;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 8px;
+            box-sizing: border-box;
           }
           .ta-btn-rechazar, .ta-btn-evaluar {
             width: 100%;
-            max-width: none !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
             height: 38px;
-            padding: 0 10px;
-            font-size: 13px;
+            padding: 0 6px !important;
+            font-size: 12px !important;
+            gap: 4px !important;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
         }
       `}</style>

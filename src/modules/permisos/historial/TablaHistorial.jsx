@@ -475,16 +475,24 @@ export default function TablaHistorial({
             order: 3 !important;
           }
           .th-toolbar-right {
-            display: grid !important;
-            grid-template-columns: 1fr auto !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
             align-items: center !important;
-            gap: 8px !important;
+            justify-content: space-between !important;
+            gap: 6px !important;
             width: 100% !important;
+            box-sizing: border-box !important;
           }
           .th-toolbar-right > div {
-            width: 100% !important;
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
             justify-content: space-between !important;
             box-sizing: border-box !important;
+          }
+          .th-toolbar-right .th-neutral-btn {
+            flex-shrink: 0 !important;
+            padding: 0 9px !important;
+            font-size: 12px !important;
           }
           .th-desktop-table-view {
             display: none !important;

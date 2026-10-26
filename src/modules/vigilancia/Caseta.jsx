@@ -647,8 +647,20 @@ export default function Caseta() {
     return t === 'retardo_en_espera' || t === 'retardo_regresa' || t === 'retardo_autorizado';
   });
 
+  const coincidePorInicioDePalabra = (emp, busq) => {
+    const limpioBusq = busq.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (!limpioBusq) return false;
+    const textoCompleto = `${emp.nombre_completo || ''} ${emp.apellido_paterno || ''} ${emp.apellido_materno || ''} ${emp.nombre || ''} ${emp.numero_empleado || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    const palabrasBusqueda = limpioBusq.split(/\s+/).filter(Boolean);
+    const tokensEmpleado = textoCompleto.split(/[\s,]+/).filter(Boolean);
+    return palabrasBusqueda.every(pb => tokensEmpleado.some(tok => tok.startsWith(pb)));
+  };
+
   const coincidenciasEntrada = tieneMinimo3Letras
-    ? todosSinEntrada.filter((emp) => (emp.nombre_completo || '').toLowerCase().includes(termino))
+    ? todosSinEntrada.filter((emp) => coincidePorInicioDePalabra(emp, termino))
     : [];
 
   const demasiadasCoincidenciasEntrada = tieneMinimo3Letras && coincidenciasEntrada.length > 3;
@@ -718,7 +730,7 @@ export default function Caseta() {
             <AvatarColaborador u={modalConfirmacion.emp} size={68} />
 
             <div>
-              <div style={{ fontSize: '19px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
+              <div style={{ fontSize: '15.5px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
                 {formatearApellidosNombre(modalConfirmacion.emp?.nombre_completo)}
               </div>
               <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '5px' }}>
@@ -834,7 +846,7 @@ export default function Caseta() {
             <input
               ref={inputBusquedaRef}
               type="text"
-              placeholder="Escribe al menos 3 letras del nombre o apellido..."
+              placeholder="Nombre o apellido (mín. 3 letras)..."
               value={busquedaTexto}
               onChange={(e) => setBusquedaTexto(e.target.value)}
               style={{
@@ -987,15 +999,7 @@ export default function Caseta() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {tipoInc === 'retardo_en_espera' ? (
-                        <span style={{
-                          fontSize: '11.5px', fontWeight: '800', color: '#d97706',
-                          background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.32)',
-                          padding: '6px 11px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                        }}>
-                          <Hourglass size={13} /> En espera...
-                        </span>
-                      ) : esRegresa ? (
+                      {tipoInc === 'retardo_en_espera' ? null : esRegresa ? (
                         <button
                           type="button"
                           onClick={() => handleSellarPase(inc.paseId, 'retiro')}
@@ -1093,7 +1097,7 @@ export default function Caseta() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
                         {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
-                        {inc && (
+                        {inc && !['ausencia_autorizada', 'retardo_en_espera', 'retardo_regresa'].includes(tipoInc) && (
                           <span style={{
                             fontSize: '10.5px', fontWeight: '800', padding: '1.5px 7px', borderRadius: '5px',
                             color: inc.color, background: inc.bg
