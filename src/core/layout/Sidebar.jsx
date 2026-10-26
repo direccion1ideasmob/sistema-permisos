@@ -4,11 +4,12 @@ import { supabase } from '../api/supabaseClient';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../auth/AuthContext';
 import { registrarSuscripcionPush } from '../notificaciones/notificacionesService';
+import ModalGuiaRapidaRH from '../../modules/permisos/historial/ModalGuiaRapidaRH';
 
 import { 
   ClipboardList, PenLine, FileBarChart, Users,
   LogOut, X, Camera, Image as ImageIcon, Sun, Moon,
-  Settings, FilePlus, Bell, Clock, DoorOpen
+  Settings, FilePlus, Bell, Clock, DoorOpen, BookOpen
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -29,6 +30,7 @@ export default function Sidebar({
   const [nuevoNombre, setNuevoNombre] = useState(usuarioLogueado?.nombre_completo || "");
   const [loading, setLoading] = useState(false);
   const [suscribiendo, setSuscribiendo] = useState(false);
+  const [mostrarGuiaSistema, setMostrarGuiaSistema] = useState(false);
 
   const handleUpdateFoto = async (e) => {
     const archivo = e.target.files[0];
@@ -341,8 +343,37 @@ export default function Sidebar({
           )}
         </nav>
 
-        {/* 5. BOTÓN CERRAR SESIÓN SIEMPRE VISIBLE ABAJO */}
+        {/* 5. GUÍA DISCRETA (SOLO RH / GERENCIA RH) + BOTÓN CERRAR SESIÓN ABAJO */}
         <div style={s.logoutContainer}>
+          {esNominas && (
+            <button
+              type="button"
+              onClick={() => {
+                cerrarMenuMovil();
+                setMostrarGuiaSistema(true);
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '7px',
+                padding: '8px 10px',
+                marginBottom: '8px',
+                borderRadius: '8px',
+                border: `1px solid ${tema.border}`,
+                backgroundColor: 'transparent',
+                color: tema.textSecondary,
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                opacity: 0.85
+              }}
+            >
+              <BookOpen size={14} style={{ flexShrink: 0 }} />
+              <span style={s.navText}>Guía del Sistema</span>
+            </button>
+          )}
           <button onClick={() => window.confirm("¿Deseas cerrar sesión?") && cerrarSesion()} style={s.btnLogout}>
             <LogOut size={18} strokeWidth={2.2} style={{ flexShrink: 0 }} />
             <span style={s.navText}>Cerrar Sesión</span>
@@ -350,6 +381,13 @@ export default function Sidebar({
         </div>
 
       </aside>
+
+      {mostrarGuiaSistema && (
+        <ModalGuiaRapidaRH
+          modoOscuro={modoOscuro}
+          onClose={() => setMostrarGuiaSistema(false)}
+        />
+      )}
 
       {/* VISOR MODAL DE FOTO DE PERFIL EN GRANDE */}
       {showPhotoModal && (
