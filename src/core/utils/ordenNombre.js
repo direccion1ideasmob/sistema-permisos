@@ -5,6 +5,20 @@ const PARTICULAS = new Set([
   'DE', 'DEL', 'LA', 'LAS', 'LOS', 'SAN', 'SANTA', 'VON', 'VAN', 'MC', 'MAC', 'Y'
 ]);
 
+// Segundos nombres frecuentes en México: evita que en personas con 2 nombres y 1 solo apellido
+// (ej. "Ricardo Israel Morua") se tome el segundo nombre ("Israel") como apellido paterno.
+const SEGUNDOS_NOMBRES_COMUNES = new Set([
+  'ISRAEL', 'ANGEL', 'MIGUEL', 'CESAR', 'JULIO', 'CARMEN', 'IRENE', 'BERENICE',
+  'GUADALUPE', 'MARIA', 'JOSE', 'JUAN', 'CARLOS', 'LUIS', 'FERNANDO', 'FERNANDA',
+  'ALEJANDRO', 'ALEJANDRA', 'ANTONIO', 'MANUEL', 'FRANCISCO', 'JAVIER', 'JESUS',
+  'DAVID', 'DANIEL', 'EDUARDO', 'ENRIQUE', 'ALBERTO', 'ROBERTO', 'RICARDO',
+  'ARTURO', 'SERGIO', 'JORGE', 'ARMANDO', 'RAUL', 'OMAR', 'IVAN', 'OSCAR',
+  'ADRIAN', 'GERARDO', 'GUSTAVO', 'HUGO', 'MAURICIO', 'PATRICIA', 'VERONICA',
+  'ELIZABETH', 'LETICIA', 'GABRIELA', 'DANIELA', 'ANDREA', 'PAOLA', 'KARLA',
+  'LAURA', 'MONICA', 'CLAUDIA', 'SANDRA', 'ADRIANA', 'BEATRIZ', 'ROCIO',
+  'ESMERALDA', 'VALERIA', 'VALERI', 'JAZMIN', 'JOANA', 'VICTORIA', 'NORA'
+]);
+
 const aTituloToken = (w = '') => {
   const siglas = ['CNC', 'RH', 'TI', 'IMSS', 'NOM'];
   const up = w.toUpperCase();
@@ -12,11 +26,38 @@ const aTituloToken = (w = '') => {
   return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
 };
 
-export const descomponerNombreMexicano = (nombreCompleto = '') => {
-  const limpio = String(nombreCompleto || '').trim().replace(/\s+/g, ' ');
-  if (!limpio) return { apellidos: '', nombres: '', completoInvertido: 'Colaborador', claveOrden: '' };
+const normalizarClave = (str = '') =>
+  String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 
-  // Si ya viene con coma ("Pérez López, Juan"), respetarlo
+export const descomponerNombreMexicano = (entrada = '', objUsuario = null) => {
+  const u = (entrada && typeof entrada === 'object') ? entrada : objUsuario;
+
+  // 1. Si tenemos las columnas explícitas apellido_paterno y nombre de la BD, son 100% exactas
+  if (u && u.apellido_paterno && u.nombre) {
+    const apPat = String(u.apellido_paterno || '').trim().split(/\s+/).filter(Boolean).map(aTituloToken).join(' ');
+    const apMat = String(u.apellido_materno || '').trim().split(/\s+/).filter(Boolean).map(aTituloToken).join(' ');
+    const nom = String(u.nombre || '').trim().split(/\s+/).filter(Boolean).map(aTituloToken).join(' ');
+    const apellidos = [apPat, apMat].filter(Boolean).join(' ');
+    const completoInvertido = nom ? `${apellidos}, ${nom}` : apellidos;
+    return {
+      apellidos,
+      nombres: nom,
+      completoInvertido,
+      completoInvertidoUpper: completoInvertido.toUpperCase(),
+      claveOrden: normalizarClave(`${apPat} ${apMat} ${nom}`)
+    };
+  }
+
+  const rawStr = (entrada && typeof entrada === 'object')
+    ? (entrada.nombre_completo || '')
+    : String(entrada || '');
+
+  const limpio = rawStr.trim().replace(/\s+/g, ' ');
+  if (!limpio) {
+    return { apellidos: '', nombres: '', completoInvertido: 'Colaborador', completoInvertidoUpper: 'COLABORADOR', claveOrden: '' };
+  }
+
+  // 2. Si ya viene con coma ("Pérez López, Juan")
   if (limpio.includes(',')) {
     const [ap, nom] = limpio.split(',').map(s => s.trim());
     const apTit = ap.split(' ').filter(Boolean).map(aTituloToken).join(' ');
@@ -26,7 +67,8 @@ export const descomponerNombreMexicano = (nombreCompleto = '') => {
       apellidos: apTit,
       nombres: nomTit,
       completoInvertido: inv,
-      claveOrden: inv.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+      completoInvertidoUpper: inv.toUpperCase(),
+      claveOrden: normalizarClave(inv)
     };
   }
 
@@ -37,7 +79,8 @@ export const descomponerNombreMexicano = (nombreCompleto = '') => {
       apellidos: unico,
       nombres: '',
       completoInvertido: unico,
-      claveOrden: unico.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+      completoInvertidoUpper: unico.toUpperCase(),
+      claveOrden: normalizarClave(unico)
     };
   }
 
@@ -49,21 +92,36 @@ export const descomponerNombreMexicano = (nombreCompleto = '') => {
       apellidos: ap,
       nombres: nom,
       completoInvertido: inv,
-      claveOrden: inv.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+      completoInvertidoUpper: inv.toUpperCase(),
+      claveOrden: normalizarClave(`${ap} ${nom}`)
     };
   }
 
-  // Para 3 o más palabras: extraer los 2 apellidos del final (incluyendo partículas como "De la", "Del")
-  let idxFin = tokens.length;
+  // Si tiene 3 palabras y la segunda palabra es un nombre propio común (ej. "Ricardo Israel Morua"),
+  // entonces tiene 2 nombres y 1 solo apellido.
+  if (tokens.length === 3 && SEGUNDOS_NOMBRES_COMUNES.has(normalizarClave(tokens[1]))) {
+    const nombres = `${aTituloToken(tokens[0])} ${aTituloToken(tokens[1])}`;
+    const apellidos = aTituloToken(tokens[2]);
+    const inv = `${apellidos}, ${nombres}`;
+    return {
+      apellidos,
+      nombres,
+      completoInvertido: inv,
+      completoInvertidoUpper: inv.toUpperCase(),
+      claveOrden: normalizarClave(`${apellidos} ${nombres}`)
+    };
+  }
+
+  // Para 3 o más palabras estándar (Nombre[s] + ApellidoPaterno + ApellidoMaterno)
   const extraerUnApellidoHaciaAtras = (hastaIdx) => {
     let i = hastaIdx - 1;
-    while (i > 1 && PARTICULAS.has(tokens[i - 1].toUpperCase())) {
+    while (i > 1 && PARTICULAS.has(normalizarClave(tokens[i - 1]))) {
       i--;
     }
     return i;
   };
 
-  const inicioApMaterno = extraerUnApellidoHaciaAtras(idxFin);
+  const inicioApMaterno = extraerUnApellidoHaciaAtras(tokens.length);
   let inicioApPaterno = inicioApMaterno;
   if (inicioApMaterno > 1) {
     inicioApPaterno = extraerUnApellidoHaciaAtras(inicioApMaterno);
@@ -80,16 +138,21 @@ export const descomponerNombreMexicano = (nombreCompleto = '') => {
     apellidos,
     nombres,
     completoInvertido,
-    claveOrden: completoInvertido.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    completoInvertidoUpper: completoInvertido.toUpperCase(),
+    claveOrden: normalizarClave(`${apellidos} ${nombres}`)
   };
 };
 
-export const formatearApellidosNombre = (nombreCompleto = '') => {
-  return descomponerNombreMexicano(nombreCompleto).completoInvertido;
+export const formatearApellidosNombre = (entrada = '', objUsuario = null) => {
+  return descomponerNombreMexicano(entrada, objUsuario).completoInvertido;
 };
 
-export const compararPorApellidoPaterno = (nombreA = '', nombreB = '') => {
-  const a = descomponerNombreMexicano(nombreA).claveOrden;
-  const b = descomponerNombreMexicano(nombreB).claveOrden;
-  return a.localeCompare(b, 'es', { sensitivity: 'base' });
+export const formatearApellidosNombreMayus = (entrada = '', objUsuario = null) => {
+  return descomponerNombreMexicano(entrada, objUsuario).completoInvertidoUpper;
+};
+
+export const compararPorApellidoPaterno = (a = '', b = '') => {
+  const ca = descomponerNombreMexicano(a).claveOrden;
+  const cb = descomponerNombreMexicano(b).claveOrden;
+  return ca.localeCompare(cb, 'es', { sensitivity: 'base' });
 };

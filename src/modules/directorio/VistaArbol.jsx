@@ -1,3 +1,4 @@
+import { formatearApellidosNombre, formatearApellidosNombreMayus, compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   ChevronDown, ChevronRight, Edit2, Lock, Unlock, X, Save, 
@@ -359,7 +360,7 @@ export default function VistaArbol({
           const idsDeptosSec = new Set(deptosSec.map(d => d.id));
           const totalPersonasDivision = usuarios.filter(u => u.activo && (idsGerentesDivision.has(u.id) || idsDeptosSec.has(u.departamento_id))).length;
           const titularTexto = gerentesDivision.length > 0
-            ? gerentesDivision.map(g => capitalizarNombre(g.nombre_completo)).join(' / ')
+            ? gerentesDivision.map(g => formatearApellidosNombre(g)).join(' / ')
             : '';
 
           return (
@@ -430,7 +431,7 @@ export default function VistaArbol({
 
                       const personalDepto = (usuarios || [])
                         .filter(u => u.departamento_id === depto.id && u.activo === true && !idsGerentesDivision.has(u.id))
-                        .sort((a, b) => obtenerClaveOrdenApellido(a).localeCompare(obtenerClaveOrdenApellido(b)));
+                        .sort((a, b) => compararPorApellidoPaterno(a, b));
 
                       const haySubareasEspecificas = personalDepto.some(u => {
                         const a = normalizar(u.area || depto.nombre);
@@ -838,7 +839,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
               lineHeight: '1.22',
               wordBreak: 'break-word'
             }}>
-              {u.nombre_completo}
+              {formatearApellidosNombreMayus(u)}
             </div>
 
             <div style={{
@@ -864,7 +865,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
                 minWidth: 0,
                 flex: 1
               }}>
-                {u.nombre_completo}
+                {formatearApellidosNombreMayus(u)}
               </div>
 
               {esMando && (

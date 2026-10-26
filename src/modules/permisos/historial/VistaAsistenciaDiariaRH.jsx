@@ -109,7 +109,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
   };
 
   const basePorDeptoYBusqueda = [...empleados]
-    .sort((a, b) => compararPorApellidoPaterno(a.nombre_completo, b.nombre_completo))
+    .sort((a, b) => compararPorApellidoPaterno(a, b))
     .filter((emp) => {
     if (deptoFiltro && String(emp.departamento_id) !== String(deptoFiltro)) return false;
     const termino = busqueda.toLowerCase().trim();
@@ -271,38 +271,85 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         @media (max-width: 768px) {
           .vad-toolbar-card {
             padding: 10px !important;
+            gap: 8px !important;
           }
           .vad-row-top {
+            display: flex !important;
             flex-direction: column !important;
             align-items: stretch !important;
             gap: 8px !important;
+          }
+          .vad-top-left-group {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 8px !important;
+            width: 100% !important;
+          }
+          .vad-date-nav {
+            width: 100% !important;
+            justify-content: space-between !important;
+            box-sizing: border-box !important;
+            height: 36px !important;
+          }
+          .vad-date-btn {
+            flex: 1 !important;
+            justify-content: center !important;
+            white-space: nowrap !important;
+            font-size: 12px !important;
           }
           .vad-seg-bar {
             width: 100% !important;
             display: grid !important;
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 4px !important;
+            padding: 4px !important;
             box-sizing: border-box !important;
           }
           .vad-seg-btn {
             justify-content: center !important;
             width: 100% !important;
+            white-space: nowrap !important;
+            font-size: 11.5px !important;
+            padding: 0 6px !important;
+            height: 32px !important;
           }
+          .vad-actions-right {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr auto auto !important;
+            gap: 6px !important;
+            align-items: center !important;
+          }
+          .vad-row-search {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 8px !important;
+          }
+          .vad-select-depto {
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          /* En móvil: 1 sola fila compacta por colaborador (sin doble piso) */
           .vad-item-row {
-            grid-template-columns: 1fr auto;
-            gap: 8px;
-            padding: 10px 12px;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+            padding: 9px 12px !important;
           }
           .vad-col-depto {
             display: none !important;
           }
           .vad-col-status {
-            grid-column: 1 / -1;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-top: 4px;
-            border-top: 1px dashed ${c.border};
+            display: none !important;
           }
+          .vad-mobile-inline-status {
+            display: inline !important;
+          }
+        }
+        .vad-mobile-inline-status {
+          display: none;
         }
       `}</style>
 
@@ -310,10 +357,10 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
       <div className="vad-toolbar-card">
         {/* FILA 1: SELECTOR MODO + NAVEGADOR DE FECHA + SEGMENTOS DE ESTATUS + CORTE Y EXPORTAR */}
         <div className="vad-row-top">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="vad-top-left-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {selectorModo}
           {/* Selector de Fecha con flechas anterior / siguiente */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '9px', padding: '3px' }}>
+          <div className="vad-date-nav" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '9px', padding: '3px' }}>
             <button
               type="button"
               onClick={() => setFecha(moverFechaDias(fecha, -1))}
@@ -329,7 +376,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                 if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
                 else inputFechaRef.current?.focus();
               }}
-              style={{ height: '28px', padding: '0 10px', border: 'none', background: 'transparent', color: c.text, fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              className="vad-date-btn" style={{ height: '28px', padding: '0 10px', border: 'none', background: 'transparent', color: c.text, fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
             >
               <Calendar size={13.5} color={c.accent} />
               <span>{formatearFechaCorta(fecha)}</span>
@@ -383,7 +430,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
           </div>
 
           {/* Acciones derechas: Hora Corte + Recargar + Exportar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="vad-actions-right" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ControlHoraCorteRH usuario={usuario} c={c} />
 
             <button
@@ -415,7 +462,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         </div>
 
         {/* FILA 2: BUSCADOR + FILTRO DE DEPARTAMENTO */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div className="vad-row-search" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
             <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
             <input
@@ -441,6 +488,7 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
           </div>
 
           <select
+            className="vad-select-depto"
             value={deptoFiltro}
             onChange={(e) => setDeptoFiltro(e.target.value)}
             style={{
@@ -494,10 +542,13 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                   />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '13px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {formatearApellidosNombre(emp.nombre_completo)}
+                      {formatearApellidosNombre(emp.nombre_completo, emp)}
                     </div>
                     <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700' }}>#{emp.numero_empleado}</span>
+                      <span className="vad-mobile-inline-status" style={{ fontWeight: '700', color: tieneEntrada ? (esTarde ? '#d97706' : '#16a34a') : (inc?.tipo === 'retardo_regresa' ? '#ef4444' : c.textMuted) }}>
+                        · {tieneEntrada ? `Ent: ${reg.hora_entrada}${tieneSalida ? ' / Sal: ' + reg.hora_salida : ''}` : (inc?.tipo === 'ausencia_autorizada' ? 'Justificado' : inc?.tipo === 'retardo_regresa' ? 'Falta (Se regresó)' : 'Sin entrada')}
+                      </span>
                       {etiquetaIncLimpia && (
                         <span style={{ color: inc.color, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           · {etiquetaIncLimpia}

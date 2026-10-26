@@ -102,7 +102,11 @@ export default function MisPermisos() {
   };
 
   const enProceso = misPermisos.filter(p => p.estado_general === 'en_firmas');
-  const finalizados = misPermisos.filter(p => p.estado_general !== 'en_firmas');
+  const finalizados = misPermisos.filter(p => {
+    if (p.estado_general === 'en_firmas') return false;
+    if (/CANCELADO por Sistema: Sustituido por/i.test(p.observaciones || '')) return false;
+    return true;
+  });
 
   const gruposPorMes = useMemo(() => {
     const nombresMeses = [
@@ -327,6 +331,8 @@ export default function MisPermisos() {
           display: flex;
           flex-direction: column;
           gap: 12px;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .mp-pill-folio {
           display: inline-flex;
@@ -756,8 +762,9 @@ export default function MisPermisos() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                       {grupo.items.map(p => {
                         const expandida = Boolean(tarjetasExpandidas[p.id]);
-                        const esAutorizado = ['autorizado', 'aprobado', 'completado_caseta'].includes(p.estado_general);
                         const pagoLower = (p.pago || '').toLowerCase();
+                        const esCanceladoMP = p.estado_general === 'cancelado' || pagoLower === 'cancelado' || /CANCELADO por/i.test(p.observaciones || '');
+                        const esAutorizado = !esCanceladoMP && ['autorizado', 'aprobado', 'completado_caseta'].includes(p.estado_general);
                         const seRegreso = pagoLower.includes('regresa');
                         const esSinGoce = pagoLower.includes('sin goce');
                         const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, motivoRechazo, notasFlujo } = parsearDatosObservaciones(p.observaciones);
@@ -774,7 +781,11 @@ export default function MisPermisos() {
                         let colorDictamen = '#16a34a';
                         let bgDictamen = 'rgba(22, 163, 74, 0.1)';
                         let borderDictamen = 'rgba(22, 163, 74, 0.3)';
-                        if (!esAutorizado) {
+                        if (esCanceladoMP) {
+                          colorDictamen = c.textMuted;
+                          bgDictamen = c.bg;
+                          borderDictamen = c.border;
+                        } else if (!esAutorizado) {
                           colorDictamen = '#dc2626';
                           bgDictamen = 'rgba(239, 68, 68, 0.1)';
                           borderDictamen = 'rgba(239, 68, 68, 0.3)';
@@ -824,7 +835,7 @@ export default function MisPermisos() {
                                     className="mp-pill-dictamen"
                                     style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
                                   >
-                                    {p.estado_general === 'cancelado' ? 'CANCELADO' : (esAutorizado ? (p.pago || 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
+                                    {esCanceladoMP ? 'CANCELADO' : (esAutorizado ? (p.pago || 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
                                   </span>
                                   {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
                                 </div>

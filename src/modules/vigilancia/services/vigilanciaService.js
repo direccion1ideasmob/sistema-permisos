@@ -39,7 +39,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
   let queryEmpleados = supabase
     .from('usuarios')
-    .select('id, numero_empleado, nombre_completo, foto_url, area, puesto, sede_id, activo, rol, departamentos:departamento_id (nombre)')
+    .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, foto_url, area, puesto, sede_id, activo, rol, departamentos:departamento_id (nombre)')
     .eq('activo', true)
     .neq('rol', 'caseta')
     .order('nombre_completo', { ascending: true });
@@ -56,7 +56,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
         id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, pago, observaciones,
         firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado,
         estado_general, created_at,
-        usuarios:usuario_id (id, numero_empleado, nombre_completo, foto_url, area, puesto, sede_id, departamentos:departamento_id (nombre)),
+        usuarios:usuario_id (id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, foto_url, area, puesto, sede_id, departamentos:departamento_id (nombre)),
         firmante1:firma_1_id (nombre_completo),
         firmante2:firma_2_id (nombre_completo)
       `)
@@ -72,7 +72,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   if (resEmpleados.error) throw resEmpleados.error;
   if (resPermisos.error) throw resPermisos.error;
 
-  const empleadosSede = (resEmpleados.data || []).slice().sort((a, b) => compararPorApellidoPaterno(a.nombre_completo, b.nombre_completo));
+  const empleadosSede = (resEmpleados.data || []).slice().sort((a, b) => compararPorApellidoPaterno(a, b));
   const idsSede = new Set(empleadosSede.map(e => e.id));
 
   // Filtrar permisos que correspondan a la sede y a la fecha consultada (o rango de vacaciones)
@@ -281,7 +281,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     mapaAsistencias[a.usuario_id] = a;
   });
 
-  const ordenarPasesPorApellido = (arr) => arr.sort((a, b) => compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo));
+  const ordenarPasesPorApellido = (arr) => arr.sort((a, b) => compararPorApellidoPaterno(a.usuarios || a.nombre_completo, b.usuarios || b.nombre_completo));
   ordenarPasesPorApellido(retenidosEnEspera);
   ordenarPasesPorApellido(pasesPorCruzar);
   ordenarPasesPorApellido(personalFuera);

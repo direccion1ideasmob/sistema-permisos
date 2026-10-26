@@ -218,7 +218,7 @@ export default function TablaHistorial({
       const fa = String(a.fecha_permiso || '').slice(0, 10);
       const fb = String(b.fecha_permiso || '').slice(0, 10);
       if (fa !== fb) return fb.localeCompare(fa);
-      return compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo);
+      return compararPorApellidoPaterno(a.usuarios || a.usuarios?.nombre_completo, b.usuarios || b.usuarios?.nombre_completo);
     });
 
     return ordenadas.filter(s => {
@@ -454,24 +454,37 @@ export default function TablaHistorial({
         }
         @media (max-width: 768px) {
           .th-single-toolbar {
+            display: flex !important;
             flex-direction: column !important;
             align-items: stretch !important;
             padding: 10px !important;
             gap: 8px !important;
           }
           .th-toolbar-left {
-            flex: 1 1 auto !important;
-            flex-wrap: wrap !important;
+            display: grid !important;
+            grid-template-columns: 1fr auto !important;
+            align-items: center !important;
+            gap: 8px !important;
             width: 100% !important;
+            flex: none !important;
           }
           .th-search-minimal {
-            flex: 1 1 100% !important;
+            grid-column: 1 / -1 !important;
+            width: 100% !important;
             max-width: 100% !important;
-            order: 2;
+            order: 3 !important;
           }
           .th-toolbar-right {
+            display: grid !important;
+            grid-template-columns: 1fr auto !important;
+            align-items: center !important;
+            gap: 8px !important;
+            width: 100% !important;
+          }
+          .th-toolbar-right > div {
             width: 100% !important;
             justify-content: space-between !important;
+            box-sizing: border-box !important;
           }
           .th-desktop-table-view {
             display: none !important;
@@ -856,7 +869,7 @@ export default function TablaHistorial({
 
                           <td style={{ padding: '11px 14px', verticalAlign: 'middle', overflow: 'hidden' }}>
                             <div style={{ fontWeight: '700', color: c.text, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {formatearApellidosNombre(u.nombre_completo || 'Colaborador')}
+                              {formatearApellidosNombre(u.nombre_completo || 'Colaborador', u)}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '12px', color: textSecundario }}>
                               <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '700', color: c.text }}>
@@ -1058,7 +1071,7 @@ export default function TablaHistorial({
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13.5px', fontWeight: '700', color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {formatearApellidosNombre(u.nombre_completo || 'Colaborador')}
+                      {formatearApellidosNombre(u.nombre_completo || 'Colaborador', u)}
                     </span>
                     <span style={{ fontSize: '11px', fontWeight: '700', color: esCancelado ? textSecundario : esAut ? '#16a34a' : '#ef4444' }}>
                       {esCancelado ? 'Cancelado' : esAut ? (s.pago || 'Autorizado') : 'Rechazado'}

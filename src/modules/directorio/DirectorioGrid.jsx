@@ -1,3 +1,4 @@
+import { formatearApellidosNombreMayus, compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { obtenerTemaGrid, generarEstilosCSS } from './utils/gridStyles';
@@ -86,7 +87,7 @@ export default function DirectorioGrid({
       })
       .sort((a, b) => {
         if (columnaOrden === 'nombre_completo') {
-          const res = obtenerClaveOrdenApellido(a).localeCompare(obtenerClaveOrdenApellido(b));
+          const res = compararPorApellidoPaterno(a, b);
           return direccionOrden === 'asc' ? res : -res;
         }
         if (columnaOrden === 'numero_empleado') {
@@ -375,7 +376,7 @@ export default function DirectorioGrid({
                   />
                   <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
                     <div style={{ fontSize: '13.5px', fontWeight: '700', color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {user.nombre_completo}
+                      {formatearApellidosNombreMayus(user)}
                     </div>
                     <div style={{ fontSize: '11px', color: c.textMuted, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       
@@ -420,7 +421,7 @@ export default function DirectorioGrid({
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
                         <img src={urlFoto} alt="" onClick={(e) => { e.stopPropagation(); if (setFotoZoom) setFotoZoom({ url: urlFoto, nombre: user.nombre_completo }); }} style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <span style={{ fontWeight: '600' }}>{user.nombre_completo}</span>
+                        <span style={{ fontWeight: '600' }}>{formatearApellidosNombreMayus(user)}</span>
                       </div>
                     </td>
                     <td><span style={{ fontSize: '12px' }}>{sedeObj?.nombre || 'Sin Sede'}</span></td>
