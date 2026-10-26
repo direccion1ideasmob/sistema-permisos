@@ -316,14 +316,27 @@ export default function Caseta() {
       flex-shrink: 0;
     }
     .caseta-list-item {
-      border-radius: 11px;
-      padding: 10px 13px;
+      border-radius: 12px;
+      padding: 11px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 12px;
       box-sizing: border-box;
       width: 100%;
+    }
+    .caseta-emp-name {
+      font-size: 14.5px;
+      font-weight: 800;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    .caseta-modal-card {
+      padding: 24px 22px;
+      border-radius: 18px;
+      width: 100%;
+      max-width: 410px;
+      box-sizing: border-box;
     }
     @media (max-width: 768px) {
       .caseta-wrap {
@@ -382,8 +395,17 @@ export default function Caseta() {
         height: 38px !important;
       }
       .caseta-list-item {
-        padding: 9px 11px !important;
-        gap: 8px !important;
+        padding: 10px 12px !important;
+        gap: 10px !important;
+      }
+      .caseta-emp-name {
+        font-size: 13.5px !important;
+        line-height: 1.22 !important;
+        white-space: normal !important;
+      }
+      .caseta-modal-card {
+        padding: 18px 16px !important;
+        border-radius: 15px !important;
       }
     }
   `;
@@ -1129,6 +1151,7 @@ export default function Caseta() {
               return (
                 <div
                   key={emp.id}
+                  className="caseta-list-item"
                   style={{
                     background: c.surfaceCard,
                     border: `1.5px solid ${
@@ -1136,19 +1159,13 @@ export default function Caseta() {
                       tipoInc === 'retardo_autorizado' ? '#16a34a' :
                       tipoInc === 'retardo_regresa' ? '#ef4444' : c.border
                     }`,
-                    borderRadius: '11px',
-                    padding: '10px 13px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
                     opacity: tipoInc === 'ausencia_autorizada' ? 0.8 : 1
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 200px', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                     <AvatarColaborador u={emp} size={40} />
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div className="caseta-emp-name" style={{ color: c.text }}>
                         {formatearApellidosNombre(emp.nombre_completo, emp)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
@@ -1266,23 +1283,18 @@ export default function Caseta() {
               return (
                 <div
                   key={emp.id}
+                  className="caseta-list-item"
                   style={{
                     background: c.surfaceCard,
                     border: `1.5px solid ${c.border}`,
                     borderLeft: `4px solid ${tieneSalida ? '#64748b' : '#16a34a'}`,
-                    borderRadius: '11px',
-                    padding: '10px 13px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
                     flexWrap: 'wrap'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 200px', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 190px', minWidth: 0 }}>
                     <AvatarColaborador u={emp} size={40} />
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div className="caseta-emp-name" style={{ color: c.text }}>
                         {formatearApellidosNombre(emp.nombre_completo, emp)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
@@ -1322,26 +1334,56 @@ export default function Caseta() {
                         <Check size={15} strokeWidth={3} /> Reingreso
                       </button>
                     ) : tieneSalida ? (
-                      <span style={{
-                        fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
-                        background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
-                        padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                      }}>
-                        <CheckCircle2 size={13} /> Salida: {reg.hora_salida}
-                      </span>
+                      <>
+                        <span style={{
+                          fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
+                          background: 'rgba(2,132,199,0.10)', border: '1px solid rgba(2,132,199,0.28)',
+                          padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                        }}>
+                          <CheckCircle2 size={13} /> Salida: {reg.hora_salida}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeshacerSalida(emp.id)}
+                          disabled={Boolean(procesandoId)}
+                          title="Deshacer salida"
+                          style={{
+                            width: '36px', height: '36px', borderRadius: '9px',
+                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >
+                          <Undo2 size={15} />
+                        </button>
+                      </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setModalConfirmacion({ emp, tipoMarca: 'salida' })}
-                        disabled={Boolean(procesandoId)}
-                        style={{
-                          height: '42px', padding: '0 16px', borderRadius: '10px', border: `1.5px solid ${c.border}`,
-                          background: c.bg, color: c.text, fontSize: '12.5px',
-                          fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
-                        }}
-                      >
-                        <LogOut size={15} /> Salida
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setModalConfirmacion({ emp, tipoMarca: 'salida' })}
+                          disabled={Boolean(procesandoId)}
+                          style={{
+                            height: '38px', padding: '0 14px', borderRadius: '9px', border: `1.5px solid ${c.border}`,
+                            background: c.bg, color: c.text, fontSize: '12px',
+                            fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                          }}
+                        >
+                          <LogOut size={14} /> Salida
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeshacerEntrada(emp.id)}
+                          disabled={Boolean(procesandoId)}
+                          title="Deshacer entrada registrada por error"
+                          style={{
+                            width: '38px', height: '38px', borderRadius: '9px',
+                            border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted,
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >
+                          <Undo2 size={15} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
