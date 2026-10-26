@@ -18,12 +18,9 @@ const formatearFechaCorta = (fechaYYYYMMDD) => {
   if (!fechaYYYYMMDD) return '';
   const [y, m, d] = fechaYYYYMMDD.split('-').map(Number);
   const fechaObj = new Date(y, m - 1, d);
-  const texto = fechaObj.toLocaleDateString('es-MX', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-  return texto.charAt(0).toUpperCase() + texto.slice(1).replace(/\./g, '');
+  const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  return `${dias[fechaObj.getDay()]}, ${String(d).padStart(2, '0')} ${meses[m - 1]} ${y}`;
 };
 
 const moverFechaDias = (fechaYYYYMMDD, dias) => {
@@ -211,63 +208,84 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
           gap: 8px;
           box-sizing: border-box;
         }
-        .vad-row-1 {
+        .vad-top-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 8px;
           width: 100%;
         }
-        .vad-row-2 {
+        .vad-middle-controls {
           display: flex;
           align-items: center;
-          justify-content: space-between;
           gap: 8px;
-          width: 100%;
+          flex: 1;
+          justify-content: center;
+          min-width: 0;
         }
-        .vad-seg-bar {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+        .vad-date-bar {
+          display: inline-flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px;
           background: ${c.bg};
           border: 1px solid ${c.border};
           border-radius: 8px;
-          padding: 2px;
-          gap: 2px;
+          padding: 2px 4px;
+          height: 34px;
           box-sizing: border-box;
+          flex-shrink: 0;
         }
-        .vad-seg-btn {
-          height: 28px;
-          padding: 0 8px;
-          border-radius: 6px;
-          border: none;
-          background: transparent;
-          color: ${c.textMuted};
-          font-size: 11.5px;
+        .vad-search-box {
+          position: relative;
+          flex: 1;
+          max-width: 340px;
+          min-width: 180px;
+        }
+        .vad-actions-pack {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+        .vad-btn-neutral {
+          height: 34px;
+          padding: 0 11px;
+          border-radius: 8px;
+          border: 1px solid ${c.border};
+          background: ${c.bg};
+          color: ${c.text};
+          font-size: 12.5px;
           font-weight: 700;
           cursor: pointer;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 4px;
+          gap: 6px;
           white-space: nowrap;
-          transition: all 0.15s ease;
-        }
-        .vad-seg-btn.active {
-          background: ${c.surfaceCard};
-          color: ${c.text};
-          font-weight: 800;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+          box-sizing: border-box;
         }
         .vad-drawer-panel {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 10px;
           background: ${c.surfaceCard};
           border: 1px solid ${c.border};
           border-radius: 10px;
-          padding: 10px 12px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          flex-wrap: wrap;
+          padding: 12px;
+          box-sizing: border-box;
+        }
+        .vad-select-clean {
+          width: 100%;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: 7px;
+          border: 1px solid ${c.border};
+          background: ${c.bg};
+          color: ${c.text};
+          font-size: 12.5px;
+          font-weight: 600;
+          outline: none;
           box-sizing: border-box;
         }
         .vad-table-container {
@@ -291,29 +309,43 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         .vad-item-row:hover {
           background: ${modoOscuro ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
         }
+        .vad-mobile-only {
+          display: none;
+        }
         @media (max-width: 768px) {
           .vad-toolbar-card {
-            padding: 9px 10px !important;
-            gap: 7px !important;
+            padding: 10px !important;
+            gap: 8px !important;
           }
-          .vad-row-2 {
-            flex-direction: column !important;
-            align-items: stretch !important;
-            gap: 7px !important;
-          }
-          .vad-seg-bar {
-            width: 100% !important;
-          }
-          .vad-seg-btn {
-            font-size: 11px !important;
-            padding: 0 4px !important;
-          }
-          .vad-hide-mobile {
+          .vad-desktop-only {
             display: none !important;
           }
+          .vad-mobile-only {
+            display: flex !important;
+          }
+          .vad-btn-label-hide-mobile {
+            display: none !important;
+          }
+          .vad-icon-only-mobile {
+            padding: 0 !important;
+            width: 34px !important;
+            height: 34px !important;
+          }
+          .vad-date-bar-mobile {
+            width: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            background: ${c.bg};
+            border: 1px solid ${c.border};
+            border-radius: 8px;
+            padding: 2px 6px;
+            height: 36px;
+            box-sizing: border-box;
+          }
           .vad-drawer-panel {
-            flex-direction: column !important;
-            align-items: stretch !important;
+            grid-template-columns: 1fr !important;
+            padding: 10px !important;
           }
           .vad-item-row {
             display: flex !important;
@@ -337,21 +369,22 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
         }
       `}</style>
 
-      {/* BARRA ULTRA COMPACTA Y EMPAQUETADA (2 RENGLONES LIMPIOS) */}
+      {/* BARRA PRINCIPAL LIMPIA Y SIMÉTRICA (IDÉNTICA A PERMISOS) */}
       <div className="vad-toolbar-card">
-        {/* RENGLÓN 1: [Permisos | Asistencia] <---> [< Fecha >] + [🎛️] + [📥] */}
-        <div className="vad-row-1">
+        {/* RENGLÓN 1: [Permisos | Asistencia] <---> (En 14": Fecha + Buscador) <---> [Filtros] + [Exportar] */}
+        <div className="vad-top-row">
           {selectorModo}
 
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '2px', height: '34px', boxSizing: 'border-box' }}>
+          {/* Controles centrales en Laptop 14" (Fecha + Buscador en la misma línea) */}
+          <div className="vad-middle-controls vad-desktop-only">
+            <div className="vad-date-bar">
               <button
                 type="button"
                 onClick={() => setFecha(moverFechaDias(fecha, -1))}
                 title="Día anterior"
-                style={{ width: '24px', height: '28px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: '26px', height: '28px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <ChevronLeft size={14} />
+                <ChevronLeft size={15} />
               </button>
 
               <button
@@ -360,10 +393,15 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                   if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
                   else inputFechaRef.current?.focus();
                 }}
-                style={{ height: '28px', padding: '0 6px', border: 'none', background: 'transparent', color: c.text, fontSize: '11.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                style={{ height: '28px', padding: '0 8px', border: 'none', background: 'transparent', color: c.text, fontSize: '12px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
               >
-                <Calendar size={12.5} color={c.accent} className="vad-hide-mobile" />
+                <Calendar size={13} color={c.accent} />
                 <span>{formatearFechaCorta(fecha)}</span>
+                {fecha === hoyStr && (
+                  <span style={{ fontSize: '9.5px', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '1px 5px', borderRadius: '4px' }}>
+                    HOY
+                  </span>
+                )}
               </button>
 
               <button
@@ -371,123 +409,178 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                 onClick={() => fecha < hoyStr && setFecha(moverFechaDias(fecha, 1))}
                 disabled={fecha >= hoyStr}
                 title="Día siguiente"
-                style={{ width: '24px', height: '28px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, opacity: fecha >= hoyStr ? 0.3 : 1, cursor: fecha >= hoyStr ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: '26px', height: '28px', borderRadius: '5px', border: 'none', background: 'transparent', color: c.text, opacity: fecha >= hoyStr ? 0.3 : 1, cursor: fecha >= hoyStr ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <ChevronRight size={14} />
+                <ChevronRight size={15} />
               </button>
-
-              <input
-                ref={inputFechaRef}
-                type="date"
-                value={fecha}
-                max={hoyStr}
-                onChange={(e) => e.target.value && setFecha(e.target.value)}
-                style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
-              />
             </div>
 
+            <div className="vad-search-box">
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
+              <input
+                type="text"
+                placeholder="Buscar apellido, nombre o #nómina..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                style={{
+                  width: '100%', height: '34px', padding: '0 28px 0 31px', borderRadius: '8px',
+                  border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+                  fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
+                }}
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda('')}
+                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <input
+            ref={inputFechaRef}
+            type="date"
+            value={fecha}
+            max={hoyStr}
+            onChange={(e) => e.target.value && setFecha(e.target.value)}
+            style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
+          />
+
+          <div className="vad-actions-pack">
             <button
               type="button"
               onClick={() => setMostrarOpcionesRH(prev => !prev)}
-              title="Departamento y Relojes RH"
+              className="vad-btn-neutral"
+              title="Filtros de asistencia y horarios RH"
               style={{
-                height: '34px', padding: '0 9px', borderRadius: '8px',
-                border: `1px solid ${(mostrarOpcionesRH || deptoFiltro) ? c.accent : c.border}`,
-                background: (mostrarOpcionesRH || deptoFiltro) ? c.accentSoft : c.bg,
-                color: (mostrarOpcionesRH || deptoFiltro) ? c.accent : c.text,
-                fontSize: '12px', fontWeight: '700', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                borderColor: (mostrarOpcionesRH || deptoFiltro || estadoFiltro !== 'todos') ? c.accent : c.border,
+                background: (mostrarOpcionesRH || deptoFiltro || estadoFiltro !== 'todos') ? c.accentSoft : c.bg,
+                color: (mostrarOpcionesRH || deptoFiltro || estadoFiltro !== 'todos') ? c.accent : c.text
               }}
             >
               <SlidersHorizontal size={14} />
-              <span className="vad-hide-mobile">Filtros</span>
-              {deptoFiltro && (
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: c.accent }} />
+              <span className="vad-btn-label-hide-mobile">Filtros</span>
+              {(deptoFiltro || estadoFiltro !== 'todos') && (
+                <span style={{
+                  background: c.accent, color: '#fff', fontSize: '10.5px',
+                  fontWeight: '800', padding: '1px 5px', borderRadius: '999px'
+                }}>
+                  {[Boolean(deptoFiltro), estadoFiltro !== 'todos'].filter(Boolean).length}
+                </span>
               )}
             </button>
 
             <button
               type="button"
               onClick={exportarCSV}
+              className="vad-btn-neutral vad-icon-only-mobile"
               title={puedeExportarDia ? 'Descargar corte en Excel' : 'Disponible al concluir la jornada o en días anteriores'}
               style={{
-                height: '34px', padding: '0 9px', borderRadius: '8px',
-                border: `1px solid ${puedeExportarDia ? c.accent : c.border}`,
+                borderColor: puedeExportarDia ? c.accent : c.border,
                 background: puedeExportarDia ? c.accent : c.bg,
                 color: puedeExportarDia ? '#fff' : c.textMuted,
-                fontSize: '12px', fontWeight: '800', cursor: puedeExportarDia ? 'pointer' : 'not-allowed',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                cursor: puedeExportarDia ? 'pointer' : 'not-allowed'
               }}
             >
               <Download size={14} />
-              <span className="vad-hide-mobile">{puedeExportarDia ? 'Exportar' : 'Al cierre'}</span>
+              <span className="vad-btn-label-hide-mobile">{puedeExportarDia ? 'Exportar' : 'Al cierre'}</span>
             </button>
           </div>
         </div>
 
-        {/* RENGLÓN 2: BUSCADOR + PÍLDORAS COMPACTAS DE ESTATUS EN 1 SOLA LÍNEA */}
-        <div className="vad-row-2">
-          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
-            <input
-              type="text"
-              placeholder="Buscar apellido, nombre o #nómina..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{
-                width: '100%', height: '34px', padding: '0 28px 0 31px', borderRadius: '8px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
-              }}
-            />
-            {busqueda && (
-              <button
-                type="button"
-                onClick={() => setBusqueda('')}
-                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
+        {/* RENGLÓN 2 EN CELULAR: Navegador de Fecha bien distribuido de lado a lado */}
+        <div className="vad-date-bar-mobile vad-mobile-only">
+          <button
+            type="button"
+            onClick={() => setFecha(moverFechaDias(fecha, -1))}
+            style={{ width: '32px', height: '30px', border: 'none', background: 'transparent', color: c.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronLeft size={16} />
+          </button>
 
-          <div className="vad-seg-bar">
-            {[
-              { id: 'todos', label: 'Todos', count: basePorDeptoYBusqueda.length, dot: null },
-              { id: 'presentes', label: 'Planta', count: totalPresentes, dot: '#16a34a' },
-              { id: 'justificados', label: 'Justif.', count: totalJustificados, dot: '#0284c7' },
-              { id: 'ausentes', label: 'Faltas', count: totalAusentes, dot: '#ef4444' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setEstadoFiltro(tab.id)}
-                className={`vad-seg-btn ${estadoFiltro === tab.id ? 'active' : ''}`}
-              >
-                {tab.dot && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: tab.dot, flexShrink: 0 }} />}
-                <span>{tab.label}</span>
-                <span style={{ fontSize: '10.5px', opacity: 0.75 }}>({tab.count})</span>
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (inputFechaRef.current?.showPicker) inputFechaRef.current.showPicker();
+              else inputFechaRef.current?.focus();
+            }}
+            style={{ flex: 1, height: '30px', border: 'none', background: 'transparent', color: c.text, fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            <Calendar size={13.5} color={c.accent} />
+            <span>{formatearFechaCorta(fecha)}</span>
+            {fecha === hoyStr && (
+              <span style={{ fontSize: '10px', fontWeight: '800', color: c.accent, background: c.accentSoft, padding: '1px 6px', borderRadius: '4px' }}>
+                HOY
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => fecha < hoyStr && setFecha(moverFechaDias(fecha, 1))}
+            disabled={fecha >= hoyStr}
+            style={{ width: '32px', height: '30px', border: 'none', background: 'transparent', color: c.text, opacity: fecha >= hoyStr ? 0.3 : 1, cursor: fecha >= hoyStr ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* RENGLÓN 3 EN CELULAR: Buscador de ancho completo */}
+        <div className="vad-mobile-only" style={{ position: 'relative', width: '100%' }}>
+          <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: c.textMuted }} />
+          <input
+            type="text"
+            placeholder="Buscar apellido, nombre o #nómina..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            style={{
+              width: '100%', height: '36px', padding: '0 28px 0 31px', borderRadius: '8px',
+              border: `1px solid ${c.border}`, background: c.bg, color: c.text,
+              fontSize: '12.5px', boxSizing: 'border-box', outline: 'none'
+            }}
+          />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda('')}
+              style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: c.textMuted, cursor: 'pointer', display: 'flex' }}
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* CAJÓN DESPLEGABLE DE FILTROS Y HERRAMIENTAS DE RH (OCULTO POR DEFECTO) */}
+      {/* CAJÓN DESPLEGABLE DE FILTROS (ESTATUS DE ASISTENCIA + DEPARTAMENTO + RELOJES RH) */}
       {mostrarOpcionesRH && (
         <div className="vad-drawer-panel">
-          <div style={{ flex: 1, minWidth: '180px' }}>
+          <div>
             <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: c.textMuted, marginBottom: '4px', textTransform: 'uppercase' }}>
-              Filtrar por Departamento
+              Estatus de Asistencia
+            </label>
+            <select
+              value={estadoFiltro}
+              onChange={(e) => setEstadoFiltro(e.target.value)}
+              className="vad-select-clean"
+            >
+              <option value="todos">Todos los colaboradores ({basePorDeptoYBusqueda.length})</option>
+              <option value="presentes">En Planta ({totalPresentes})</option>
+              <option value="justificados">Justificados ({totalJustificados})</option>
+              <option value="ausentes">Sin Registro / Faltas ({totalAusentes})</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: c.textMuted, marginBottom: '4px', textTransform: 'uppercase' }}>
+              Departamento
             </label>
             <select
               value={deptoFiltro}
               onChange={(e) => setDeptoFiltro(e.target.value)}
-              style={{
-                width: '100%', height: '34px', padding: '0 10px', borderRadius: '8px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                fontSize: '12.5px', fontWeight: '600', outline: 'none', boxSizing: 'border-box'
-              }}
+              className="vad-select-clean"
             >
               <option value="">Todos los departamentos</option>
               {departamentos.map((d) => (
@@ -496,36 +589,33 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-            <ControlHoraCorteRH usuario={usuario} c={c} />
+          <div>
+            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '700', color: c.textMuted, marginBottom: '4px', textTransform: 'uppercase' }}>
+              Horarios y Sincronización
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <ControlHoraCorteRH usuario={usuario} c={c} />
 
-            <button
-              type="button"
-              onClick={cargarAsistenciaDia}
-              style={{
-                height: '34px', padding: '0 11px', borderRadius: '8px',
-                border: `1px solid ${c.border}`, background: c.bg, color: c.text,
-                fontSize: '12px', fontWeight: '700', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: '5px'
-              }}
-            >
-              <RefreshCw size={13.5} /> Actualizar
-            </button>
-
-            {deptoFiltro && (
               <button
                 type="button"
-                onClick={() => setDeptoFiltro('')}
-                style={{
-                  height: '34px', padding: '0 10px', borderRadius: '8px',
-                  border: 'none', background: 'transparent', color: c.textMuted,
-                  fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: '4px'
-                }}
+                onClick={cargarAsistenciaDia}
+                className="vad-btn-neutral"
+                style={{ flex: 1 }}
               >
-                <RotateCcw size={12.5} /> Limpiar
+                <RefreshCw size={13.5} /> Actualizar
               </button>
-            )}
+
+              {(deptoFiltro || estadoFiltro !== 'todos') && (
+                <button
+                  type="button"
+                  onClick={() => { setDeptoFiltro(''); setEstadoFiltro('todos'); }}
+                  className="vad-btn-neutral"
+                  style={{ color: c.textMuted }}
+                >
+                  <RotateCcw size={13} /> Limpiar
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
