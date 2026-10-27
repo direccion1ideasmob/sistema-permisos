@@ -98,7 +98,10 @@ export default function Caseta() {
   const handleSellarPase = async (id, tipoMovimiento) => {
     setProcesandoId(id);
     try {
-      await registrarCheckCaseta(id, tipoMovimiento);
+      const res = await registrarCheckCaseta(id, tipoMovimiento);
+      if (res?.resultado === 'retenido_por_horario') {
+        alert('⚠️ HORARIO NO COINCIDE:\n' + res.detalleDesfase + '\n\nEl colaborador ha quedado retenido en puerta y se envió solicitud de autorización a Jefatura / RH.');
+      }
       await cargarDatos();
     } catch (err) {
       alert('Error al sellar movimiento: ' + err.message);
@@ -691,6 +694,10 @@ export default function Caseta() {
   const tieneMinimo3Letras = letrasSinEspacios.length >= 3;
 
   const todosSinEntrada = empleadosSede.filter(emp => !mapaAsistencias[emp.id]?.hora_entrada);
+  const ausentesProgramadosHoy = todosSinEntrada.filter((emp) => {
+    const inc = mapaIncidenciasHoy[emp.id];
+    return inc?.tipo === 'ausencia_autorizada';
+  });
   const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
 
   const retenidosActivosPuerta = todosSinEntrada.filter((emp) => {
@@ -971,9 +978,84 @@ export default function Caseta() {
         )}
       </div>
 
-      {/* PESTAÑA 1: ENTRADA */}
+            {/* PESTAÑA 1: ENTRADA */}
       {subTabAsistencia === 'por_llegar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+          {ausentesProgramadosHoy.length > 0 && (
+            <div style={{
+              background: c.surfaceCard,
+              border: `1.5px solid ${c.border}`,
+              borderRadius: '14px',
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '7px'
+            }}>
+              <div style={{
+                fontSize: '11.5px',
+                fontWeight: '900',
+                color: c.textMuted,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span>📋 Ausencias Programadas Hoy (Vacaciones / Faltas)</span>
+                <span>{ausentesProgramadosHoy.length}</span>
+              </div>
+              {ausentesProgramadosHoy.map((emp) => {
+                const inc = mapaIncidenciasHoy[emp.id];
+                const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
+                return (
+                  <div
+                    key={emp.id}
+                    className="caseta-puerta-item"
+                    style={{
+                      background: c.bg,
+                      border: `1px solid ${c.border}`,
+                      padding: '8px 11px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      <AvatarColaborador u={emp} size={36} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
+                          {formatearApellidosNombre(emp.nombre_completo, emp)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '700', marginTop: '2px' }}>
+                          #{emp.numero_empleado} {emp.departamentos?.nombre ? `• ${emp.departamentos.nombre}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      <span style={{
+                        fontSize: '11px', fontWeight: '800', padding: '4px 9px', borderRadius: '7px',
+                        color: inc.color, background: inc.bg
+                      }}>
+                        {inc.etiqueta}
+                      </span>
+                      {!esVac && (
+                        <button
+                          type="button"
+                          onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
+                          disabled={Boolean(procesandoId)}
+                          title="Sí se presentó a trabajar (Registrar entrada y cancelar falta)"
+                          style={{
+                            minWidth: '48px', height: '36px', padding: '0 12px', borderRadius: '9px', border: 'none',
+                            background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '900',
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >
+                          <Check size={17} strokeWidth={3} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {retenidosActivosPuerta.length > 0 && (
             <div style={{
               background: c.surfaceCard,

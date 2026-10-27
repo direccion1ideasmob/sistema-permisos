@@ -3,12 +3,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2, User, Stethoscope, Briefcase
 } from 'lucide-react';
-import { contarReincidenciasRetardo } from '../services/permisosService';
+import { contarReincidenciasRetardo, contarFaltasRecientes30Dias } from '../services/permisosService';
 
 export default function TarjetaAprobacion({
   solicitud, esPendiente, onAprobar, onRechazar, onForzarFirma, usuarioActual, c, modoOscuro
 }) {
   const [reincidencias, setReincidencias] = useState(0);
+  const [faltasAcumuladas, setFaltasAcumuladas] = useState(0);
 
   const u = solicitud.usuarios || {};
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo || 'U')}&background=334155&color=f8fafc&bold=true`;
@@ -34,19 +35,24 @@ export default function TarjetaAprobacion({
 
   useEffect(() => {
     let montado = true;
-    const checarReincidencia = async () => {
-      if (esRetardo && solicitud.usuario_id) {
-        try {
-          const total = await contarReincidenciasRetardo(solicitud.usuario_id, solicitud.id, new Date(solicitud.created_at));
-          if (montado) setReincidencias(total || 0);
-        } catch (err) {
-          console.error("Error verificando reincidencia:", err);
+    const checarHistorialIncidencias = async () => {
+      if (!solicitud.usuario_id) return;
+      try {
+        if (esRetardo) {
+          const totalR = await contarReincidenciasRetardo(solicitud.usuario_id, solicitud.id, new Date(solicitud.created_at));
+          if (montado) setReincidencias(totalR || 0);
         }
+        if (tipo === 'falta' || esRetardo || /FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || '')) {
+          const totalF = await contarFaltasRecientes30Dias(solicitud.usuario_id, solicitud.id, new Date(solicitud.created_at));
+          if (montado) setFaltasAcumuladas(totalF || 0);
+        }
+      } catch (err) {
+        console.error("Error verificando reincidencia/faltas:", err);
       }
     };
-    checarReincidencia();
+    checarHistorialIncidencias();
     return () => { montado = false; };
-  }, [esRetardo, solicitud.usuario_id, solicitud.id, solicitud.created_at]);
+  }, [esRetardo, tipo, solicitud.usuario_id, solicitud.id, solicitud.created_at, solicitud.asunto_motivo]);
 
   const aTitulo = (str = '') => {
     const siglas = ['CNC', 'RH', 'TI', 'IMSS', 'NOM'];
@@ -445,6 +451,19 @@ export default function TarjetaAprobacion({
               padding: '3px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px'
             }}>
               <AlertTriangle size={13} /> {reincidencias} retardo(s) previo(s)
+            </span>
+          )}
+          {faltasAcumuladas > 0 && (
+            <span style={{
+              fontSize: '12px', fontWeight: '800',
+              color: faltasAcumuladas >= 3 ? '#ffffff' : '#7c3aed',
+              background: faltasAcumuladas >= 3 ? '#dc2626' : 'rgba(124,58,237,0.14)',
+              padding: '3px 9px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+            }}>
+              <AlertTriangle size={13} />
+              {faltasAcumuladas >= 3
+                ? `🚨 ${faltasAcumuladas} FALTAS EN 30 DÍAS (LÍMITE RH / BAJA)`
+                : `${faltasAcumuladas} falta(s) previa(s) (30 días)`}
             </span>
           )}
         </div>

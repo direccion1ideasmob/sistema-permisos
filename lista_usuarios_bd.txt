@@ -1,0 +1,23 @@
+TOTAL USUARIOS ACTIVOS: 21
+
+1. [alejandrovb] ALEJANDRO VALENZO BATALLA | Rol: jefe_area | Nómina: administrativo | Depto: ESTIMACIONES | Área: ESTIMACIONES | Puesto: DESARROLLADOR | Reporta a: Sin jefe directo
+2. [felix.mendoza] FELIX JONATAN MENDOZA APARICIO | Rol: empleado | Nómina: produccion | Depto: METAL | Área: HABILITADO | Puesto: ENCARGAD | Reporta a: RENE MORALES MARTINEZ
+3. [francisco.pacheco] FRANCISCO PACHECO CHAPARRO | Rol: empleado | Nómina: produccion | Depto: METAL | Área: HABILITADO | Puesto: TROQUELADOR | Reporta a: RENE MORALES MARTINEZ
+4. [jazmin.flores] JAZMIN FLORES ROMERO | Rol: empleado | Nómina: produccion | Depto: METAL | Área: HABILITADO | Puesto: AYUDANTE GENERAL | Reporta a: RENE MORALES MARTINEZ
+5. [joana.gonzalez] JOANA BERENICE GONZÁLEZ GARCÍA | Rol: empleado | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: RECLUTAMIENTO | Puesto: RECLUTAMIENTO | Reporta a: Sin jefe directo
+6. [jorge.xxx] JORGE DANIEL XXX FLORES | Rol: empleado | Nómina: produccion | Depto: METAL | Área: HABILITADO | Puesto: MEDIO OFICIAL | Reporta a: RENE MORALES MARTINEZ
+7. [jose.coca] JOSE COCA | Rol: gerente_rh | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: DIRECCION RH | Puesto: GERENTE RECURSOS HUMANOS | Reporta a: Sin jefe directo
+8. [josue.munoz] JOSUE MUÑOZ COVARRUBIAS | Rol: empleado | Nómina: produccion | Depto: METAL | Área: CNC LASER | Puesto: OPERADOR | Reporta a: RENE MORALES MARTINEZ
+9. [julio.marquez] JULIO CESAR MARQUEZ LEZAMA | Rol: jefe_area | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: OBRA | Puesto: AUXILIAR DE RECURSOS HUMANOS | Reporta a: Sin jefe directo
+10. [julio.martinez] JULIO CESAR MARTINEZ CABRERA | Rol: empleado | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: SEGURIDAD INDUSTRIAL | Puesto: SEGURIDAD INDUSTRIAL | Reporta a: MARIEL VERA PAREDES
+11. [mariel.vera] MARIEL VERA PAREDES | Rol: jefe_area | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: SEGURIDAD INDUSTRIAL | Puesto: SEGURIDAD INDUSTRIAL | Reporta a: Sin jefe directo
+12. [miguel.lopez] MIGUEL ANGEL LOPEZ MENDOZA | Rol: empleado | Nómina: produccion | Depto: METAL | Área: HABILITADO | Puesto: MEDIO OFICIAL | Reporta a: RENE MORALES MARTINEZ
+13. [nora.tello] NORA EDITH TELLO BUENO | Rol: empleado | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: NOMINAS | Puesto: AUXILIAR DE RECURSOS HUMANOS | Reporta a: VICTORIA IRENE JUAREZ PADILLA
+14. [pedro.simon] PEDRO SIMON RIOS | Rol: gerente_admin | Nómina: administrativo | Depto: DIRECCION | Área: DIRECCION | Puesto: GERENTE ADMINISTRATIVO | Reporta a: Sin jefe directo
+15. [rene.morales] RENE MORALES MARTINEZ | Rol: jefe_area | Nómina: administrativo | Depto: METAL | Área: METAL | Puesto: SUPERVISOR | Reporta a: Sin jefe directo
+16. [rey.ortiz] REYNALDO ORTIZ | Rol: gerente_produccion | Nómina: administrativo | Depto: PRODUCCION | Área: PRODUCCION | Puesto: GERENTE DE PRODUCCION | Reporta a: Sin jefe directo
+17. [ricardo.morua] RICARDO ISRAEL MORUA | Rol: empleado | Nómina: produccion | Depto: METAL | Área: CNC LASER | Puesto: SUPERVISOR | Reporta a: RENE MORALES MARTINEZ
+18. [valeri.mecalco] VALERI CARMEN MECALCO DE LA ROSA | Rol: jefe_area | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: SALUD OCUPACIONAL | Puesto: SUPERVISOR | Reporta a: Sin jefe directo
+19. [veronica.iturbide] VERONICA ITURBIDE RUBIO | Rol: empleado | Nómina: produccion | Depto: RECURSOS HUMANOS | Área: SALUD OCUPACIONAL | Puesto: LIMPIEZA | Reporta a: Sin jefe directo
+20. [victoria.padilla] VICTORIA IRENE JUAREZ PADILLA | Rol: rh_nominas | Nómina: administrativo | Depto: RECURSOS HUMANOS | Área: NOMINAS | Puesto: NOMINAS | Reporta a: Sin jefe directo
+21. [vigilancia] VIGILANCIA | Rol: caseta | Nómina: produccion | Depto: VIGILANCIA | Área: VIGILANCIA | Puesto: VIGILANCIA | Reporta a: Sin jefe directo

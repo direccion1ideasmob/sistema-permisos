@@ -68,6 +68,58 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
   return total;
 };
 
+
+// 3.B VERIFICAR ACUMULACIÓN DE FALTAS (Últimos 30 días — Alerta RH a las 3 faltas)
+export const contarFaltasRecientes30Dias = async (usuarioId, permisoId = null, fechaBase = new Date()) => {
+  if (!usuarioId) return 0;
+  const fechaLimite = new Date(fechaBase);
+  fechaLimite.setDate(fechaLimite.getDate() - 30);
+  const fechaMinStr = `${fechaLimite.getFullYear()}-${String(fechaLimite.getMonth() + 1).padStart(2, '0')}-${String(fechaLimite.getDate()).padStart(2, '0')}`;
+
+  let query = supabase
+    .from('permisos')
+    .select('id, tipo_permiso, estado_general, pago, observaciones')
+    .eq('usuario_id', usuarioId)
+    .gte('fecha_permiso', fechaMinStr);
+
+  if (permisoId) {
+    query = query.neq('id', permisoId);
+  }
+
+  const { data } = await query;
+  const total = (data || []).filter(p => {
+    const pagoL = String(p.pago || '').toLowerCase();
+    const obsL = String(p.observaciones || '');
+    if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL)) return false;
+    const tipoL = (p.tipo_permiso || '').toLowerCase();
+    if (tipoL === 'falta' && p.estado_general !== 'rechazado') return true;
+    return false;
+  }).length;
+
+  return total;
+};
+
+export const enviarRecordatorioPermisosRezagados = async (listaPermisos = []) => {
+  let enviados = 0;
+  for (const p of listaPermisos) {
+    const dest = [];
+    if (p.firma_1_estado === 'pendiente' && p.firma_1_id) dest.push(p.firma_1_id);
+    else if (p.firma_2_estado === 'pendiente' && p.firma_2_id) dest.push(p.firma_2_id);
+    else if (p.firma_3_estado === 'pendiente' && p.firma_3_id) dest.push(p.firma_3_id);
+    if (dest.length > 0) {
+      try {
+        await enviarNotificacionPushUsuarios([...new Set(dest)], {
+          titulo: `⏰ RECORDATORIO: PASE PENDIENTE DE FIRMA (${p.folio})`,
+          mensaje: `👤 ${p.usuarios?.nombre_completo || 'Colaborador'}\n📅 Fecha del pase: ${p.fecha_permiso}\n⚠️ Esta solicitud sigue en espera de tu dictamen.`,
+          urlDestino: '/aprobaciones'
+        });
+        enviados++;
+      } catch (_) {}
+    }
+  }
+  return enviados;
+};
+
 // 4. OBTENER TODAS LAS SOLICITUDES PARA BANDEJA DE APROBACIONES
 export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuarioId = null, rol = null } = {}) => {
   await sincronizarCierreTurnoAutomatico();

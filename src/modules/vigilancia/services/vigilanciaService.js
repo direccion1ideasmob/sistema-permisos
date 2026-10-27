@@ -264,8 +264,11 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       return;
     }
 
-    // 3. Si es una salida que aún está en firmas, no puede salir todavía
+    // 3. Si es una salida que fue retenida en puerta porque no coincidió la hora de regreso/salida -> Retenido en Espera
     if (tipo === 'salida' && rawPase.estado_general === 'en_firmas') {
+      if (/\[HORARIO NO COINCIDE EN CASETA/i.test(obs)) {
+        retenidosEnEspera.push(p);
+      }
       return;
     }
 
@@ -301,6 +304,62 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   };
 };
 
+
+export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimiento = 'reingreso', detalleDesfase = '') => {
+  const ahora = new Date();
+  const horaFormateada = ahora.toTimeString().slice(0, 5);
+
+  const { data: permiso, error: errGet } = await supabase
+    .from('permisos')
+    .select('*, usuarios:usuario_id (id, nombre_completo, foto_url, departamento_id)')
+    .eq('id', permisoId)
+    .single();
+
+  if (errGet || !permiso) throw new Error('No se encontró el pase.');
+
+  const obsActual = permiso.observaciones || '';
+  const notaDesfase = `⚠️ [HORARIO NO COINCIDE EN CASETA (${horaFormateada} hrs): ${detalleDesfase} — Retenido en puerta para nueva autorización]`;
+  const nuevasObs = `${obsActual} | ${notaDesfase} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.trim();
+
+  // Reabrir firma de RH (y Jefe si aplica) para que autoricen el exceso de tiempo antes de dejarlo pasar
+  const updates = {
+    estado_general: 'en_firmas',
+    firma_3_estado: 'pendiente',
+    observaciones: nuevasObs
+  };
+
+  const { error } = await supabase
+    .from('permisos')
+    .update(updates)
+    .eq('id', permisoId);
+
+  if (error) throw error;
+
+  const { data: rhUsers } = await supabase
+    .from('usuarios')
+    .select('id')
+    .in('rol', ['gerente_rh', 'rh_nominas'])
+    .eq('activo', true);
+
+  const dest = [
+    ...(rhUsers || []).map(u => u.id),
+    permiso.firma_1_id
+  ].filter(Boolean);
+
+  if (dest.length > 0) {
+    try {
+      await enviarNotificacionPushUsuarios([...new Set(dest)], {
+        titulo: '🚨 HORARIO DE PASE NO COINCIDE EN CASETA',
+        mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n🕒 ${detalleDesfase}\n⏳ Retenido en Vigilancia esperando tu autorización para pasar.`,
+        fotoUrl: permiso.usuarios?.foto_url || null,
+        urlDestino: '/aprobaciones'
+      });
+    } catch (_) {}
+  }
+
+  return { resultado: 'retenido_por_horario', detalleDesfase };
+};
+
 // 2. SELLAR MOVIMIENTO EN PUERTA (CONGELAR LLEGADA / ENTRADA / SALIDA / REINGRESO / RETIRO A CASA)
 export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') => {
   const ahora = new Date();
@@ -318,6 +377,26 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   const obsActual = permiso.observaciones || '';
   const tipo = (permiso.tipo_permiso || '').toLowerCase();
   const requiereRegreso = obsActual.toLowerCase().includes('regresa:');
+
+  // VALIDACIÓN DE COINCIDENCIA DE HORAS EN PASE DE SALIDA Y REGRESO (Si no trae flag 'forzado')
+  if (tipo === 'salida' && !mov.includes('forzado') && !/\[HORARIO NO COINCIDE EN CASETA/i.test(obsActual)) {
+    const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    if (mov.includes('reingreso')) {
+      const mRegresa = obsActual.match(/Regresa:\s*(\d{1,2}):(\d{2})/i);
+      if (mRegresa) {
+        const minRegresoPactado = parseInt(mRegresa[1], 10) * 60 + parseInt(mRegresa[2], 10);
+        const minExceso = minAhora - minRegresoPactado;
+        if (minExceso > 15) {
+          const hPactada = `${String(mRegresa[1]).padStart(2, '0')}:${mRegresa[2]}`;
+          return await solicitarReautorizacionHorarioSalida(
+            permisoId,
+            'reingreso',
+            `Regresó a las ${horaFormateada} hrs (Hora límite autorizada: ${hPactada} hrs, +${minExceso} min tarde)`
+          );
+        }
+      }
+    }
+  }
   const mLlegadaCongelada = obsActual.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
   const horaCongelada = mLlegadaCongelada ? mLlegadaCongelada[1].trim() : null;
 
@@ -624,7 +703,7 @@ export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancel
   return data;
 };
 
-export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
+export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, motivoEspecial = null) => {
   const hoyStr = obtenerFechaLocalHoy();
   const ahora = new Date();
   const horaActual = ahora.toTimeString().slice(0, 5);
@@ -793,7 +872,7 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null) => {
     fecha_fin: null,
     tipo_permiso: 'retardo',
     pago: 'Pendiente de dictamen',
-    asunto_motivo: '[PERSONAL] Llegada posterior al límite de tolerancia registrada en caseta.',
+    asunto_motivo: motivoEspecial || '[PERSONAL] Llegada posterior al límite de tolerancia registrada en caseta.',
     total_horas: diffHoras,
     observaciones: detalleHorarioTexto,
     firma_empleado: true,
@@ -874,6 +953,35 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
   if (tipoMarca === 'entrada') {
     if (regresadoHoy) {
       throw new Error('Este colaborador ya fue regresado a casa hoy (Falta por retardo). No es posible registrarle entrada.');
+    }
+
+    // VERIFICAR SI EL TRABAJADOR TIENE UNA FALTA SIN AVISO RECIENTE PENDIENTE DE JUSTIFICAR O FALTÓ AYER SIN AVISAR
+    if (!forzarDirectoRH && !retardoHoy) {
+      const ayer = new Date(ahora);
+      ayer.setDate(ahora.getDate() - (ahora.getDay() === 1 ? 3 : 1)); // Si hoy es lunes revisa viernes, si no revisa ayer
+      const offsetAyer = ayer.getTimezoneOffset() * 60000;
+      const fechaAyerStr = new Date(ayer.getTime() - offsetAyer).toISOString().split('T')[0];
+
+      const [{ data: huboAsistAyer }, { data: asisAyerEmp }, { data: permAyerEmp }] = await Promise.all([
+        supabase.from('asistencias_caseta').select('id').eq('fecha', fechaAyerStr).limit(1),
+        supabase.from('asistencias_caseta').select('id, hora_entrada').eq('usuario_id', usuarioId).eq('fecha', fechaAyerStr).maybeSingle(),
+        supabase.from('permisos').select('id, tipo_permiso, estado_general, pago').eq('usuario_id', usuarioId).lte('fecha_permiso', fechaAyerStr).in('estado_general', ['autorizado', 'aprobado', 'completado_caseta'])
+      ]);
+
+      // Solo si ayer hubo operación en planta (hubo pase de lista en caseta) y este trabajador NO entró ni tuvo permiso autorizado
+      if (huboAsistAyer && huboAsistAyer.length > 0 && !asisAyerEmp?.hora_entrada) {
+        const tuvoPermisoValidoAyer = (permAyerEmp || []).some(pa => {
+          const finPa = pa.fecha_fin || pa.fecha_permiso || fechaAyerStr;
+          return finPa >= fechaAyerStr && String(pa.pago || '').toLowerCase() !== 'cancelado';
+        });
+        if (!tuvoPermisoValidoAyer) {
+          return await registrarRetardoEnPuerta(
+            usuarioId,
+            guardiaId,
+            `[FALTA PREVIA SIN AVISO] El colaborador faltó sin avisar el día ${fechaAyerStr} y se presenta en caseta. Requiere autorización de Jefatura / RH.`
+          );
+        }
+      }
     }
     // CASO A: Llega en tiempo (<= hora límite de RH) o RH lo valida directamente desde su panel
     if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {

@@ -6,7 +6,8 @@ import {
   obtenerSolicitudesAprobacion,
   aprobarSolicitudPermiso,
   rechazarSolicitudPermiso,
-  forzarSaltoFirmaRH
+  forzarSaltoFirmaRH,
+  enviarRecordatorioPermisosRezagados
 } from '../services/permisosService';
 
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../aprobacionesStyles';
@@ -131,6 +132,25 @@ export default function Aprobaciones() {
     .slice()
     .sort((a, b) => compararPorApellidoPaterno(a.usuarios?.nombre_completo, b.usuarios?.nombre_completo));
 
+  const hoyIso = (() => {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  })();
+  const permisosRezagados = listadoActual.filter(s => s.fecha_permiso < hoyIso);
+
+  const handleRecordarRezagados = async () => {
+    if (permisosRezagados.length === 0) return;
+    setProcesando(true);
+    try {
+      const n = await enviarRecordatorioPermisosRezagados(permisosRezagados);
+      alert(`🔔 Se enviaron ${n} recordatorio(s) push a los responsables de firmar los permisos rezagados.`);
+    } catch (e) {
+      alert('Error al enviar recordatorios: ' + e.message);
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   return (
     <div className="aprobaciones-container aprob-main-wrap" style={{ maxWidth: tabActiva === 'historial' ? '100%' : '1060px', margin: '0 auto' }}>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
@@ -236,6 +256,42 @@ export default function Aprobaciones() {
           </button>
         )}
       </div>
+
+      {tabActiva !== 'historial' && permisosRezagados.length > 0 && (
+        <div style={{
+          background: 'rgba(245, 158, 11, 0.12)',
+          border: '1.5px solid #f59e0b',
+          borderRadius: '12px',
+          padding: '10px 14px',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '10px',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: '13px', fontWeight: '800', color: '#d97706' }}>
+            ⏰ Hay {permisosRezagados.length} permiso(s) de días anteriores que siguen sin firmarse.
+          </span>
+          <button
+            type="button"
+            onClick={handleRecordarRezagados}
+            disabled={procesando}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#d97706',
+              color: '#fff',
+              fontSize: '12px',
+              fontWeight: '800',
+              cursor: 'pointer'
+            }}
+          >
+            🔔 Enviar Recordatorio Push
+          </button>
+        </div>
+      )}
 
       {cargando ? (
         <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '14px', fontWeight: '600' }}>
