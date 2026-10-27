@@ -1116,7 +1116,7 @@ export default function Caseta() {
                       tipoInc === 'retardo_autorizado' ? '#16a34a' :
                       tipoInc === 'retardo_regresa' ? '#ef4444' : c.border
                     }`,
-                    opacity: tipoInc === 'ausencia_autorizada' ? 0.8 : 1
+                    opacity: (tipoInc === 'ausencia_autorizada' && String(inc?.etiqueta || '').includes('Vacaciones')) ? 0.8 : 1
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
@@ -1128,7 +1128,7 @@ export default function Caseta() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
                         <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.text }}>#{emp.numero_empleado}</span>
                         {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
-                        {inc && !['ausencia_autorizada', 'retardo_en_espera', 'retardo_regresa'].includes(tipoInc) && (
+                        {inc && !['retardo_en_espera', 'retardo_regresa'].includes(tipoInc) && (
                           <span style={{
                             fontSize: '10.5px', fontWeight: '800', padding: '1.5px 7px', borderRadius: '5px',
                             color: inc.color, background: inc.bg
@@ -1183,7 +1183,7 @@ export default function Caseta() {
                       >
                         <Check size={17} strokeWidth={3} /> Dar Paso
                       </button>
-                    ) : tipoInc === 'ausencia_autorizada' ? (
+                    ) : (tipoInc === 'ausencia_autorizada' && String(inc?.etiqueta || '').includes('Vacaciones')) ? (
                       <span style={{
                         fontSize: '11.5px', fontWeight: '800', color: inc.color,
                         background: inc.bg, padding: '6px 10px', borderRadius: '8px'
