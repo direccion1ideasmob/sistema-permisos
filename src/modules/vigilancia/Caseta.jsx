@@ -8,15 +8,17 @@ import {
   registrarCheckCaseta,
   registrarAsistenciaLista,
   solicitarAutorizacionInusualCaseta,
+  solicitarReautorizacionHorarioSalida,
   deshacerEntradaReciente,
   deshacerSalidaReciente,
   obtenerHoraLimiteTolerancia,
+  obtenerHoraSalidaOficial,
   obtenerFechaLocalHoy
 } from './services/vigilanciaService';
 import {
   DoorOpen, RotateCcw, CheckCircle2, LogOut,
   Search, RefreshCw, UserCheck, Users, CalendarOff,
-  Hourglass, CornerUpLeft, X, Check, Undo2, ShieldAlert
+  Hourglass, CornerUpLeft, X, Check, Undo2, ShieldAlert, Zap
 } from 'lucide-react';
 
 export default function Caseta() {
@@ -24,10 +26,11 @@ export default function Caseta() {
   const location = useLocation();
   const inputBusquedaRef = useRef(null);
 
+  // Panel 1: 'control' (/caseta) | Panel 2: 'tablero' (/caseta/asistencia)
   const rutaActual = location.pathname;
-  const vista = rutaActual.includes('/asistencia') || rutaActual.includes('/retardo')
-    ? 'asistencia'
-    : 'pases';
+  const modoVista = rutaActual.includes('/asistencia') || rutaActual.includes('/retardo')
+    ? 'tablero'
+    : 'control';
 
   const [modoOscuro, setModoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   useEffect(() => {
@@ -42,8 +45,8 @@ export default function Caseta() {
 
   const c = obtenerTemaAprobaciones(modoOscuro);
 
-  const [subTabPases, setSubTabPases] = useState('por_cruzar');
-  const [subTabAsistencia, setSubTabAsistencia] = useState('por_llegar');
+  // Filtro activo en el Panel 2 (Tablero y Bitácora)
+  const [kpiActivo, setKpiActivo] = useState('en_planta');
 
   const [retenidosEnEspera, setRetenidosEnEspera] = useState([]);
   const [pasesPorCruzar, setPasesPorCruzar] = useState([]);
@@ -53,30 +56,35 @@ export default function Caseta() {
   const [mapaAsistencias, setMapaAsistencias] = useState({});
   const [mapaIncidenciasHoy, setMapaIncidenciasHoy] = useState({});
   const [horaLimiteStr, setHoraLimiteStr] = useState('07:15');
+  const [horaSalidaOficialStr, setHoraSalidaOficialStr] = useState('17:00');
 
-  const [modalConfirmacion, setModalConfirmacion] = useState(null);
-  const [bannerResultado, setBannerResultado] = useState(null); // { tipo: 'verde' | 'rojo', texto: string }
   const [busquedaTexto, setBusquedaTexto] = useState('');
   const [procesandoId, setProcesandoId] = useState(null);
+
+  // Barra flotante de resultado + Deshacer rápido (sin modales)
+  const [feedbackAccion, setFeedbackAccion] = useState(null);
+  const timerFeedbackRef = useRef(null);
 
   const sedeGuardia = usuario?.sede_id || null;
   const hoyStr = obtenerFechaLocalHoy();
 
-  const mostrarBanner = (tipo, texto) => {
-    setBannerResultado({ tipo, texto });
-    setTimeout(() => {
-      setBannerResultado(null);
-      if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
-    }, tipo === 'rojo' ? 4000 : 2000);
+  const lanzarFeedback = ( payload ) => {
+    if (timerFeedbackRef.current) clearTimeout(timerFeedbackRef.current);
+    setFeedbackAccion(payload);
+    timerFeedbackRef.current = setTimeout(() => {
+      setFeedbackAccion(null);
+    }, payload.tipo === 'rojo' ? 5000 : 6000);
   };
 
   const cargarDatos = useCallback(async () => {
     try {
-      const [data, lim] = await Promise.all([
+      const [data, limEntrada, limSalida] = await Promise.all([
         obtenerDatosCaseta(sedeGuardia, hoyStr),
-        obtenerHoraLimiteTolerancia()
+        obtenerHoraLimiteTolerancia(),
+        obtenerHoraSalidaOficial()
       ]);
-      setHoraLimiteStr(lim || '07:15');
+      setHoraLimiteStr(limEntrada || '07:15');
+      setHoraSalidaOficialStr(limSalida || '17:00');
       setRetenidosEnEspera(data.retenidosEnEspera || []);
       setPasesPorCruzar(data.pasesPorCruzar || []);
       setPersonalFuera(data.personalFuera || []);
@@ -91,104 +99,359 @@ export default function Caseta() {
 
   useEffect(() => {
     cargarDatos();
-    const intervalo = setInterval(cargarDatos, 6000);
+    const intervalo = setInterval(cargarDatos, 5000);
     return () => clearInterval(intervalo);
   }, [cargarDatos]);
 
-  // Saber si en este minuto ya pasó la hora de tolerancia
-  const esDespuesDeTolerancia = () => {
-    const ahora = new Date();
-    const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
-    const [hL, mL] = (horaLimiteStr || '07:15').split(':').map(Number);
-    const minLim = (isNaN(hL) ? 7 : hL) * 60 + (isNaN(mL) ? 15 : mL);
-    return minAhora > minLim;
+  // Utilidades de tiempo en vivo
+  const obtenerMinutosAhora = () => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
   };
 
-  const handleSellarPase = async (id, tipoMovimiento, nombreEmp = '') => {
-    setProcesandoId(id);
-    try {
-      const res = await registrarCheckCaseta(id, tipoMovimiento);
-      if (res?.resultado === 'retenido_por_horario') {
-        mostrarBanner('rojo', `🛑 ALTO — HORARIO NO COINCIDE (${res.detalleDesfase}). Hazlo a un lado mientras autoriza Jefatura / RH.`);
-        setSubTabPases('por_cruzar');
-      } else if (tipoMovimiento === 'retiro') {
-        mostrarBanner('rojo', `↩️ RETIRO CONFIRMADO ${nombreEmp ? ': ' + nombreEmp : ''}`);
-      } else {
-        mostrarBanner('verde', `✅ ADELANTE — CRUCE REGISTRADO ${nombreEmp ? ': ' + nombreEmp : ''}`);
-      }
-      await cargarDatos();
-    } catch (err) {
-      alert('Error al sellar movimiento: ' + err.message);
-    } finally {
-      setProcesandoId(null);
+  const parsearHoraAMinutos = (str = '07:15') => {
+    const [h, m] = String(str).split(':').map(Number);
+    return (isNaN(h) ? 7 : h) * 60 + (isNaN(m) ? 15 : m);
+  };
+
+  // ====================================================================
+  // MOTOR DE LAS 12 VARIACIONES: Evalúa qué acción corresponde a cada empleado
+  // ====================================================================
+  const evaluarEstadoEmpleado = (emp) => {
+    const regAsis = mapaAsistencias[emp.id];
+    const inc = mapaIncidenciasHoy[emp.id];
+    const tieneEntrada = Boolean(regAsis?.hora_entrada);
+    const tieneSalida = Boolean(regAsis?.hora_salida);
+
+    const pasePuerta = pasesPorCruzar.find(p => p.usuario_id === emp.id);
+    const paseRetenido = retenidosEnEspera.find(p => p.usuario_id === emp.id);
+    const paseFuera = personalFuera.find(p => p.usuario_id === emp.id);
+    const paseSelladoDefinitivo = crucesCompletadosHoy.find(
+      p => p.usuario_id === emp.id && p.tipo_permiso === 'salida' && !p.requiereRegreso && !p.horaEntradaCaseta
+    );
+
+    const minAhora = obtenerMinutosAhora();
+    const minLimiteEntrada = parsearHoraAMinutos(horaLimiteStr);
+    const minSalidaOficial = parsearHoraAMinutos(horaSalidaOficialStr);
+
+    // 1. Ya está retenido en la reja esperando firma de Jefe / RH
+    if (paseRetenido || inc?.tipo === 'retardo_en_espera') {
+      return {
+        codigo: 'EN_ESPERA_FIRMA',
+        color: '#f59e0b',
+        bg: modoOscuro ? 'rgba(245,158,11,0.10)' : '#fffbeb',
+        etiqueta: paseRetenido?.etiquetaMotivoPuerta || inc?.etiqueta || '⏳ En espera de firma',
+        subtexto: `Esperando autorización de: ${paseRetenido?.esperandoFirmaDe || inc?.esperandoFirmaDe || 'Jefatura / RH'}`,
+        textoBoton: '⏳ Esperando Firma',
+        deshabilitado: true
+      };
     }
-  };
 
-  const handleConfirmarEntradaModal = async () => {
-    if (!modalConfirmacion || procesandoId) return;
-    const { emp, inc } = modalConfirmacion;
-    const empleadoId = emp.id;
-    const nombreColaborador = emp.nombre_completo;
+    // 2. Orden de RH / Jefe: Se regresa a casa (Acceso denegado)
+    if (pasePuerta?.seRegresaACasa || (inc?.tipo === 'retardo_regresa' && !inc?.yaSeRetiroACasa)) {
+      return {
+        codigo: 'CONFIRMAR_RETIRO_CASA',
+        color: '#dc2626',
+        bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fef2f2',
+        etiqueta: '🚫 ORDEN RH: SE REGRESA A CASA',
+        subtexto: 'Acceso denegado — Confirmar que se retira de puerta',
+        textoBoton: '↩️ Confirmar Retiro',
+        paseId: pasePuerta?.id || inc?.paseId
+      };
+    }
 
-    setProcesandoId(`${empleadoId}-entrada`);
-    try {
-      // Si tenía Vacaciones o Falta programada hoy, solicita reautorización
+    // 3. Está en la calle con pase temporal y viene a reingresar (Variación 11)
+    if (paseFuera) {
+      const obs = paseFuera.observacionesRaw || '';
+      const mReg = obs.match(/Regresa:\s*(\d{1,2}):(\d{2})/i);
+      const yaAvalado = /\[HORARIO AUTORIZADO EN CASETA\]/i.test(obs);
+      let excedidoMin = 0;
+      let horaPactada = '';
+      if (mReg && !yaAvalado) {
+        const minPactado = parseInt(mReg[1], 10) * 60 + parseInt(mReg[2], 10);
+        excedidoMin = minAhora - minPactado;
+        horaPactada = `${String(mReg[1]).padStart(2, '0')}:${mReg[2]}`;
+      }
+      if (excedidoMin > 15) {
+        return {
+          codigo: 'REINGRESO_EXCEDIDO',
+          color: '#dc2626',
+          bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fff5f5',
+          etiqueta: `🛑 REGRESÓ +${excedidoMin} MIN TARDE (Límite ${horaPactada} hrs)`,
+          subtexto: 'Horario no coincide — Retener y pedir autorización',
+          textoBoton: '🛑 Retener (Excedió Hora)',
+          paseId: paseFuera.id
+        };
+      }
+      return {
+        codigo: 'REINGRESO_PASE_OK',
+        color: '#2563eb',
+        bg: modoOscuro ? 'rgba(37,99,235,0.10)' : '#eff6ff',
+        etiqueta: `🔵 EN LA CALLE CON PASE (${paseFuera.horarioProgramado})`,
+        subtexto: 'En tiempo para reingresar a planta',
+        textoBoton: '↙ Confirmar Reingreso',
+        paseId: paseFuera.id
+      };
+    }
+
+    // 4. Tiene Pase de Salida autorizado pendiente de salir (Variaciones 8 y 10)
+    if (pasePuerta && pasePuerta.tipo_permiso === 'salida') {
+      const obs = pasePuerta.observacionesRaw || '';
+      const mSal = obs.match(/Salida(?:\s+definitiva)?:\s*(\d{1,2}):(\d{2})/i);
+      const yaAvalado = /\[HORARIO AUTORIZADO EN CASETA\]/i.test(obs);
+      if (mSal && !yaAvalado) {
+        const minSal = parseInt(mSal[1], 10) * 60 + parseInt(mSal[2], 10);
+        const diff = Math.abs(minAhora - minSal);
+        const hSalStr = `${String(mSal[1]).padStart(2, '0')}:${mSal[2]}`;
+        if (diff > 20) {
+          return {
+            codigo: 'SALIDA_DESFASADA',
+            color: '#dc2626',
+            bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fff5f5',
+            etiqueta: `🛑 HORA DE SALIDA NO COINCIDE (Pase: ${hSalStr} hrs)`,
+            subtexto: `Diferencia de ${diff} min respecto a su pase autorizado`,
+            textoBoton: '��� Retener y Reautorizar Hora',
+            paseId: pasePuerta.id
+          };
+        }
+      }
+      return {
+        codigo: 'SALIDA_PASE_OK',
+        color: '#0284c7',
+        bg: modoOscuro ? 'rgba(2,132,199,0.10)' : '#f0f9ff',
+        etiqueta: pasePuerta.requiereRegreso ? `🔵 PASE DE SALIDA CON REGRESO (${pasePuerta.horarioProgramado})` : `🔵 PASE DE SALIDA DEFINITIVA (${pasePuerta.horarioProgramado})`,
+        subtexto: 'Pase autorizado listo para cruzar',
+        textoBoton: '↗ Sellar Salida con Pase',
+        paseId: pasePuerta.id
+      };
+    }
+
+    // 5.AÚN NO HA ENTRADO HOY A PLANTA (Variaciones 1 a 7)
+    if (!tieneEntrada) {
+      // Variación 6: Faltó el día hábil anterior sin aviso
+      if (inc?.tipo === 'falta_ayer_sin_aviso') {
+        return {
+          codigo: 'RETENER_FALTA_AYER',
+          color: '#dc2626',
+          bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fff5f5',
+          etiqueta: '🛑 FALTÓ EL DÍA ANTERIOR SIN AVISO',
+          subtexto: 'No dejar pasar — Requiere autorización de Jefatura / RH',
+          textoBoton: '🛑 Retener en Puerta'
+        };
+      }
+
+      // Variación 7: Tenía Vacaciones o Falta programada para hoy pero se presenta en puerta
       if (inc?.tipo === 'ausencia_autorizada') {
         const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
+        return {
+          codigo: 'RETENER_EN_AUSENCIA',
+          color: '#dc2626',
+          bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fff5f5',
+          etiqueta: esVac ? '🏖️ ESTÁ DE VACACIONES HOY' : '📋 TIENE FALTA PROGRAMADA HOY',
+          subtexto: 'Comportamiento inusual — Solicitar autorización para ingresar',
+          textoBoton: '🛑 Retener y Pedir Acceso',
+          inc
+        };
+      }
+
+      // Variaciones 2, 3 y 4: Ya tenía un Retardo o Acceso Autorizado en puerta
+      if (inc?.tipo === 'retardo_autorizado' || (pasePuerta && pasePuerta.tipo_permiso !== 'salida')) {
+        const obs = pasePuerta?.observacionesRaw || '';
+        const mEst = obs.match(/Llegada estimada:\s*(\d{1,2}):(\d{2})/i);
+        const yaReautorizado = /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obs);
+        if (mEst && minAhora > minLimiteEntrada && !yaReautorizado) {
+          const minPrometido = parseInt(mEst[1], 10) * 60 + parseInt(mEst[2], 10);
+          const exceso = minAhora - minPrometido;
+          const hProm = `${String(mEst[1]).padStart(2, '0')}:${mEst[2]}`;
+          if (exceso > 15) {
+            return {
+              codigo: 'RETARDO_EXCEDIDO',
+              color: '#dc2626',
+              bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fff5f5',
+              etiqueta: `🛑 LLEGÓ +${exceso} MIN DESPUÉS DE LO AVISADO (Avisó ${hProm} hrs)`,
+              subtexto: 'Excedió la hora de su permiso de retardo',
+              textoBoton: '🛑 Retener y Reautorizar',
+              paseId: pasePuerta?.id || inc?.paseId
+            };
+          }
+        }
+        return {
+          codigo: 'ENTRADA_AUTORIZADA_PUERTA',
+          color: '#16a34a',
+          bg: modoOscuro ? 'rgba(22,163,74,0.12)' : '#f0fdf4',
+          etiqueta: '🟢 ACCESO AUTORIZADO POR JEFATURA / RH',
+          subtexto: 'Listo para ingresar a planta',
+          textoBoton: '↵ Dar Paso a Planta',
+          paseId: pasePuerta?.id || inc?.paseId
+        };
+      }
+
+      // Variación 5: Llega después de la hora límite de tolerancia sin permiso
+      if (minAhora > minLimiteEntrada) {
+        return {
+          codigo: 'RETENER_RETARDO_NUEVO',
+          color: '#dc2626',
+          bg: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fff5f5',
+          etiqueta: `🛑 LLEGADA TARDE (Límite ${horaLimiteStr} hrs)`,
+          subtexto: 'Fuera de tolerancia — Retener para autorización de Jefe / RH',
+          textoBoton: '🛑 Retener por Retardo'
+        };
+      }
+
+      // Variación 1: Entrada normal en tiempo
+      return {
+        codigo: 'ENTRADA_PUNTUAL',
+        color: '#16a34a',
+        bg: modoOscuro ? 'rgba(22,163,74,0.08)' : '#f0fdf4',
+        etiqueta: '🟢 EN TIEMPO — PASA A PLANTA',
+        subtexto: `Entrada matutina normal (Límite ${horaLimiteStr} hrs)`,
+        textoBoton: '↵ Dar Entrada'
+      };
+    }
+
+    // 6. YA ESTÁ EN PLANTA (O YA SALIÓ DEFINITIVO HOY) — Variación 12
+    if (!tieneSalida) {
+      const esAntesDeFinDeTurno = minAhora < (minSalidaOficial - 30);
+      return {
+        codigo: 'SALIDA_DE_TURNO',
+        color: esAntesDeFinDeTurno ? '#d97706' : '#0284c7',
+        bg: c.surfaceCard,
+        etiqueta: `🏭 EN PLANTA (Entró ${regAsis.hora_entrada} hrs)`,
+        subtexto: esAntesDeFinDeTurno
+          ? `⚠️ Aún no son las ${horaSalidaOficialStr} hrs y NO tiene Pase de Salida autorizado`
+          : 'Registrar salida de fin de turno',
+        textoBoton: esAntesDeFinDeTurno ? '⚠️ Registrar Salida sin Pase' : '↵ Dar Salida de Turno',
+        requiereConfirmarSinPase: esAntesDeFinDeTurno
+      };
+    }
+
+    // Variación 12-B: Ya tenía salida registrada hoy (o Salida Definitiva) y regresa a la reja
+    return {
+      codigo: 'YA_SALIO_HOY',
+      color: '#64748b',
+      bg: c.surfaceCard,
+      etiqueta: `✅ SALIDA YA REGISTRADA HOY (${regAsis.hora_salida} hrs)`,
+      subtexto: paseSelladoDefinitivo ? 'Salió con Pase Definitivo — ¿Regresa excepcionalmente?' : 'Turno concluido hoy',
+      textoBoton: paseSelladoDefinitivo ? '🛑 Solicitar Reingreso Excepcional' : '↩ Deshacer Salida',
+      paseDefinitivo: paseSelladoDefinitivo
+    };
+  };
+
+  // ====================================================================
+  // EJECUTAR ACCIÓN EN 1 TOQUE (O CON TECLA ENTER)
+  // ====================================================================
+  const ejecutarAccionDirecta = async (emp) => {
+    if (procesandoId) return;
+    const ev = evaluarEstadoEmpleado(emp);
+    if (ev.deshabilitado) return;
+
+    if (ev.requiereConfirmarSinPase) {
+      const ok = window.confirm(`⚠️ ${emp.nombre_completo} NO tiene Pase de Salida autorizado y aún no es la hora de salida (${horaSalidaOficialStr} hrs).\n\n¿Deseas registrar su salida de turno de todos modos?`);
+      if (!ok) return;
+    }
+
+    setProcesandoId(emp.id);
+    try {
+      setBusquedaTexto('');
+
+      if (ev.codigo === 'ENTRADA_PUNTUAL' || ev.codigo === 'RETENER_RETARDO_NUEVO' || ev.codigo === 'RETENER_FALTA_AYER') {
+        const res = await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, false);
+        if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
+          lanzarFeedback({
+            tipo: 'verde',
+            texto: `✅ ADELANTE — PASA A PLANTA: ${emp.nombre_completo}`,
+            deshacerFn: () => handleDeshacerEntrada(emp.id)
+          });
+        } else {
+          lanzarFeedback({
+            tipo: 'rojo',
+            texto: `🛑 ALTO — NO DEJAR PASAR A ${emp.nombre_completo} (En espera de firma en la reja)`
+          });
+        }
+      } else if (ev.codigo === 'RETENER_EN_AUSENCIA') {
+        const esVac = String(ev.inc?.etiqueta || '').toLowerCase().includes('vacaciones');
         await solicitarAutorizacionInusualCaseta(
-          inc.paseId,
+          ev.inc.paseId,
           esVac ? 'presentacion_en_vacaciones' : 'presentacion_en_falta'
         );
-        setModalConfirmacion(null);
-        setBusquedaTexto('');
-        mostrarBanner('rojo', `🛑 ALTO — NO DEJAR PASAR A ${nombreColaborador} (Tenía ${esVac ? 'Vacaciones' : 'Falta'} hoy, esperando firma)`);
-        await cargarDatos();
-        return;
+        lanzarFeedback({
+          tipo: 'rojo',
+          texto: `🛑 ALTO — ${emp.nombre_completo} tenía ${esVac ? 'Vacaciones' : 'Falta'} hoy. En espera de autorización.`
+        });
+      } else if (ev.codigo === 'ENTRADA_AUTORIZADA_PUERTA' || ev.codigo === 'RETARDO_EXCEDIDO') {
+        const res = await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, false);
+        if (res?.resultado === 'retenido_por_inusual') {
+          lanzarFeedback({
+            tipo: 'rojo',
+            texto: `🛑 ALTO — Excedió la hora avisada. Reabriendo autorización para ${emp.nombre_completo}.`
+          });
+        } else {
+          if (ev.paseId) await registrarCheckCaseta(ev.paseId, 'entrada');
+          lanzarFeedback({
+            tipo: 'verde',
+            texto: `✅ ADELANTE — PASA A PLANTA: ${emp.nombre_completo}`,
+            deshacerFn: () => handleDeshacerEntrada(emp.id)
+          });
+        }
+      } else if (ev.codigo === 'SALIDA_PASE_OK' || ev.codigo === 'SALIDA_DESFASADA') {
+        const res = await registrarCheckCaseta(ev.paseId, 'salida');
+        if (res?.resultado === 'retenido_por_horario') {
+          lanzarFeedback({
+            tipo: 'rojo',
+            texto: `🛑 ALTO — Hora de salida no coincide (${res.detalleDesfase}). Esperando autorización.`
+          });
+        } else {
+          lanzarFeedback({
+            tipo: 'azul',
+            texto: `↗ SALIDA CON PASE SELLADA: ${emp.nombre_completo}`
+          });
+        }
+      } else if (ev.codigo === 'REINGRESO_PASE_OK' || ev.codigo === 'REINGRESO_EXCEDIDO') {
+        const res = await registrarCheckCaseta(ev.paseId, 'reingreso');
+        if (res?.resultado === 'retenido_por_horario') {
+          lanzarFeedback({
+            tipo: 'rojo',
+            texto: `🛑 ALTO — Regresó fuera de horario (${res.detalleDesfase}). Esperando autorización.`
+          });
+        } else {
+          lanzarFeedback({
+            tipo: 'verde',
+            texto: `✅ REINGRESO A PLANTA REGISTRADO: ${emp.nombre_completo}`
+          });
+        }
+      } else if (ev.codigo === 'CONFIRMAR_RETIRO_CASA') {
+        await registrarCheckCaseta(ev.paseId, 'retiro');
+        lanzarFeedback({
+          tipo: 'rojo',
+          texto: `↩️ RETIRO A CASA CONFIRMADO: ${emp.nombre_completo}`
+        });
+      } else if (ev.codigo === 'SALIDA_DE_TURNO') {
+        await registrarAsistenciaLista(emp.id, 'salida', usuario?.id || null, false);
+        lanzarFeedback({
+          tipo: 'azul',
+          texto: `✓ SALIDA DE TURNO REGISTRADA: ${emp.nombre_completo}`,
+          deshacerFn: () => handleDeshacerSalida(emp.id)
+        });
+      } else if (ev.codigo === 'YA_SALIO_HOY') {
+        if (ev.paseDefinitivo) {
+          await solicitarAutorizacionInusualCaseta(ev.paseDefinitivo.id, 'reingreso_salida_definitiva');
+          lanzarFeedback({
+            tipo: 'rojo',
+            texto: `🛑 ALTO — Solicitud de reingreso enviada a Jefatura / RH para ${emp.nombre_completo}`
+          });
+        } else {
+          await deshacerSalidaReciente(emp.id);
+          lanzarFeedback({
+            tipo: 'verde',
+            texto: `↩ Salida deshecha: ${emp.nombre_completo} vuelve a figurar En Planta`
+          });
+        }
       }
 
-      const res = await registrarAsistenciaLista(empleadoId, 'entrada', usuario?.id || null, false);
-      setModalConfirmacion(null);
-      setBusquedaTexto('');
-
-      if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
-        mostrarBanner('verde', `✅ ADELANTE — PASA A PLANTA: ${nombreColaborador}`);
-      } else {
-        mostrarBanner('rojo', `🛑 ALTO — NO DEJAR PASAR A ${nombreColaborador} (Pásalo a espera en lo que autoriza su Jefe / RH)`);
-      }
-
       await cargarDatos();
+      if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
     } catch (err) {
-      alert('Error al procesar registro: ' + err.message);
-    } finally {
-      setProcesandoId(null);
-    }
-  };
-
-  // Salida de turno directa en 1 solo clic para no hacer fila a las 5:00 PM
-  const handleSalidaDirecta = async (emp) => {
-    if (procesandoId) return;
-    setProcesandoId(`${emp.id}-salida`);
-    try {
-      await registrarAsistenciaLista(emp.id, 'salida', usuario?.id || null, false);
-      setBusquedaTexto('');
-      mostrarBanner('verde', `✓ SALIDA DE TURNO REGISTRADA: ${emp.nombre_completo}`);
-      await cargarDatos();
-    } catch (err) {
-      alert('Error al registrar salida: ' + err.message);
-    } finally {
-      setProcesandoId(null);
-    }
-  };
-
-  const handleSolicitarReingresoSalidaDefinitiva = async (pase) => {
-    setProcesandoId(pase.id);
-    try {
-      await solicitarAutorizacionInusualCaseta(pase.id, 'reingreso_salida_definitiva');
-      setSubTabPases('por_cruzar');
-      mostrarBanner('rojo', `🛑 ALTO — ${pase.usuarios?.nombre_completo} tenía Salida Definitiva. Esperando autorización para reingresar.`);
-      await cargarDatos();
-    } catch (err) {
-      alert('Error al solicitar reingreso: ' + err.message);
+      alert('Error en caseta: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -198,6 +461,7 @@ export default function Caseta() {
     setProcesandoId(`${empleadoId}-deshacer`);
     try {
       await deshacerEntradaReciente(empleadoId);
+      setFeedbackAccion(null);
       await cargarDatos();
     } catch (err) {
       alert('No se pudo deshacer la entrada: ' + err.message);
@@ -210,6 +474,7 @@ export default function Caseta() {
     setProcesandoId(`${empleadoId}-deshacer-salida`);
     try {
       await deshacerSalidaReciente(empleadoId);
+      setFeedbackAccion(null);
       await cargarDatos();
     } catch (err) {
       alert('No se pudo deshacer la salida: ' + err.message);
@@ -218,446 +483,24 @@ export default function Caseta() {
     }
   };
 
-  const AvatarColaborador = ({ u, size = 40 }) => {
+  const AvatarColaborador = ({ u, size = 42 }) => {
     const url = u?.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u?.nombre_completo || 'C')}&background=16a34a&color=fff&bold=true`;
     return (
       <img
         src={url}
         alt=""
         style={{
-          width: `${size}px`, height: `${size}px`, borderRadius: '9px',
+          width: `${size}px`, height: `${size}px`, borderRadius: '10px',
           objectFit: 'cover', border: `1px solid ${c.border}`, flexShrink: 0
         }}
       />
     );
   };
 
-  const estilosComunesCaseta = `
-    .caseta-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      box-sizing: border-box;
-      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .caseta-tabs-bar {
-      display: grid !important;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 4px;
-      height: 42px;
-      padding: 4px !important;
-      box-sizing: border-box;
-    }
-    .caseta-tabs-bar .tab-btn {
-      padding: 0 8px !important;
-      font-size: 13px !important;
-      gap: 6px !important;
-      min-width: 0 !important;
-    }
-    .caseta-card {
-      background: ${c.surfaceCard};
-      border: 1.5px solid ${c.border};
-      border-radius: 13px;
-      padding: 12px 15px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      box-sizing: border-box;
-      width: 100%;
-    }
-    .caseta-card-left {
-      display: flex;
-      align-items: center;
-      gap: 11px;
-      min-width: 0;
-      flex: 1;
-    }
-    .caseta-card-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-    .caseta-btn-action {
-      height: 40px;
-      padding: 0 16px;
-      border-radius: 9px;
-      border: none;
-      font-size: 13px;
-      font-weight: 800;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      white-space: nowrap;
-      box-sizing: border-box;
-    }
-    .caseta-search-box {
-      padding: 12px 14px;
-      border-radius: 14px;
-    }
-    .caseta-search-input {
-      width: 100%;
-      height: 48px;
-      padding: 0 40px 0 42px;
-      border-radius: 11px;
-      font-size: 15px;
-      font-weight: 700;
-      box-sizing: border-box;
-      outline: none;
-    }
-    .caseta-refresh-btn {
-      width: 48px;
-      height: 48px;
-      border-radius: 11px;
-      flex-shrink: 0;
-    }
-    .caseta-list-item {
-      border-radius: 12px;
-      padding: 11px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      box-sizing: border-box;
-      width: 100%;
-    }
-    .caseta-emp-name {
-      font-size: 14.5px;
-      font-weight: 800;
-      line-height: 1.25;
-      word-break: break-word;
-    }
-    @media (max-width: 768px) {
-      .caseta-wrap { padding-top: 42px; gap: 10px; }
-      .caseta-tabs-bar { height: 38px; border-radius: 10px !important; }
-      .caseta-tabs-bar .tab-btn { font-size: 11.5px !important; padding: 0 4px !important; gap: 4px !important; }
-      .caseta-tabs-bar .tab-btn svg { display: none !important; }
-      .caseta-card { flex-direction: column !important; align-items: stretch !important; padding: 11px 12px !important; gap: 9px !important; }
-      .caseta-card-actions { width: 100% !important; justify-content: stretch !important; }
-      .caseta-card-actions > button { flex: 1 !important; width: 100% !important; justify-content: center !important; }
-    }
-  `;
-
-  // Banner Semáforo (Verde = Adelante / Rojo = Alto, no dejar pasar)
-  const renderBannerSemaforo = () => {
-    if (!bannerResultado) return null;
-    const esRojo = bannerResultado.tipo === 'rojo';
-    return (
-      <div style={{
-        background: esRojo ? '#dc2626' : '#16a34a',
-        color: '#ffffff',
-        borderRadius: '12px',
-        padding: '13px 16px',
-        fontSize: '15px',
-        fontWeight: '900',
-        textAlign: 'center',
-        boxShadow: esRojo ? '0 8px 24px rgba(220,38,38,0.38)' : '0 6px 18px rgba(22,163,74,0.32)',
-        letterSpacing: '0.01em'
-      }}>
-        {bannerResultado.texto}
-      </div>
-    );
-  };
-
-  // ====================================================================
-  // VISTA 1: PASES DE PUERTA (SALIDAS DURANTE EL TURNO, REINGRESOS Y DETENIDOS)
-  // ====================================================================
-  if (vista === 'pases') {
-    const totalEnPuerta = pasesPorCruzar.length + retenidosEnEspera.length;
-
-    return (
-      <div className="caseta-wrap">
-        <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
-        <style>{estilosComunesCaseta}</style>
-
-        {renderBannerSemaforo()}
-
-        <div className="tabs-aprobacion-bar caseta-tabs-bar">
-          <button
-            className={`tab-btn ${subTabPases === 'por_cruzar' ? 'active' : ''}`}
-            onClick={() => setSubTabPases('por_cruzar')}
-          >
-            <DoorOpen size={15} />
-            <span>En Puerta</span>
-            {totalEnPuerta > 0 && (
-              <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
-                {totalEnPuerta}
-              </span>
-            )}
-          </button>
-
-          <button
-            className={`tab-btn ${subTabPases === 'reingresos' ? 'active' : ''}`}
-            onClick={() => setSubTabPases('reingresos')}
-          >
-            <RotateCcw size={15} />
-            <span>Por Regresar</span>
-            {personalFuera.length > 0 && (
-              <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
-                {personalFuera.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            className={`tab-btn ${subTabPases === 'sellados' ? 'active' : ''}`}
-            onClick={() => setSubTabPases('sellados')}
-          >
-            <CheckCircle2 size={15} />
-            <span>Sellados ({crucesCompletadosHoy.length})</span>
-          </button>
-        </div>
-
-        {subTabPases === 'por_cruzar' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-            {pasesPorCruzar.map((p) => {
-              const esSalida = p.tipo_permiso === 'salida';
-              const esRegresoCasa = Boolean(p.seRegresaACasa);
-              const colorBorde = esRegresoCasa ? '#ef4444' : (esSalida ? '#0284c7' : '#16a34a');
-              const bgBadge = esRegresoCasa ? 'rgba(239,68,68,0.14)' : (esSalida ? 'rgba(2,132,199,0.12)' : 'rgba(22,163,74,0.12)');
-              const textoBadge = esRegresoCasa
-                ? '🚫 ORDEN RH: SE REGRESA A CASA'
-                : (esSalida ? (p.requiereRegreso ? '🔵 SALIDA CON REGRESO' : '🔵 SALIDA DEFINITIVA') : '🟢 AUTORIZADO — DAR PASO');
-
-              return (
-                <div
-                  key={p.id}
-                  className="caseta-card"
-                  style={{
-                    borderLeft: `5px solid ${colorBorde}`,
-                    background: esRegresoCasa ? (modoOscuro ? 'rgba(239,68,68,0.08)' : '#fef2f2') : c.surfaceCard
-                  }}
-                >
-                  <div className="caseta-card-left">
-                    <AvatarColaborador u={p.usuarios} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                        {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                        <span style={{
-                          fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '5px',
-                          background: bgBadge, color: colorBorde
-                        }}>
-                          {textoBadge}
-                        </span>
-                        <span style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700' }}>
-                          #{p.usuarios?.numero_empleado} {p.horarioProgramado ? `• ${p.horarioProgramado}` : ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="caseta-card-actions">
-                    <button
-                      onClick={() => handleSellarPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'), p.usuarios?.nombre_completo)}
-                      disabled={procesandoId === p.id}
-                      className="caseta-btn-action"
-                      style={{ background: colorBorde, color: '#fff' }}
-                    >
-                      {esRegresoCasa ? <CornerUpLeft size={15} /> : <Check size={16} strokeWidth={3} />}
-                      {procesandoId === p.id
-                        ? 'Procesando...'
-                        : (esRegresoCasa ? 'Confirmar Retiro' : (esSalida ? 'Confirmar Salida' : 'Dar Acceso'))}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            {retenidosEnEspera.map((p) => (
-              <div
-                key={p.id}
-                className="caseta-card"
-                style={{
-                  borderLeft: '5px solid #dc2626',
-                  background: modoOscuro ? 'rgba(220,38,38,0.06)' : '#fff5f5'
-                }}
-              >
-                <div className="caseta-card-left">
-                  <AvatarColaborador u={p.usuarios} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
-                      {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px', fontSize: '11.5px', fontWeight: '700' }}>
-                      <span style={{ color: '#dc2626', background: 'rgba(220,38,38,0.14)', padding: '2px 8px', borderRadius: '5px', fontWeight: '800' }}>
-                        {p.etiquetaMotivoPuerta || '🛑 Detenido en puerta'}
-                      </span>
-                      <span style={{ color: c.textMuted }}>
-                        • Esperando firma de: <strong style={{ color: c.text }}>{p.esperandoFirmaDe}</strong>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <span style={{
-                  fontSize: '12px', fontWeight: '900', color: '#dc2626',
-                  display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0
-                }}>
-                  <Hourglass size={14} /> NO DEJAR PASAR AÚN
-                </span>
-              </div>
-            ))}
-
-            {pasesPorCruzar.length === 0 && retenidosEnEspera.length === 0 && (
-              <div style={{
-                background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-                padding: '36px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
-              }}>
-                No hay pases pendientes ni personas detenidas en puerta en este momento.
-              </div>
-            )}
-          </div>
-        )}
-
-        {subTabPases === 'reingresos' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-            {personalFuera.length === 0 ? (
-              <div style={{
-                background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-                padding: '36px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
-              }}>
-                No hay personal fuera de planta pendiente de reingreso.
-              </div>
-            ) : (
-              personalFuera.map((p) => (
-                <div key={p.id} className="caseta-card" style={{ borderLeft: '5px solid #2563eb' }}>
-                  <div className="caseta-card-left">
-                    <AvatarColaborador u={p.usuarios} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '14.5px', fontWeight: '800', color: c.text }}>
-                        {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700', marginTop: '3px' }}>
-                        #{p.usuarios?.numero_empleado} • {p.horarioProgramado}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="caseta-card-actions">
-                    <button
-                      onClick={() => handleSellarPase(p.id, 'reingreso', p.usuarios?.nombre_completo)}
-                      disabled={procesandoId === p.id}
-                      className="caseta-btn-action"
-                      style={{ background: '#2563eb', color: '#fff' }}
-                    >
-                      <Check size={16} strokeWidth={3} />
-                      {procesandoId === p.id ? 'Verificando...' : 'Confirmar Reingreso'}
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {subTabPases === 'sellados' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-            {crucesCompletadosHoy.length === 0 ? (
-              <div style={{
-                background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-                padding: '36px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
-              }}>
-                Aún no se han sellado movimientos en puerta el día de hoy.
-              </div>
-            ) : (
-              crucesCompletadosHoy.map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    background: c.surfaceCard,
-                    border: `1px solid ${c.border}`,
-                    borderLeft: `4px solid ${p.seRegresaACasa ? '#ef4444' : '#16a34a'}`,
-                    borderRadius: '11px',
-                    padding: '10px 13px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '10px',
-                    flexWrap: 'wrap'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                    <AvatarColaborador u={p.usuarios} size={34} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text }}>
-                        {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
-                      </div>
-                      <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '600' }}>
-                        #{p.usuarios?.numero_empleado} • {p.folio}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', fontWeight: '800' }}>
-                    {p.seRegresaACasa ? (
-                      <span style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', padding: '4px 9px', borderRadius: '6px' }}>
-                        ↩️ Retirado a casa
-                      </span>
-                    ) : (
-                      <>
-                        {p.horaSalidaCaseta && (
-                          <span style={{ background: 'rgba(2,132,199,0.12)', color: '#0284c7', padding: '4px 9px', borderRadius: '6px' }}>
-                            ✓ Salida: {p.horaSalidaCaseta}
-                          </span>
-                        )}
-                        {p.horaEntradaCaseta && (
-                          <span style={{ background: c.accentSoft, color: c.accent, padding: '4px 9px', borderRadius: '6px' }}>
-                            {p.tipo_permiso === 'salida' ? `✓ Reingreso: ${p.horaEntradaCaseta}` : `✓ Entrada: ${p.horaEntradaCaseta}`}
-                          </span>
-                        )}
-                        {p.tipo_permiso === 'salida' && p.horaSalidaCaseta && !p.horaEntradaCaseta && !p.requiereRegreso && (
-                          <button
-                            type="button"
-                            onClick={() => handleSolicitarReingresoSalidaDefinitiva(p)}
-                            disabled={Boolean(procesandoId)}
-                            style={{
-                              padding: '4px 9px', borderRadius: '6px', border: '1px solid #d97706',
-                              background: 'rgba(245,158,11,0.14)', color: '#d97706', fontSize: '11px',
-                              fontWeight: '800', cursor: 'pointer'
-                            }}
-                          >
-                            Solicitar Reingreso
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ====================================================================
-  // VISTA 2: PASE DE LISTA (FLUJO RÁPIDO CON SEMÁFORO Y SIN BRINCAR DE PANTALLA)
-  // ====================================================================
+  // Buscador inteligente
   const termino = (busquedaTexto || '').toLowerCase().trim();
   const letrasSinEspacios = termino.replace(/\s+/g, '');
-  const tieneMinimo3Letras = letrasSinEspacios.length >= 3;
-
-  const todosSinEntrada = empleadosSede.filter(emp => !mapaAsistencias[emp.id]?.hora_entrada);
-  const ausentesProgramadosHoy = todosSinEntrada.filter((emp) => {
-    const inc = mapaIncidenciasHoy[emp.id];
-    return inc?.tipo === 'ausencia_autorizada';
-  });
-  const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
-
-  // Personas actualmente paradas a un lado en la reja (En espera de firma o ya con resolución para darles paso / retiro)
-  const detenidosEnReja = todosSinEntrada.filter((emp) => {
-    const inc = mapaIncidenciasHoy[emp.id];
-    const t = inc?.tipo || 'normal';
-    if (t === 'retardo_regresa' && inc?.yaSeRetiroACasa) return false;
-    return t === 'retardo_en_espera' || t === 'retardo_autorizado' || t === 'retardo_regresa';
-  });
+  const tieneMinimo2Letras = letrasSinEspacios.length >= 2;
 
   const coincidePorInicioDePalabra = (emp, busq) => {
     const limpioBusq = busq.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -671,171 +514,217 @@ export default function Caseta() {
     return palabrasBusqueda.every(pb => tokensEmpleado.some(tok => tok.startsWith(pb)));
   };
 
-  const coincidenciasEntrada = tieneMinimo3Letras
-    ? todosSinEntrada.filter((emp) => coincidePorInicioDePalabra(emp, termino))
+  const resultadosBuscador = tieneMinimo2Letras
+    ? empleadosSede.filter(emp => coincidePorInicioDePalabra(emp, termino)).slice(0, 5)
     : [];
 
-  const demasiadasCoincidenciasEntrada = tieneMinimo3Letras && coincidenciasEntrada.length > 3;
+  // Listas clasificadas para el Panel 2 (Tablero y Bitácora)
+  const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada) && !mapaAsistencias[emp.id]?.hora_salida);
+  const todosSinEntrada = empleadosSede.filter(emp => !mapaAsistencias[emp.id]?.hora_entrada);
+  const ausentesConPermiso = todosSinEntrada.filter(emp => mapaIncidenciasHoy[emp.id]?.tipo === 'ausencia_autorizada');
+  const faltanPorLlegar = todosSinEntrada.filter(emp => mapaIncidenciasHoy[emp.id]?.tipo !== 'ausencia_autorizada');
 
-  const coincidenciasEnPlanta = termino
-    ? todosEnPlanta.filter((emp) => coincidePorInicioDePalabra(emp, termino))
-    : todosEnPlanta;
+  // Empleados en la reja en este instante (Retenidos esperando firma + Listos para cruzar)
+  const idsEnReja = new Set([
+    ...pasesPorCruzar.map(p => p.usuario_id),
+    ...retenidosEnEspera.map(p => p.usuario_id)
+  ]);
+  const empleadosEnReja = empleadosSede.filter(e => idsEnReja.has(e.id));
 
-  const fueraDeToleranciaAhora = esDespuesDeTolerancia();
+  // Empleados en la calle con pase temporal
+  const idsEnCalle = new Set(personalFuera.map(p => p.usuario_id));
+  const empleadosEnCalle = empleadosSede.filter(e => idsEnCalle.has(e.id));
 
-  return (
-    <div className="caseta-wrap">
-      <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
-      <style>{estilosComunesCaseta}</style>
+  const estilosTorniquete = `
+    .caseta-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .torniquete-row {
+      border-radius: 13px;
+      padding: 12px 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-sizing: border-box;
+      width: 100%;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .kpi-grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      width: 100%;
+    }
+    .kpi-card-btn {
+      border-radius: 12px;
+      padding: 11px 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    @media (max-width: 768px) {
+      .caseta-wrap { padding-top: 42px; gap: 10px; }
+      .torniquete-row { flex-direction: column !important; align-items: stretch !important; }
+      .kpi-grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  `;
 
-      {/* MODAL DE CONFIRMACIÓN CON SEMÁFORO (VERDE = ENTRADA NORMAL / ROJO = RETENER EN PUERTA) */}
-      {modalConfirmacion && (
-        <div
-          onClick={() => { if (!procesandoId) setModalConfirmacion(null); }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: c.surfaceCard,
-              border: `2.5px solid ${modalConfirmacion.requiereRetencion ? '#dc2626' : '#16a34a'}`,
-              borderRadius: '18px', padding: '24px 22px', width: '100%', maxWidth: '420px',
-              boxShadow: '0 20px 45px rgba(0,0,0,0.45)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '14px'
-            }}
-          >
-            <span style={{
-              fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em',
-              padding: '5px 14px', borderRadius: '999px',
-              background: modalConfirmacion.requiereRetencion ? 'rgba(220,38,38,0.15)' : 'rgba(22,163,74,0.15)',
-              color: modalConfirmacion.requiereRetencion ? '#dc2626' : '#16a34a'
-            }}>
-              {modalConfirmacion.requiereRetencion ? `🛑 ${modalConfirmacion.motivoRetencion}` : '✅ ENTRADA NORMAL EN TIEMPO'}
-            </span>
+  // Renderizador de tarjeta inteligente de empleado (Usado en el Buscador y en los Monitores Activos)
+  const renderFilaInteligente = (emp, esPrimeraEnBusqueda = false) => {
+    const ev = evaluarEstadoEmpleado(emp);
+    const procesandoEste = procesandoId === emp.id;
 
-            <AvatarColaborador u={modalConfirmacion.emp} size={68} />
-
-            <div>
-              <div style={{ fontSize: '16px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
-                {formatearApellidosNombre(modalConfirmacion.emp?.nombre_completo, modalConfirmacion.emp)}
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '4px' }}>
-                #{modalConfirmacion.emp?.numero_empleado}
-                {modalConfirmacion.emp?.departamentos?.nombre ? ` • ${modalConfirmacion.emp.departamentos.nombre}` : ''}
-              </div>
+    return (
+      <div
+        key={emp.id}
+        className="torniquete-row"
+        style={{
+          background: ev.bg,
+          border: `2px solid ${ev.color}`,
+          boxShadow: esPrimeraEnBusqueda ? `0 6px 18px ${ev.color}26` : 'none'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+          <AvatarColaborador u={emp} size={44} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '15px', fontWeight: '900', color: c.text }}>
+                {formatearApellidosNombre(emp.nombre_completo, emp)}
+              </span>
+              <span style={{ fontSize: '12px', fontFamily: 'ui-monospace, monospace', fontWeight: '800', color: c.textMuted }}>
+                #{emp.numero_empleado}
+              </span>
+              {emp.departamentos?.nombre && (
+                <span style={{ fontSize: '11.5px', fontWeight: '700', color: c.textMuted }}>
+                  • {emp.departamentos.nombre}
+                </span>
+              )}
             </div>
 
-            {modalConfirmacion.requiereRetencion && (
-              <div style={{
-                background: 'rgba(220,38,38,0.10)', border: '1px solid rgba(220,38,38,0.35)',
-                color: '#dc2626', borderRadius: '10px', padding: '8px 12px', fontSize: '12.5px', fontWeight: '800'
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+              <span style={{
+                fontSize: '11.5px', fontWeight: '900', padding: '2.5px 9px', borderRadius: '6px',
+                background: `${ev.color}22`, color: ev.color
               }}>
-                ⚠️ NO LO DEJES PASAR AÚN. Al confirmar, quedará en espera aquí mismo mientras su Jefe o RH autoriza.
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '10px', width: '100%', marginTop: '4px' }}>
-              <button
-                type="button"
-                onClick={() => setModalConfirmacion(null)}
-                disabled={Boolean(procesandoId)}
-                style={{
-                  height: '50px', borderRadius: '12px', border: `1.5px solid ${c.border}`,
-                  background: c.bg, color: c.textMuted, fontSize: '14px', fontWeight: '800', cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                }}
-              >
-                <X size={18} /> Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={handleConfirmarEntradaModal}
-                disabled={Boolean(procesandoId)}
-                style={{
-                  height: '50px', borderRadius: '12px', border: 'none',
-                  background: modalConfirmacion.requiereRetencion ? '#dc2626' : '#16a34a',
-                  color: '#ffffff', fontSize: '14.5px', fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px'
-                }}
-              >
-                {modalConfirmacion.requiereRetencion ? <ShieldAlert size={19} /> : <Check size={20} strokeWidth={3} />}
-                <span>
-                  {procesandoId
-                    ? 'Procesando...'
-                    : (modalConfirmacion.requiereRetencion ? 'Retener y Pedir Firma' : 'Dar Entrada')}
-                </span>
-              </button>
+                {ev.etiqueta}
+              </span>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: c.textMuted }}>
+                {ev.subtexto}
+              </span>
             </div>
           </div>
         </div>
-      )}
-
-      {/* PESTAÑAS DEL PASE DE LISTA */}
-      <div className="tabs-aprobacion-bar caseta-tabs-bar">
-        <button
-          className={`tab-btn ${subTabAsistencia === 'por_llegar' ? 'active' : ''}`}
-          onClick={() => setSubTabAsistencia('por_llegar')}
-        >
-          <Users size={15} />
-          <span>Entrada ({todosSinEntrada.length})</span>
-        </button>
 
         <button
-          className={`tab-btn ${subTabAsistencia === 'en_planta' ? 'active' : ''}`}
-          onClick={() => setSubTabAsistencia('en_planta')}
-        >
-          <UserCheck size={15} />
-          <span>En Planta / Salidas ({todosEnPlanta.length})</span>
-        </button>
-
-        <button
-          className={`tab-btn ${subTabAsistencia === 'ausentes' ? 'active' : ''}`}
-          onClick={() => setSubTabAsistencia('ausentes')}
-        >
-          <CalendarOff size={15} />
-          <span>Vacaciones / Faltas ({ausentesProgramadosHoy.length})</span>
-        </button>
-      </div>
-
-      {renderBannerSemaforo()}
-
-      {/* BUSCADOR RÁPIDO */}
-      {subTabAsistencia !== 'ausentes' && (
-        <div
-          className="caseta-search-box"
+          type="button"
+          disabled={ev.deshabilitado || Boolean(procesandoId)}
+          onClick={() => ejecutarAccionDirecta(emp)}
           style={{
-            background: c.surfaceCard,
-            border: `1.5px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
+            height: '46px',
+            padding: '0 20px',
+            borderRadius: '11px',
+            border: 'none',
+            background: ev.deshabilitado ? 'rgba(245,158,11,0.18)' : ev.color,
+            color: ev.deshabilitado ? '#d97706' : '#ffffff',
+            fontSize: '13.5px',
+            fontWeight: '900',
+            cursor: ev.deshabilitado || procesandoId ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '7px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            boxShadow: ev.deshabilitado ? 'none' : `0 4px 12px ${ev.color}40`
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+          <span>{procesandoEste ? 'Procesando...' : ev.textoBoton}</span>
+          {esPrimeraEnBusqueda && !ev.deshabilitado && (
+            <span style={{
+              fontSize: '10.5px', padding: '2px 6px', borderRadius: '4px',
+              background: 'rgba(255,255,255,0.22)', fontWeight: '800'
+            }}>
+              Enter ↵
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  };
+
+  // ====================================================================
+  // PANEL 1: ⚡ CONTROL DE PUERTA (TORNIQUETE EN VIVO — 1 SOLA PANTALLA)
+  // ====================================================================
+  if (modoVista === 'control') {
+    return (
+      <div className="caseta-wrap">
+        <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+        <style>{estilosTorniquete}</style>
+
+        {/* 1. BUSCADOR UNIVERSAL "TOCA Y PASA" CON SOPORTE DE TECLA ENTER */}
+        <div style={{
+          background: c.surfaceCard,
+          border: `2px solid ${tieneMinimo2Letras ? c.accent : c.border}`,
+          borderRadius: '16px',
+          padding: '14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          boxShadow: tieneMinimo2Letras ? '0 8px 24px rgba(22,163,74,0.12)' : 'none'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', fontWeight: '800', color: c.textMuted }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: c.text }}>
+              <Zap size={15} color={c.accent} /> CONTROL INTELIGENTE DE PUERTA (Entradas, Salidas, Pases y Reingresos)
+            </span>
+            <span>Tolerancia entrada: <strong style={{ color: c.text }}>{horaLimiteStr} hrs</strong></span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
               <Search
-                size={17}
+                size={19}
                 style={{
-                  position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)',
-                  color: tieneMinimo3Letras ? c.accent : c.textMuted, pointerEvents: 'none'
+                  position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)',
+                  color: tieneMinimo2Letras ? c.accent : c.textMuted, pointerEvents: 'none'
                 }}
               />
               <input
                 ref={inputBusquedaRef}
                 type="text"
-                className="caseta-search-input"
-                placeholder={subTabAsistencia === 'en_planta' ? 'Filtrar personal en planta para dar salida...' : 'Escribe 3 letras del apellido o nombre...'}
+                autoFocus
+                placeholder="Escribe apellido, nombre o # de empleado y presiona Enter ↵"
                 value={busquedaTexto}
                 onChange={(e) => setBusquedaTexto(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && resultadosBuscador.length > 0) {
+                    e.preventDefault();
+                    ejecutarAccionDirecta(resultadosBuscador[0]);
+                  } else if (e.key === 'Escape') {
+                    setBusquedaTexto('');
+                  }
+                }}
                 style={{
-                  border: `1.5px solid ${tieneMinimo3Letras ? c.accent : c.border}`,
+                  width: '100%',
+                  height: '52px',
+                  padding: '0 44px 0 44px',
+                  borderRadius: '12px',
+                  border: `1.5px solid ${tieneMinimo2Letras ? c.accent : c.border}`,
                   background: c.bg,
-                  color: c.text
+                  color: c.text,
+                  fontSize: '16px',
+                  fontWeight: '800',
+                  boxSizing: 'border-box',
+                  outline: 'none'
                 }}
               />
               {busquedaTexto && (
@@ -859,394 +748,334 @@ export default function Caseta() {
 
             <button
               onClick={cargarDatos}
-              title="Actualizar"
-              className="caseta-refresh-btn"
+              title="Actualizar ahora"
               style={{
+                width: '52px', height: '52px', borderRadius: '12px',
                 border: `1.5px solid ${c.border}`, background: c.bg, color: c.text,
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
               }}
             >
-              <RefreshCw size={17} />
+              <RefreshCw size={18} />
             </button>
           </div>
-        </div>
-      )}
 
-      {/* PESTAÑA 1: ENTRADA MATUTINA */}
-      {subTabAsistencia === 'por_llegar' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-          {/* RESULTADOS DEL BUSCADOR CON SEMÁFORO VISUAL ANTES DE CONFIRMAR */}
-          {!tieneMinimo3Letras ? (
+          {/* TIRITA FLOTANTE DE FEEDBACK + DESHACER EN 1 CLIC */}
+          {feedbackAccion && (
             <div style={{
-              background: c.surfaceCard, border: `1px dashed ${c.border}`, borderRadius: '12px',
-              padding: '24px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
-            }}>
-              Escribe <strong style={{ color: c.text }}>3 letras</strong> del apellido o nombre para dar entrada (Hora límite hoy: <strong style={{ color: c.text }}>{horaLimiteStr} hrs</strong>).
-            </div>
-          ) : demasiadasCoincidenciasEntrada ? (
-            <div style={{
-              background: 'rgba(245, 158, 11, 0.10)', border: '1.5px solid rgba(245, 158, 11, 0.4)',
-              borderRadius: '12px', padding: '20px 18px', textAlign: 'center', color: '#d97706', fontSize: '14px', fontWeight: '800'
-            }}>
-              Hay {coincidenciasEntrada.length} coincidencias. Escribe una letra más.
-            </div>
-          ) : coincidenciasEntrada.length === 0 ? (
-            <div style={{
-              background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-              padding: '24px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
-            }}>
-              No se encontró ningún colaborador pendiente de entrada con "{busquedaTexto}".
-            </div>
-          ) : (
-            coincidenciasEntrada.map((emp) => {
-              const inc = mapaIncidenciasHoy[emp.id];
-              const tipoInc = inc?.tipo || 'normal';
-
-              // Determinar si requiere retención en puerta (Semáforo Rojo) o si pasa directo (Semáforo Verde)
-              let requiereRetencion = false;
-              let motivoRetencion = '';
-
-              if (tipoInc === 'falta_ayer_sin_aviso') {
-                requiereRetencion = true;
-                motivoRetencion = 'FALTÓ AYER SIN AVISO';
-              } else if (tipoInc === 'ausencia_autorizada') {
-                requiereRetencion = true;
-                motivoRetencion = String(inc?.etiqueta || '').includes('Vacaciones') ? 'ESTÁ DE VACACIONES HOY' : 'TIENE FALTA PROGRAMADA HOY';
-              } else if (fueraDeToleranciaAhora && tipoInc !== 'retardo_autorizado') {
-                requiereRetencion = true;
-                motivoRetencion = `LLEGADA TARDE (Límite ${horaLimiteStr} hrs)`;
-              }
-
-              return (
-                <div
-                  key={emp.id}
-                  className="caseta-list-item"
-                  style={{
-                    background: requiereRetencion ? (modoOscuro ? 'rgba(220,38,38,0.08)' : '#fff5f5') : c.surfaceCard,
-                    border: `2px solid ${requiereRetencion ? '#dc2626' : '#16a34a'}`
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                    <AvatarColaborador u={emp} size={42} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className="caseta-emp-name" style={{ color: c.text }}>
-                        {formatearApellidosNombre(emp.nombre_completo, emp)}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '700', marginTop: '3px' }}>
-                        <strong style={{ color: c.text }}>#{emp.numero_empleado}</strong>
-                        {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
-                        <span style={{
-                          padding: '2px 8px', borderRadius: '5px', fontWeight: '800', fontSize: '11px',
-                          background: requiereRetencion ? 'rgba(220,38,38,0.15)' : 'rgba(22,163,74,0.15)',
-                          color: requiereRetencion ? '#dc2626' : '#16a34a'
-                        }}>
-                          {requiereRetencion ? `🛑 ${motivoRetencion}` : '🟢 PASA A PLANTA'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                    {tipoInc === 'retardo_en_espera' ? (
-                      <span style={{
-                        padding: '8px 12px', borderRadius: '9px', background: 'rgba(220,38,38,0.14)',
-                        color: '#dc2626', fontSize: '12px', fontWeight: '900'
-                      }}>
-                        🛑 Ya detenido esperando firma
-                      </span>
-                    ) : tipoInc === 'retardo_autorizado' ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSellarPase(inc.paseId, 'entrada', emp.nombre_completo)}
-                        disabled={Boolean(procesandoId)}
-                        style={{
-                          height: '44px', padding: '0 16px', borderRadius: '10px', border: 'none',
-                          background: '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: 'pointer'
-                        }}
-                      >
-                        ✅ Dar Paso
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setModalConfirmacion({ emp, inc, requiereRetencion, motivoRetencion })}
-                        disabled={Boolean(procesandoId)}
-                        style={{
-                          height: '46px', padding: '0 18px', borderRadius: '11px', border: 'none',
-                          background: requiereRetencion ? '#dc2626' : '#16a34a',
-                          color: '#fff', fontSize: '13px', fontWeight: '900', cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                        }}
-                      >
-                        {requiereRetencion ? (
-                          <>🛑 Retener a un lado</>
-                        ) : (
-                          <><Check size={19} strokeWidth={3} /> Dar Entrada</>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-
-          {/* CAJÓN EN LA MISMA PANTALLA: PERSONAS DETENIDAS EN LA REJA ESPERANDO RESPUESTA */}
-          {detenidosEnReja.length > 0 && (
-            <div style={{
-              background: c.surfaceCard,
-              border: '2px solid #dc2626',
-              borderRadius: '14px',
-              padding: '10px 12px',
+              background: feedbackAccion.tipo === 'rojo' ? '#dc2626' : (feedbackAccion.tipo === 'azul' ? '#0284c7' : '#16a34a'),
+              color: '#ffffff',
+              borderRadius: '11px',
+              padding: '11px 15px',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              fontSize: '14.5px',
+              fontWeight: '900',
+              boxShadow: '0 6px 18px rgba(0,0,0,0.22)'
             }}>
-              <div style={{
-                fontSize: '12px', fontWeight: '900', color: '#dc2626',
-                textTransform: 'uppercase', letterSpacing: '0.03em',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-              }}>
-                <span>🛑 Personas detenidas a un lado en la reja (No dejar pasar hasta que cambie a verde)</span>
-                <span>{detenidosEnReja.length}</span>
-              </div>
+              <span>{feedbackAccion.texto}</span>
+              {feedbackAccion.deshacerFn && (
+                <button
+                  type="button"
+                  onClick={feedbackAccion.deshacerFn}
+                  style={{
+                    padding: '5px 12px', borderRadius: '8px',
+                    border: '1.5px solid rgba(255,255,255,0.65)',
+                    background: 'rgba(0,0,0,0.20)', color: '#fff',
+                    fontSize: '12.5px', fontWeight: '900', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0
+                  }}
+                >
+                  <Undo2 size={14} /> Deshacer
+                </button>
+              )}
+            </div>
+          )}
 
-              {detenidosEnReja.map((emp) => {
-                const inc = mapaIncidenciasHoy[emp.id];
-                const t = inc?.tipo;
-                const yaAutorizado = t === 'retardo_autorizado';
-                const seRetira = t === 'retardo_regresa';
-
-                return (
-                  <div
-                    key={emp.id}
-                    className="caseta-list-item"
-                    style={{
-                      background: yaAutorizado
-                        ? (modoOscuro ? 'rgba(22,163,74,0.16)' : '#f0fdf4')
-                        : (modoOscuro ? 'rgba(220,38,38,0.10)' : '#fef2f2'),
-                      border: `1.5px solid ${yaAutorizado ? '#16a34a' : '#dc2626'}`,
-                      padding: '9px 12px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                      <AvatarColaborador u={emp} size={38} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
-                          {formatearApellidosNombre(emp.nombre_completo, emp)}
-                        </div>
-                        <div style={{ fontSize: '11.5px', fontWeight: '800', color: yaAutorizado ? '#16a34a' : '#dc2626', marginTop: '2px' }}>
-                          {inc?.etiqueta}
-                        </div>
-                      </div>
-                    </div>
-
-                    {yaAutorizado ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSellarPase(inc.paseId, 'entrada', emp.nombre_completo)}
-                        disabled={Boolean(procesandoId)}
-                        style={{
-                          height: '40px', padding: '0 16px', borderRadius: '9px', border: 'none',
-                          background: '#16a34a', color: '#fff', fontSize: '12.5px', fontWeight: '900', cursor: 'pointer'
-                        }}
-                      >
-                        ✅ Dar Paso a Planta
-                      </button>
-                    ) : seRetira ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSellarPase(inc.paseId, 'retiro', emp.nombre_completo)}
-                        disabled={Boolean(procesandoId)}
-                        style={{
-                          height: '40px', padding: '0 14px', borderRadius: '9px', border: 'none',
-                          background: '#dc2626', color: '#fff', fontSize: '12.5px', fontWeight: '900', cursor: 'pointer'
-                        }}
-                      >
-                        ↩️ Confirmar Retiro a Casa
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: '11.5px', fontWeight: '900', color: '#dc2626', whiteSpace: 'nowrap' }}>
-                        ⏳ Esperando firma...
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+          {/* RESULTADOS EN VIVO DEL BUSCADOR */}
+          {tieneMinimo2Letras && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              {resultadosBuscador.length === 0 ? (
+                <div style={{ padding: '18px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '700' }}>
+                  No se encontró ningún colaborador con "{busquedaTexto}".
+                </div>
+              ) : (
+                resultadosBuscador.map((emp, idx) => renderFilaInteligente(emp, idx === 0))
+              )}
             </div>
           )}
         </div>
-      )}
 
-      {/* PESTAÑA 2: EN PLANTA / SALIDAS RÁPIDAS EN 1 CLIC */}
-      {subTabAsistencia === 'en_planta' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          {todosEnPlanta.length === 0 ? (
-            <div style={{
-              background: c.surfaceCard, border: `1px dashed ${c.border}`, borderRadius: '12px',
-              padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
+        {/* 2. MONITOR ACTIVO: EN LA REJA AHORITA (Retenidos esperando firma o Con pase listo para cruzar) */}
+        <div style={{
+          background: c.surfaceCard,
+          border: `1.5px solid ${empleadosEnReja.length > 0 ? '#f59e0b' : c.border}`,
+          borderRadius: '15px',
+          padding: '13px 15px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px'
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            fontSize: '12.5px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.03em',
+            color: empleadosEnReja.length > 0 ? '#d97706' : c.textMuted
+          }}>
+            <span>🚪 En la Reja Ahorita (Pases por cruzar y Personas esperando firma)</span>
+            <span style={{
+              padding: '2px 9px', borderRadius: '999px',
+              background: empleadosEnReja.length > 0 ? 'rgba(245,158,11,0.16)' : c.bg,
+              color: empleadosEnReja.length > 0 ? '#d97706' : c.textMuted
             }}>
-              Aún no hay colaboradores registrados en planta el día de hoy.
+              {empleadosEnReja.length}
+            </span>
+          </div>
+
+          {empleadosEnReja.length === 0 ? (
+            <div style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600', padding: '8px 2px' }}>
+              Nadie detenido en la reja ni pases pendientes por cruzar en este momento.
             </div>
           ) : (
-            coincidenciasEnPlanta.map((emp) => {
+            empleadosEnReja.map(emp => renderFilaInteligente(emp, false))
+          )}
+        </div>
+
+        {/* 3. MONITOR ACTIVO: EN LA CALLE CON PASE TEMPORAL (Por regresar a planta) */}
+        <div style={{
+          background: c.surfaceCard,
+          border: `1.5px solid ${empleadosEnCalle.length > 0 ? '#2563eb' : c.border}`,
+          borderRadius: '15px',
+          padding: '13px 15px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px'
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            fontSize: '12.5px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.03em',
+            color: empleadosEnCalle.length > 0 ? '#2563eb' : c.textMuted
+          }}>
+            <span>🚶 En la Calle con Pase Temporal (Toca cuando regresen a la reja)</span>
+            <span style={{
+              padding: '2px 9px', borderRadius: '999px',
+              background: empleadosEnCalle.length > 0 ? 'rgba(37,99,235,0.14)' : c.bg,
+              color: empleadosEnCalle.length > 0 ? '#2563eb' : c.textMuted
+            }}>
+              {empleadosEnCalle.length}
+            </span>
+          </div>
+
+          {empleadosEnCalle.length === 0 ? (
+            <div style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600', padding: '8px 2px' }}>
+              Ningún colaborador fuera con pase temporal en este momento.
+            </div>
+          ) : (
+            empleadosEnCalle.map(emp => renderFilaInteligente(emp, false))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ====================================================================
+  // PANEL 2: 📊 TABLERO Y BITÁCORA DEL DÍA (VISUALIZACIÓN E HISTÓRICO)
+  // ====================================================================
+  const kpis = [
+    { id: 'en_planta', label: 'En Planta', count: todosEnPlanta.length, color: '#16a34a' },
+    { id: 'por_llegar', label: 'Faltan por Llegar', count: faltanPorLlegar.length, color: '#0284c7' },
+    { id: 'ausentes', label: 'Vacaciones / Faltas', count: ausentesConPermiso.length, color: '#8b5cf6' },
+    { id: 'en_calle', label: 'En la Calle', count: empleadosEnCalle.length, color: '#2563eb' },
+    { id: 'bitacora', label: 'Bitácora Sellados', count: crucesCompletadosHoy.length, color: '#64748b' }
+  ];
+
+  return (
+    <div className="caseta-wrap">
+      <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+      <style>{estilosTorniquete}</style>
+
+      {/* 5 TARJETAS KPI PARA FILTRAR LA VISUALIZACIÓN SIN MEZCLAR INFORMACIÓN */}
+      <div className="kpi-grid-5">
+        {kpis.map(k => {
+          const activo = kpiActivo === k.id;
+          return (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => setKpiActivo(k.id)}
+              className="kpi-card-btn"
+              style={{
+                background: activo ? `${k.color}15` : c.surfaceCard,
+                border: `2px solid ${activo ? k.color : c.border}`
+              }}
+            >
+              <span style={{ fontSize: '21px', fontWeight: '900', color: k.color, lineHeight: 1 }}>
+                {k.count}
+              </span>
+              <span style={{ fontSize: '11.5px', fontWeight: '800', color: activo ? c.text : c.textMuted }}>
+                {k.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* FILTRO RÁPIDO DENTRO DEL TABLERO */}
+      <div style={{
+        background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderRadius: '13px',
+        padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px'
+      }}>
+        <Search size={16} color={c.textMuted} />
+        <input
+          type="text"
+          placeholder="Filtrar en esta lista por nombre o # de empleado..."
+          value={busquedaTexto}
+          onChange={(e) => setBusquedaTexto(e.target.value)}
+          style={{
+            flex: 1, border: 'none', background: 'transparent', color: c.text,
+            fontSize: '14px', fontWeight: '700', outline: 'none'
+          }}
+        />
+        {busquedaTexto && (
+          <button
+            type="button"
+            onClick={() => setBusquedaTexto('')}
+            style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer' }}
+          >
+            <X size={17} />
+          </button>
+        )}
+      </div>
+
+      {/* LISTA 1: PERSONAL EN PLANTA */}
+      {kpiActivo === 'en_planta' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {todosEnPlanta
+            .filter(emp => !termino || coincidePorInicioDePalabra(emp, termino))
+            .map(emp => {
               const reg = mapaAsistencias[emp.id];
-              const tieneSalida = Boolean(reg?.hora_salida);
-
               return (
-                <div
-                  key={emp.id}
-                  className="caseta-list-item"
-                  style={{
-                    background: c.surfaceCard,
-                    border: `1.5px solid ${c.border}`,
-                    borderLeft: `4px solid ${tieneSalida ? '#64748b' : '#16a34a'}`
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                    <AvatarColaborador u={emp} size={40} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className="caseta-emp-name" style={{ color: c.text }}>
+                <div key={emp.id} className="torniquete-row" style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderLeft: '4px solid #16a34a' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                    <AvatarColaborador u={emp} size={38} />
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
                         {formatearApellidosNombre(emp.nombre_completo, emp)}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
-                        <strong style={{ color: c.text }}>#{emp.numero_empleado}</strong>
-                        {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
-                        {reg?.hora_entrada && (
-                          <span style={{ fontSize: '10.5px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', color: '#16a34a', background: 'rgba(22,163,74,0.12)' }}>
-                            Entrada: {reg.hora_entrada}
-                          </span>
-                        )}
+                      <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700' }}>
+                        #{emp.numero_empleado} {emp.departamentos?.nombre ? `• ${emp.departamentos.nombre}` : ''} • <strong style={{ color: '#16a34a' }}>Entrada: {reg?.hora_entrada} hrs</strong>
                       </div>
                     </div>
                   </div>
-
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {tieneSalida ? (
-                      <>
-                        <span style={{
-                          fontSize: '11.5px', fontWeight: '800', color: '#0284c7',
-                          background: 'rgba(2,132,199,0.10)', padding: '6px 10px', borderRadius: '8px'
-                        }}>
-                          Salida: {reg.hora_salida}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeshacerSalida(emp.id)}
-                          disabled={Boolean(procesandoId)}
-                          title="Deshacer salida"
-                          style={{
-                            width: '36px', height: '36px', borderRadius: '9px',
-                            border: `1px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                          }}
-                        >
-                          <Undo2 size={15} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleSalidaDirecta(emp)}
-                          disabled={Boolean(procesandoId)}
-                          style={{
-                            height: '40px', padding: '0 16px', borderRadius: '9px', border: 'none',
-                            background: '#0284c7', color: '#ffffff', fontSize: '12.5px', fontWeight: '800',
-                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
-                          }}
-                        >
-                          <LogOut size={14} /> Dar Salida
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeshacerEntrada(emp.id)}
-                          disabled={Boolean(procesandoId)}
-                          title="Deshacer entrada"
-                          style={{
-                            width: '38px', height: '38px', borderRadius: '9px',
-                            border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted,
-                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                          }}
-                        >
-                          <Undo2 size={15} />
-                        </button>
-                      </>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => ejecutarAccionDirecta(emp)}
+                      style={{
+                        height: '36px', padding: '0 12px', borderRadius: '8px', border: 'none',
+                        background: '#0284c7', color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer'
+                      }}
+                    >
+                      Dar Salida
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeshacerEntrada(emp.id)}
+                      title="Deshacer entrada registrada por error"
+                      style={{
+                        width: '36px', height: '36px', borderRadius: '8px', border: `1px solid ${c.border}`,
+                        background: c.bg, color: c.textMuted, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                    >
+                      <Undo2 size={15} />
+                    </button>
                   </div>
                 </div>
               );
-            })
+            })}
+        </div>
+      )}
+
+      {/* LISTA 2: FALTAN POR LLEGAR */}
+      {kpiActivo === 'por_llegar' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {faltanPorLlegar
+            .filter(emp => !termino || coincidePorInicioDePalabra(emp, termino))
+            .map(emp => renderFilaInteligente(emp, false))}
+        </div>
+      )}
+
+      {/* LISTA 3: VACACIONES Y FALTAS PROGRAMADAS HOY */}
+      {kpiActivo === 'ausentes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {ausentesConPermiso.length === 0 ? (
+            <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '28px', textAlign: 'center', color: c.textMuted, fontWeight: '600' }}>
+              Ningún colaborador con Vacaciones o Falta programada para hoy.
+            </div>
+          ) : (
+            ausentesConPermiso
+              .filter(emp => !termino || coincidePorInicioDePalabra(emp, termino))
+              .map(emp => renderFilaInteligente(emp, false))
           )}
         </div>
       )}
 
-      {/* PESTAÑA 3: VACACIONES Y FALTAS DE HOY */}
-      {subTabAsistencia === 'ausentes' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          {ausentesProgramadosHoy.length === 0 ? (
-            <div style={{
-              background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-              padding: '36px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
-            }}>
-              No hay colaboradores con Vacaciones ni Faltas programadas el día de hoy.
+      {/* LISTA 4: EN LA CALLE CON PASE TEMPORAL */}
+      {kpiActivo === 'en_calle' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {empleadosEnCalle.length === 0 ? (
+            <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '28px', textAlign: 'center', color: c.textMuted, fontWeight: '600' }}>
+              No hay colaboradores fuera con pase temporal.
             </div>
           ) : (
-            ausentesProgramadosHoy.map((emp) => {
-              const inc = mapaIncidenciasHoy[emp.id];
-              return (
-                <div
-                  key={emp.id}
-                  className="caseta-list-item"
-                  style={{
-                    background: c.surfaceCard,
-                    border: `1.5px solid ${c.border}`,
-                    borderLeft: `4px solid ${inc.color}`
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                    <AvatarColaborador u={emp} size={40} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className="caseta-emp-name" style={{ color: c.text }}>
-                        {formatearApellidosNombre(emp.nombre_completo, emp)}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
-                        <span style={{
-                          fontSize: '11px', fontWeight: '800', padding: '2px 8px', borderRadius: '5px',
-                          color: inc.color, background: inc.bg
-                        }}>
-                          {inc.etiqueta}
-                        </span>
-                        <span style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '700' }}>
-                          #{emp.numero_empleado} {emp.departamentos?.nombre ? `• ${emp.departamentos.nombre}` : ''}
-                        </span>
-                      </div>
+            empleadosEnCalle.map(emp => renderFilaInteligente(emp, false))
+          )}
+        </div>
+      )}
+
+      {/* LISTA 5: BITÁCORA DE MOVIMIENTOS SELLADOS HOY */}
+      {kpiActivo === 'bitacora' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {crucesCompletadosHoy.length === 0 ? (
+            <div style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px', padding: '28px', textAlign: 'center', color: c.textMuted, fontWeight: '600' }}>
+              Aún no hay pases sellados en la bitácora de hoy.
+            </div>
+          ) : (
+            crucesCompletadosHoy.map(p => (
+              <div key={p.id} className="torniquete-row" style={{ background: c.surfaceCard, border: `1.5px solid ${c.border}`, borderLeft: `4px solid ${p.seRegresaACasa ? '#ef4444' : '#16a34a'}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                  <AvatarColaborador u={p.usuarios} size={36} />
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
+                      {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '600' }}>
+                      #{p.usuarios?.numero_empleado} • Folio {p.folio} • {p.horarioProgramado}
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSubTabAsistencia('por_llegar');
-                      setModalConfirmacion({
-                        emp,
-                        inc,
-                        requiereRetencion: true,
-                        motivoRetencion: String(inc?.etiqueta || '').includes('Vacaciones') ? 'ESTÁ DE VACACIONES HOY' : 'TIENE FALTA PROGRAMADA HOY'
-                      });
-                    }}
-                    disabled={Boolean(procesandoId)}
-                    style={{
-                      height: '38px', padding: '0 13px', borderRadius: '9px',
-                      border: '1.5px solid #dc2626', background: 'rgba(220,38,38,0.10)',
-                      color: '#dc2626', fontSize: '12px', fontWeight: '800', cursor: 'pointer', flexShrink: 0
-                    }}
-                  >
-                    🛑 Se presentó (Pedir Firma)
-                  </button>
                 </div>
-              );
-            })
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '800' }}>
+                  {p.seRegresaACasa ? (
+                    <span style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', padding: '4px 9px', borderRadius: '6px' }}>
+                      ↩️ Retirado a casa ({p.horaRetiroCaseta})
+                    </span>
+                  ) : (
+                    <>
+                      {p.horaSalidaCaseta && (
+                        <span style={{ background: 'rgba(2,132,199,0.12)', color: '#0284c7', padding: '4px 9px', borderRadius: '6px' }}>
+                          ↗ Salida: {p.horaSalidaCaseta}
+                        </span>
+                      )}
+                      {p.horaEntradaCaseta && (
+                        <span style={{ background: c.accentSoft, color: c.accent, padding: '4px 9px', borderRadius: '6px' }}>
+                          ↙ {p.tipo_permiso === 'salida' ? `Reingreso: ${p.horaEntradaCaseta}` : `Entrada: ${p.horaEntradaCaseta}`}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       )}

@@ -260,6 +260,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       esRechazado,
       created_at: rawPase.created_at,
       horarioProgramado: extraerHorarioProgramado(obs),
+      observacionesRaw: obs,
       requiereRegreso,
       seRegresaACasa,
       horaLlegadaPuerta,
