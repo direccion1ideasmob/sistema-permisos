@@ -23,7 +23,7 @@ export default function Caseta() {
   const location = useLocation();
   const inputRef = useRef(null);
 
-  const esPaseDeLista = !location.pathname.includes('/asistencia') && !location.pathname.includes('/actividad');
+  const esPaseDeLista = location.pathname === '/caseta' || location.pathname === '/caseta/';
 
   const [modoOscuro, setModoOscuro] = useState(() => localStorage.getItem('tema_sistema') === 'oscuro');
   useEffect(() => {

@@ -323,7 +323,7 @@ export default function Sidebar({
           {esCaseta && (
             <>
               <Link 
-                to="/caseta/asistencia" 
+                to="/caseta" 
                 onClick={cerrarMenuMovil} 
                 style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
@@ -331,7 +331,7 @@ export default function Sidebar({
                 <span style={s.navText}>Asistencia</span>
               </Link>
               <Link 
-                to="/caseta" 
+                to="/caseta/asistencia" 
                 onClick={cerrarMenuMovil} 
                 style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >

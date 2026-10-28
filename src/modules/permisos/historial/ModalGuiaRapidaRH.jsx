@@ -105,7 +105,7 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
     ],
     caseta: [
       {
-        titulo: 'Módulo 1: "Asistencia" (Menú lateral de Caseta)',
+        titulo: 'Módulo 1: "Actividad" (Menú lateral de Caseta)',
         puntos: [
           ['Pestaña "Entrada" (Regla de 3 letras)', 'El guardia debe escribir al menos 3 letras del apellido, nombre o # de empleado. Por seguridad, si hay más de 3 coincidencias el sistema pide escribir una letra más. Luego toca el botón verde "✓" y en la ventana con fotografía presiona "Confirmar".'],
           ['Si el trabajador llega tarde (Recuadro "🔔 En puerta")', 'Si pasa después de la Tolerancia de Entrada configurada por RH, el sistema no lo mete a planta y lo coloca arriba en "🔔 En puerta (En espera y Resoluciones)" con leyenda "En espera de RH". • Si RH autoriza: aparece el botón verde "Dar Paso a Planta" (o se registra su entrada si RH ya lo dictaminó en vivo). • Si RH ordena regresarlo: aparece el botón rojo "Confirmar Retiro".'],
@@ -114,7 +114,7 @@ export default function ModalGuiaRapidaRH({ modoOscuro, onClose }) {
         ]
       },
       {
-        titulo: 'Módulo 2: "Actividad" (Menú lateral de Caseta)',
+        titulo: 'Módulo 2: "Asistencia" (Menú lateral de Caseta)',
         puntos: [
           ['Pestaña "En Puerta"', 'Muestra los permisos autorizados listos para cruzar y los retenidos en espera de RH. Según el caso, el guardia presiona: • "Confirmar Salida" (azul, para pases de salida anticipada). • "Dar Acceso" (verde, para entradas/retardos autorizados). • "Confirmar Retiro" (rojo, cuando RH ordena que se regrese a casa).'],
           ['Pestaña "Por Regresar"', 'Lista a los colaboradores que salieron con un pase temporal (con regreso el mismo día). Cuando vuelven a caseta, el guardia presiona "Confirmar Reingreso".'],
