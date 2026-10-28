@@ -251,6 +251,17 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       horaEntradaCaseta,
       esperandoFirmaDe,
       autorizadoPor,
+      etiquetaMotivoPuerta: (() => {
+        if (/VACACIONES.*reincorporarse/i.test(obs)) return '🏖️ Se presentó en Vacaciones';
+        if (/Tenía FALTA programada/i.test(obs)) return '📋 Tenía Falta hoy y se presentó';
+        if (/SALIDA DEFINITIVA.*reingresar/i.test(obs)) return '🔄 Solicita reingresar tras Salida Definitiva';
+        if (/HORARIO NO COINCIDE EN CASETA/i.test(obs)) return '⚠️ Horario de pase no coincide';
+        if (/retardo autorizado para las/i.test(obs)) return '⚠️ Llegó más tarde del retardo avisado';
+        if (tipo === 'falta' || /FALTA PREVIA SIN AVISO|FALTA SIN AVISO/i.test(rawPase.asunto_motivo || '') || /FALTA PREVIA SIN AVISO/i.test(obs)) {
+          return '🚨 Faltó sin aviso previo';
+        }
+        return `🕒 Retardo en puerta${horaLlegadaPuerta ? ' (' + horaLlegadaPuerta + ')' : ''}`;
+      })(),
       usuarios: {
         id: rawPase.usuarios?.id,
         numero_empleado: rawPase.usuarios?.numero_empleado,
@@ -665,7 +676,7 @@ export const sincronizarCierreTurnoAutomatico = async () => {
 
     const horaSalidaStr = await obtenerHoraSalidaOficial();
     const [hSal, mSal] = (horaSalidaStr || '17:00').split(':').map(Number);
-    const minSalidaOficial = (isNaN(hSal) ? 17 : hSal) * 60 + (isNaN(mSal) ? 0 : mSal);
+    const minSalidaOficial = Math.max(17 * 60, (isNaN(hSal) ? 17 : hSal) * 60 + (isNaN(mSal) ? 0 : mSal));
     const turnoHoyConcluido = minActuales >= minSalidaOficial;
 
     // Consultar permisos de retardo y salida de los últimos 10 días que ya debieron concluir
