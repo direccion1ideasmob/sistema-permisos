@@ -52,6 +52,7 @@ export default function Caseta() {
   const [busqueda, setBusqueda] = useState('');
   const [procesandoId, setProcesandoId] = useState(null);
   const [avisoGrande, setAvisoGrande] = useState(null);
+  const [confirmarAnularEntrada, setConfirmarAnularEntrada] = useState(null);
   const timerAvisoRef = useRef(null);
 
   const sedeGuardia = usuario?.sede_id || null;
@@ -425,9 +426,33 @@ export default function Caseta() {
             <div style={{ fontSize: '18px', fontWeight: '900', color: c.text, lineHeight: 1.2 }}>
               {formatearApellidosNombre(emp.nombre_completo, emp)}
             </div>
-            <div style={{ fontSize: '14px', fontWeight: '800', color: acc.color, marginTop: '5px' }}>
-              {acc.estado}
-              {emp.departamentos?.nombre ? <span style={{ color: c.textMuted, fontWeight: '600' }}> · {emp.departamentos.nombre}</span> : ''}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '5px' }}>
+              <span style={{ fontSize: '14px', fontWeight: '800', color: acc.color }}>
+                {acc.estado}
+                {emp.departamentos?.nombre ? <span style={{ color: c.textMuted, fontWeight: '600' }}> · {emp.departamentos.nombre}</span> : ''}
+              </span>
+              {acc.tipoAccion === 'SALIDA_TURNO' && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmarAnularEntrada(emp);
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: c.textMuted,
+                    fontSize: '11.5px',
+                    fontWeight: '700',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    opacity: 0.75
+                  }}
+                >
+                  Corregir entrada
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -469,6 +494,67 @@ export default function Caseta() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '820px', margin: '0 auto', fontFamily: '"Inter", sans-serif' }}>
         <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+      {confirmarAnularEntrada && (
+        <div
+          onClick={() => setConfirmarAnularEntrada(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: c.surfaceCard, border: '2px solid #dc2626',
+              borderRadius: '18px', padding: '24px 22px', width: '100%', maxWidth: '400px',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.4)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '14px'
+            }}
+          >
+            <span style={{
+              fontSize: '12px', fontWeight: '900', textTransform: 'uppercase',
+              padding: '4px 12px', borderRadius: '99px',
+              background: 'rgba(220,38,38,0.14)', color: '#dc2626'
+            }}>
+              Confirmar corrección de asistencia
+            </span>
+            <div style={{ fontSize: '16px', fontWeight: '900', color: c.text, lineHeight: 1.3 }}>
+              ¿Seguro que deseas anular la entrada de hoy de {formatearApellidosNombre(confirmarAnularEntrada.nombre_completo, confirmarAnularEntrada)}?
+            </div>
+            <div style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600' }}>
+              El trabajador dejará de aparecer en planta y volverá a estar pendiente de entrada.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginTop: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setConfirmarAnularEntrada(null)}
+                style={{
+                  height: '46px', borderRadius: '11px', border: `1.5px solid ${c.border}`,
+                  background: c.bg, color: c.text, fontSize: '14px', fontWeight: '800', cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const idBorrar = confirmarAnularEntrada.id;
+                  setConfirmarAnularEntrada(null);
+                  await revertirEntrada(idBorrar);
+                }}
+                style={{
+                  height: '46px', borderRadius: '11px', border: 'none',
+                  background: '#dc2626', color: '#fff', fontSize: '14px', fontWeight: '900', cursor: 'pointer'
+                }}
+              >
+                Sí, anular entrada
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
         {/* AVISO GIGANTE VERDE O ROJO */}
         {avisoGrande && (
@@ -599,6 +685,67 @@ export default function Caseta() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '820px', margin: '0 auto', fontFamily: '"Inter", sans-serif' }}>
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+      {confirmarAnularEntrada && (
+        <div
+          onClick={() => setConfirmarAnularEntrada(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: c.surfaceCard, border: '2px solid #dc2626',
+              borderRadius: '18px', padding: '24px 22px', width: '100%', maxWidth: '400px',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.4)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '14px'
+            }}
+          >
+            <span style={{
+              fontSize: '12px', fontWeight: '900', textTransform: 'uppercase',
+              padding: '4px 12px', borderRadius: '99px',
+              background: 'rgba(220,38,38,0.14)', color: '#dc2626'
+            }}>
+              Confirmar corrección de asistencia
+            </span>
+            <div style={{ fontSize: '16px', fontWeight: '900', color: c.text, lineHeight: 1.3 }}>
+              ¿Seguro que deseas anular la entrada de hoy de {formatearApellidosNombre(confirmarAnularEntrada.nombre_completo, confirmarAnularEntrada)}?
+            </div>
+            <div style={{ fontSize: '13px', color: c.textMuted, fontWeight: '600' }}>
+              El trabajador dejará de aparecer en planta y volverá a estar pendiente de entrada.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginTop: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setConfirmarAnularEntrada(null)}
+                style={{
+                  height: '46px', borderRadius: '11px', border: `1.5px solid ${c.border}`,
+                  background: c.bg, color: c.text, fontSize: '14px', fontWeight: '800', cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const idBorrar = confirmarAnularEntrada.id;
+                  setConfirmarAnularEntrada(null);
+                  await revertirEntrada(idBorrar);
+                }}
+                style={{
+                  height: '46px', borderRadius: '11px', border: 'none',
+                  background: '#dc2626', color: '#fff', fontSize: '14px', fontWeight: '900', cursor: 'pointer'
+                }}
+              >
+                Sí, anular entrada
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {avisoGrande && (
         <div style={{
