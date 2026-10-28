@@ -42,6 +42,7 @@ export default function Caseta() {
   const [retenidosEnEspera, setRetenidosEnEspera] = useState([]);
   const [pasesPorCruzar, setPasesPorCruzar] = useState([]);
   const [personalFuera, setPersonalFuera] = useState([]);
+  const [crucesCompletadosHoy, setCrucesCompletadosHoy] = useState([]);
   const [empleadosSede, setEmpleadosSede] = useState([]);
   const [mapaAsistencias, setMapaAsistencias] = useState({});
   const [mapaIncidenciasHoy, setMapaIncidenciasHoy] = useState({});
@@ -77,6 +78,7 @@ export default function Caseta() {
       setRetenidosEnEspera(data.retenidosEnEspera || []);
       setPasesPorCruzar(data.pasesPorCruzar || []);
       setPersonalFuera(data.personalFuera || []);
+      setCrucesCompletadosHoy(data.crucesCompletadosHoy || []);
       setEmpleadosSede(data.empleadosSede || []);
       setMapaAsistencias(data.mapaAsistencias || {});
       setMapaIncidenciasHoy(data.mapaIncidenciasHoy || {});
@@ -230,7 +232,20 @@ export default function Caseta() {
       };
     }
 
-    // 7. Ya salió hoy
+    // 7. Ya salió hoy (Revisar si fue por Salida Definitiva para permitir pedir reingreso si vuelve)
+    const paseDef = crucesCompletadosHoy.find(
+      p => p.usuario_id === emp.id && p.tipo_permiso === 'salida' && !p.requiereRegreso && !p.horaEntradaCaseta
+    );
+    if (paseDef) {
+      return {
+        color: '#d97706',
+        fondo: c.surfaceCard,
+        estado: '🔵 Salió con pase definitivo',
+        boton: '✋ PEDIR REINGRESO',
+        tipoAccion: 'REINGRESO_DEFINITIVO',
+        paseId: paseDef.id
+      };
+    }
     return {
       color: '#64748b',
       fondo: c.surfaceCard,
@@ -264,9 +279,13 @@ export default function Caseta() {
         );
         mostrarAviso('rojo', `✋ DETENIDO: Se pidió autorización para ${emp.nombre_completo}`);
       } else if (acc.tipoAccion === 'ENTRADA_AUTORIZADA') {
-        if (acc.paseId) await registrarCheckCaseta(acc.paseId, 'entrada');
-        else await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, true);
-        mostrarAviso('verde', `✅ PASA A PLANTA: ${emp.nombre_completo}`, () => revertirEntrada(emp.id));
+        const res = await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, false);
+        if (res?.resultado === 'retenido_por_inusual' || res?.resultado === 'en_espera_rh') {
+          mostrarAviso('rojo', `✋ DETENIDO: Llegó más tarde de la hora autorizada. Se pidió firma.`);
+        } else {
+          if (acc.paseId) await registrarCheckCaseta(acc.paseId, 'entrada');
+          mostrarAviso('verde', `✅ PASA A PLANTA: ${emp.nombre_completo}`, () => revertirEntrada(emp.id));
+        }
       } else if (acc.tipoAccion === 'SALIDA_PASE') {
         const res = await registrarCheckCaseta(acc.paseId, 'salida');
         if (res?.resultado === 'retenido_por_horario') {
@@ -287,6 +306,9 @@ export default function Caseta() {
       } else if (acc.tipoAccion === 'SALIDA_TURNO') {
         await registrarAsistenciaLista(emp.id, 'salida', usuario?.id || null, false);
         mostrarAviso('verde', `✅ SALIDA REGISTRADA: ${emp.nombre_completo}`, () => revertirSalida(emp.id));
+      } else if (acc.tipoAccion === 'REINGRESO_DEFINITIVO') {
+        await solicitarAutorizacionInusualCaseta(acc.paseId, 'reingreso_salida_definitiva');
+        mostrarAviso('rojo', `✋ DETENIDO: Se pidió autorización de reingreso para ${emp.nombre_completo}`);
       } else if (acc.tipoAccion === 'DESHACER_SALIDA') {
         await deshacerSalidaReciente(emp.id);
         mostrarAviso('verde', `↩ Salida deshecha: ${emp.nombre_completo}`);
@@ -410,7 +432,26 @@ export default function Caseta() {
           </div>
         </div>
 
-        <button
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {acc.tipoAccion === 'SALIDA_TURNO' && (
+            <button
+              type="button"
+              title="Deshacer entrada registrada por error"
+              disabled={Boolean(procesandoId)}
+              onClick={(e) => {
+                e.stopPropagation();
+                revertirEntrada(emp.id);
+              }}
+              style={{
+                width: '46px', height: '54px', borderRadius: '12px',
+                border: `1.5px solid ${c.border}`, background: c.bg, color: c.textMuted,
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >
+              <Undo2 size={20} />
+            </button>
+          )}
+          <button
           type="button"
           disabled={acc.deshabilitado || Boolean(procesandoId)}
           onClick={(e) => {
@@ -433,6 +474,7 @@ export default function Caseta() {
         >
           {cargando ? '...' : acc.boton}
         </button>
+        </div>
       </div>
     );
   };
