@@ -270,15 +270,15 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       esperandoFirmaDe,
       autorizadoPor,
       etiquetaMotivoPuerta: (() => {
-        if (/VACACIONES.*reincorporarse/i.test(obs)) return '🏖️ Se presentó en Vacaciones';
-        if (/Tenía FALTA programada/i.test(obs)) return '📋 Tenía Falta hoy y se presentó';
-        if (/SALIDA DEFINITIVA.*reingresar/i.test(obs)) return '🔄 Solicita reingresar tras Salida Definitiva';
-        if (/HORARIO NO COINCIDE EN CASETA/i.test(obs)) return '⚠️ Horario de pase no coincide';
-        if (/retardo autorizado para las/i.test(obs)) return '⚠️ Llegó más tarde del retardo avisado';
+        if (/VACACIONES.*reincorporarse/i.test(obs)) return 'Vacaciones vigentes';
+        if (/Tenía FALTA programada/i.test(obs)) return 'Falta programada';
+        if (/SALIDA DEFINITIVA.*reingresar/i.test(obs)) return 'Reingreso extraordinario';
+        if (/HORARIO NO COINCIDE EN CASETA/i.test(obs)) return 'Horario vencido';
+        if (/retardo autorizado para las/i.test(obs)) return 'Tiempo excedido';
         if (tipo === 'falta' || /FALTA PREVIA SIN AVISO|FALTA SIN AVISO/i.test(rawPase.asunto_motivo || '') || /FALTA PREVIA SIN AVISO/i.test(obs)) {
-          return '🚨 Faltó sin aviso previo';
+          return 'Falta previa s/aviso';
         }
-        return `🕒 Retardo en puerta${horaLlegadaPuerta ? ' (' + horaLlegadaPuerta + ')' : ''}`;
+        return `Retardo${horaLlegadaPuerta ? ' · ' + horaLlegadaPuerta : ''}`;
       })(),
       usuarios: {
         id: rawPase.usuarios?.id,
