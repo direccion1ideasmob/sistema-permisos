@@ -144,7 +144,15 @@ export default function Sidebar({
       }}>
 
         {/* 1. MARCA DE AGUA EN LA BARRA */}
-        <div style={s.sidebarWatermarkContainer}>
+        <Link 
+                to="/caseta/asistencia" 
+                onClick={cerrarMenuMovil} 
+                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
+              >
+                <ClipboardList size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
+                <span style={s.navText}>Asistencia</span>
+              </Link>
+            <div style={s.sidebarWatermarkContainer}>
           <img 
             src="/LogoVerde-removebg-preview.png" 
             alt="Marca de agua lateral" 
@@ -328,15 +336,7 @@ export default function Sidebar({
                 style={location.pathname === '/caseta' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
               >
                 <DoorOpen size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Pases de Puerta</span>
-              </Link>
-              <Link 
-                to="/caseta/asistencia" 
-                onClick={cerrarMenuMovil} 
-                style={location.pathname === '/caseta/asistencia' ? { ...s.navLinkActive, backgroundColor: tema.navActiveBg, color: tema.navActiveText, borderLeft: `4px solid ${tema.navActiveBorder}` } : { ...s.navLink, color: tema.textSecondary }}
-              >
-                <ClipboardList size={21} strokeWidth={2} style={{ flexShrink: 0 }} />
-                <span style={s.navText}>Pase de Lista</span>
+                <span style={s.navText}>Actividad</span>
               </Link>
               
             </>

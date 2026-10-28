@@ -433,24 +433,7 @@ export default function Caseta() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          {acc.tipoAccion === 'SALIDA_TURNO' && (
-            <button
-              type="button"
-              title="Deshacer entrada registrada por error"
-              disabled={Boolean(procesandoId)}
-              onClick={(e) => {
-                e.stopPropagation();
-                revertirEntrada(emp.id);
-              }}
-              style={{
-                width: '46px', height: '54px', borderRadius: '12px',
-                border: `1.5px solid ${c.border}`, background: c.bg, color: c.textMuted,
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-              }}
-            >
-              <Undo2 size={20} />
-            </button>
-          )}
+          
           <button
           type="button"
           disabled={acc.deshabilitado || Boolean(procesandoId)}
