@@ -141,7 +141,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     // Guardar en mapaIncidenciasHoy con su 'tipo' exacto para que Caseta.jsx lo muestre siempre
     if (!mapaIncidenciasHoy[rawPase.usuario_id]) {
-      if (tipo === 'vacaciones' && !esRechazado) {
+      if (tipo === 'vacaciones' && !esRechazado && !(rawPase.estado_general === 'en_firmas' && Boolean(horaLlegadaPuerta))) {
         mapaIncidenciasHoy[rawPase.usuario_id] = {
           tipo: 'ausencia_autorizada',
           paseId: rawPase.id,
@@ -157,7 +157,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           color: '#8b5cf6',
           bg: 'rgba(139,92,246,0.12)'
         };
-      } else if (tipo === 'retardo' || seRegresaACasa || (tipo === 'falta' && Boolean(horaLlegadaPuerta))) {
+      } else if (tipo === 'retardo' || seRegresaACasa || ((tipo === 'falta' || tipo === 'vacaciones') && Boolean(horaLlegadaPuerta))) {
         if (seRegresaACasa) {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_regresa',
@@ -168,6 +168,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             bg: 'rgba(239,68,68,0.14)'
           };
         } else if (!jefeYaDecidioRetardo) {
+          const esInusualAusencia = /COMPORTAMIENTO INUSUAL EN CASETA/i.test(obs);
           const esFaltaSinAviso = tipo === 'falta' || /FALTA PREVIA SIN AVISO|FALTA SIN AVISO/i.test(rawPase.asunto_motivo || '') || /FALTA PREVIA SIN AVISO/i.test(obs);
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_en_espera',
@@ -175,7 +176,9 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             esperandoFirmaDe,
             horaLlegadaPuerta,
             esFaltaSinAviso,
-            etiqueta: esFaltaSinAviso
+            etiqueta: esInusualAusencia
+              ? `🚨 CAMBIO EN PUERTA (${tipo.toUpperCase()}) • Esperando a: ${esperandoFirmaDe}`
+              : esFaltaSinAviso
               ? `🚨 RETENIDO POR FALTA SIN AVISO • Esperando a: ${esperandoFirmaDe}`
               : `⏳ RETARDO EN PUERTA • Esperando a: ${esperandoFirmaDe}`,
             color: esFaltaSinAviso ? '#dc2626' : '#d97706',
@@ -219,7 +222,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     // Los pases de puerta solo aplican para hoy y para Salida o Retardo
     if (fechaTarget !== hoy) return;
-    const esFaltaRetenidaPuerta = tipo === 'falta' && Boolean(horaLlegadaPuerta);
+    const esFaltaRetenidaPuerta = (tipo === 'falta' || tipo === 'vacaciones') && Boolean(horaLlegadaPuerta);
     if (tipo !== 'salida' && tipo !== 'retardo' && !seRegresaACasa && !esFaltaRetenidaPuerta) return;
 
     // Si es una salida rechazada o cancelada, o si el empleado ya fue regresado a casa hoy en un retardo, no cruza puerta como salida
@@ -321,6 +324,80 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   };
 };
 
+
+
+// REGLA MAESTRA RH: Cualquier comportamiento inusual en puerta modifica el permiso existente
+// y retiene al colaborador en espera de autorización de Jefatura / RH
+export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia = 'presentacion_en_ausencia', detalleAdicional = '') => {
+  const ahora = new Date();
+  const horaFormateada = ahora.toTimeString().slice(0, 5);
+  const hoyStr = obtenerFechaLocalHoy();
+
+  const { data: permiso, error: errGet } = await supabase
+    .from('permisos')
+    .select('*, usuarios:usuario_id (id, nombre_completo, foto_url, departamento_id)')
+    .eq('id', permisoId)
+    .single();
+
+  if (errGet || !permiso) throw new Error('No se encontró el permiso para re-autorizar.');
+
+  const obsLimpia = (permiso.observaciones || '')
+    .replace(/\s*\|\s*\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/gi, '')
+    .replace(/\s*\|\s*\[HORARIO AUTORIZADO EN CASETA\]/gi, '')
+    .replace(/\s*\|\s*\[LLEGADA EN PUERTA:\s*[^\]]+\]/gi, '')
+    .trim();
+
+  let descripcionInusual = detalleAdicional;
+  if (tipoAnomalia === 'presentacion_en_falta') {
+    descripcionInusual = `Tenía FALTA programada hoy pero se presentó en caseta a las ${horaFormateada} hrs solicitando ingresar a laborar`;
+  } else if (tipoAnomalia === 'presentacion_en_vacaciones') {
+    descripcionInusual = `Estaba en periodo de VACACIONES pero se presentó en caseta a las ${horaFormateada} hrs solicitando reincorporarse antes`;
+  } else if (tipoAnomalia === 'reingreso_salida_definitiva') {
+    descripcionInusual = `Tenía SALIDA DEFINITIVA pero regresó a caseta a las ${horaFormateada} hrs solicitando reingresar a planta`;
+  }
+
+  const selloInusual = `⚠️ [COMPORTAMIENTO INUSUAL EN CASETA (${horaFormateada} hrs): ${descripcionInusual}]`;
+  const nuevasObs = `${obsLimpia} | ${selloInusual} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.replace(/^\s*\|\s*/, '').trim();
+
+  const updates = {
+    estado_general: 'en_firmas',
+    pago: 'Pendiente de dictamen (Cambio en Caseta)',
+    firma_1_estado: permiso.firma_1_id ? 'pendiente' : permiso.firma_1_estado,
+    firma_3_estado: 'pendiente',
+    observaciones: nuevasObs
+  };
+
+  const { error } = await supabase
+    .from('permisos')
+    .update(updates)
+    .eq('id', permisoId);
+
+  if (error) throw error;
+
+  const { data: rhUsers } = await supabase
+    .from('usuarios')
+    .select('id')
+    .in('rol', ['gerente_rh', 'rh_nominas'])
+    .eq('activo', true);
+
+  const dest = [
+    permiso.firma_1_id,
+    ...(rhUsers || []).map(u => u.id)
+  ].filter(Boolean);
+
+  if (dest.length > 0) {
+    try {
+      await enviarNotificacionPushUsuarios([...new Set(dest)], {
+        titulo: '🚨 CAMBIO INUSUAL EN CASETA — REQUIERE AUTORIZACIÓN',
+        mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n⚠️ ${descripcionInusual}\n⏳ Retenido en Vigilancia esperando tu decisión.`,
+        fotoUrl: permiso.usuarios?.foto_url || null,
+        urlDestino: '/aprobaciones'
+      });
+    } catch (_) {}
+  }
+
+  return { resultado: 'retenido_por_inusual', descripcionInusual };
+};
 
 export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimiento = 'reingreso', detalleDesfase = '') => {
   const ahora = new Date();
@@ -775,13 +852,12 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
 
   const vacacionesHoy = activosHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'vacaciones');
   if (vacacionesHoy) {
-    throw new Error(`El colaborador tiene Vacaciones autorizadas hoy (${vacacionesHoy.folio}).`);
+    return await solicitarAutorizacionInusualCaseta(vacacionesHoy.id, 'presentacion_en_vacaciones');
   }
 
-  // Si tenía una Falta ordinaria programada hoy pero sí se presentó en caseta, cancelamos la falta previa
-  const faltaOrdinariaHoy = activosHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'falta' && p.id !== yaRegresadoHoy?.id);
+  const faltaOrdinariaHoy = activosHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'falta' && p.id !== yaRegresadoHoy?.id && !/FALTA PREVIA SIN AVISO/i.test(p.asunto_motivo || ''));
   if (faltaOrdinariaHoy) {
-    await cancelarPasePorInasistenciaOCambio(faltaOrdinariaHoy.id, `Se presentó a laborar en puerta (${horaActual} hrs)`);
+    return await solicitarAutorizacionInusualCaseta(faltaOrdinariaHoy.id, 'presentacion_en_falta');
   }
 
   const esPorFaltaSinAviso = Boolean(motivoEspecial && /FALTA/i.test(motivoEspecial));
@@ -1018,13 +1094,18 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
         }
       }
     }
+    const vacacionesHoyLista = pasesVigentesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'vacaciones');
+    if (vacacionesHoyLista && !forzarDirectoRH) {
+      return await solicitarAutorizacionInusualCaseta(vacacionesHoyLista.id, 'presentacion_en_vacaciones');
+    }
+    if (faltaHoy && !forzarDirectoRH && !/FALTA PREVIA SIN AVISO/i.test(faltaHoy.asunto_motivo || '')) {
+      return await solicitarAutorizacionInusualCaseta(faltaHoy.id, 'presentacion_en_falta');
+    }
+
     // CASO A: Llega en tiempo (<= hora límite de RH) o RH lo valida directamente desde su panel
     if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {
       if (retardoHoy && retardoHoy.estado_general !== 'completado_caseta') {
         await cancelarPasePorInasistenciaOCambio(retardoHoy.id, `Asistió en horario normal (${horaActual} hrs)`);
-      }
-      if (faltaHoy) {
-        await cancelarPasePorInasistenciaOCambio(faltaHoy.id, `Asistió a laborar (${horaActual} hrs)`);
       }
     } else {
       // CASO B: Llega DESPUÉS del límite de tolerancia de RH (> 07:15) marcado por Caseta
@@ -1033,12 +1114,26 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
         if (seRegresa) {
           return { resultado: 'se_regresa', data: retardoHoy };
         }
-        // Ya tenía su retardo autorizado -> sella el pase y registra en asistencias_caseta
+        // VARIACIÓN 4: Verificar si llegó más de 15 min más tarde de la hora que había avisado en su retardo anticipado
+        const obsRet = retardoHoy.observaciones || '';
+        const mEst = obsRet.match(/Llegada estimada:\s*(\d{1,2}):(\d{2})/i);
+        const yaReautorizadoRet = /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obsRet);
+        if (mEst && !yaReautorizadoRet) {
+          const minEstimados = parseInt(mEst[1], 10) * 60 + parseInt(mEst[2], 10);
+          const excesoRet = minutosDelDia - minEstimados;
+          if (excesoRet > 15) {
+            const hPrometida = `${String(mEst[1]).padStart(2, '0')}:${mEst[2]}`;
+            return await solicitarAutorizacionInusualCaseta(
+              retardoHoy.id,
+              'retardo_excedido',
+              `Tenía retardo autorizado para las ${hPrometida} hrs pero llegó a caseta a las ${horaActual} hrs (+${excesoRet} min después de lo avisado)`
+            );
+          }
+        }
         await registrarCheckCaseta(retardoHoy.id, 'entrada');
         return { resultado: 'entrada_registrada', data: retardoHoy };
       }
 
-      // NO tiene retardo autorizado aún -> Se detiene en puerta y manda el Retardo a Aprobaciones de RH/Jefe
       return await registrarRetardoEnPuerta(usuarioId, guardiaId);
     }
   }

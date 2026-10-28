@@ -15,9 +15,10 @@ export default function TarjetaAprobacion({
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo || 'U')}&background=334155&color=f8fafc&bold=true`;
 
   const tipo = (solicitud.tipo_permiso || '').toLowerCase();
-  const esFaltaEnPuerta = tipo === 'falta' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const esFaltaEnPuerta = (tipo === 'falta' || tipo === 'vacaciones') && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const esInusualEnPuerta = /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(solicitud.observaciones || '');
   const esSalidaDesfaseHorario = tipo === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '');
-  const esRetardo = tipo === 'retardo' || esFaltaEnPuerta;
+  const esRetardo = tipo === 'retardo' || esFaltaEnPuerta || esInusualEnPuerta;
 
   const esRH = usuarioActual?.rol === 'rh_nominas' || usuarioActual?.rol === 'gerente_rh' || usuarioActual?.rol === 'superadmin';
   const soyFirmante1Directo = solicitud.firma_1_id === usuarioActual?.id && solicitud.firma_1_estado === 'pendiente';

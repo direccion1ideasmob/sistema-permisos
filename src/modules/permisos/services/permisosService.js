@@ -352,6 +352,59 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const estaEnPuerta = /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
   const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
 
+  // RESOLUCIÓN DE COMPORTAMIENTOS INUSUALES EN CASETA CUANDO RH / JEFATURA DA ACCESO
+  const obsOriginalInusual = solicitud.observaciones || '';
+  const esInusualCaseta = /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(obsOriginalInusual);
+  if (esInusualCaseta && updates.estado_general === 'autorizado' && !seRegresaDictamen) {
+    try {
+      const mLlegadaP = obsOriginalInusual.match(/\[LLEGADA EN PUERTA:\s*([^\]]+)\]/i);
+      const horaRealPuerta = mLlegadaP ? mLlegadaP[1].replace(/\s*hrs/i, '').trim() : new Date().toTimeString().slice(0, 5);
+      const obsConAvalInusual = `${updates.observaciones || obsOriginalInusual} | [COMPORTAMIENTO INUSUAL AUTORIZADO]`;
+
+      if (/presentó en caseta.*FALTA|Tenía FALTA programada/i.test(obsOriginalInusual)) {
+        // Tenía falta programada hoy, se presentó y le autorizaron ingresar -> Se cancela la falta y se registra su entrada en lista
+        await supabase.from('permisos').update({
+          estado_general: 'rechazado',
+          pago: 'Cancelado',
+          observaciones: `${obsConAvalInusual} | [PASE CANCELADO: Ingreso autorizado en puerta a las ${horaRealPuerta} hrs]`
+        }).eq('id', solicitud.id);
+        await registrarCheckCaseta(solicitud.id, 'entrada');
+      } else if (/VACACIONES.*reincorporarse antes/i.test(obsOriginalInusual)) {
+        // Estaba de vacaciones y le autorizaron reincorporarse hoy -> Ajustar vacaciones y registrar entrada hoy
+        const hoyIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        if (solicitud.fecha_permiso >= hoyIso) {
+          await supabase.from('permisos').update({
+            estado_general: 'rechazado',
+            pago: 'Cancelado',
+            observaciones: `${obsConAvalInusual} | [PASE CANCELADO: Reincorporación anticipada autorizada el ${hoyIso}]`
+          }).eq('id', solicitud.id);
+        } else {
+          const ayerDate = new Date();
+          ayerDate.setDate(ayerDate.getDate() - 1);
+          const ayerIso = new Date(ayerDate.getTime() - ayerDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+          await supabase.from('permisos').update({
+            fecha_fin: ayerIso,
+            observaciones: `${obsConAvalInusual} | [Vacaciones recortadas al ${ayerIso} por reincorporación autorizada en puerta]`
+          }).eq('id', solicitud.id);
+        }
+        const { data: exAsis } = await supabase.from('asistencias_caseta').select('id').eq('usuario_id', solicitud.usuario_id).eq('fecha', hoyIso).maybeSingle();
+        if (!exAsis) {
+          await supabase.from('asistencias_caseta').insert([{ usuario_id: solicitud.usuario_id, fecha: hoyIso, hora_entrada: horaRealPuerta }]);
+        }
+      } else if (/SALIDA DEFINITIVA.*reingresar/i.test(obsOriginalInusual)) {
+        await supabase.from('permisos').update({
+          observaciones: `${obsConAvalInusual} (Regresa: ${horaRealPuerta} hrs)`
+        }).eq('id', solicitud.id);
+        await registrarCheckCaseta(solicitud.id, 'reingreso_forzado');
+      } else {
+        await supabase.from('permisos').update({ observaciones: obsConAvalInusual }).eq('id', solicitud.id);
+        await registrarCheckCaseta(solicitud.id, 'entrada');
+      }
+    } catch (eIn) {
+      console.warn('Aviso al resolver comportamiento inusual:', eIn);
+    }
+  }
+
   // Si era una SALIDA retenida en caseta porque no coincidió la hora, al autorizarla marcamos [HORARIO AUTORIZADO EN CASETA] y sellamos su paso
   if (tipoLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '') && updates.estado_general === 'autorizado') {
     try {

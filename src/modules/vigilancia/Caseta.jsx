@@ -8,6 +8,7 @@ import {
   registrarCheckCaseta,
   registrarAsistenciaLista,
   registrarRetardoEnPuerta,
+  solicitarAutorizacionInusualCaseta,
   deshacerEntradaReciente,
   deshacerSalidaReciente,
   obtenerFechaLocalHoy
@@ -144,6 +145,42 @@ export default function Caseta() {
       await cargarDatos();
     } catch (err) {
       alert('Error al procesar registro: ' + err.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const handleSolicitarIngresoEnAusencia = async (emp, inc) => {
+    const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
+    const msg = esVac
+      ? `${emp.nombre_completo} tiene VACACIONES vigentes hoy.\n\n¿Retener en puerta y solicitar autorización a Jefatura / RH para que pueda reincorporarse antes?`
+      : `${emp.nombre_completo} tenía FALTA programada hoy pero se presentó en puerta.\n\n¿Retener en puerta y solicitar autorización a Jefatura / RH para modificar su permiso y darle acceso?`;
+    if (!window.confirm(msg)) return;
+
+    setProcesandoId(`${emp.id}-inusual`);
+    try {
+      await solicitarAutorizacionInusualCaseta(
+        inc.paseId,
+        esVac ? 'presentacion_en_vacaciones' : 'presentacion_en_falta'
+      );
+      setUltimoRegistradoTexto(`⏳ Retenido en puerta esperando autorización: ${emp.nombre_completo}`);
+      await cargarDatos();
+    } catch (err) {
+      alert('Error al solicitar autorización: ' + err.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const handleSolicitarReingresoSalidaDefinitiva = async (pase) => {
+    if (!window.confirm(`${pase.usuarios?.nombre_completo} salió con PASE DEFINITIVO (sin regreso).\n\n¿Retener en puerta y solicitar autorización a Jefatura / RH para permitir su reingreso?`)) return;
+    setProcesandoId(pase.id);
+    try {
+      await solicitarAutorizacionInusualCaseta(pase.id, 'reingreso_salida_definitiva');
+      setSubTabPases('por_cruzar');
+      await cargarDatos();
+    } catch (err) {
+      alert('Error al solicitar reingreso: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -509,21 +546,20 @@ export default function Caseta() {
                         <span style={{ fontSize: '11px', fontWeight: '800', padding: '4px 9px', borderRadius: '7px', color: inc.color, background: inc.bg }}>
                           {inc.etiqueta}
                         </span>
-                        {!esVac && (
-                          <button
-                            type="button"
-                            onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
-                            disabled={Boolean(procesandoId)}
-                            title="Sí se presentó a trabajar (Registrar entrada y cancelar falta)"
-                            style={{
-                              minWidth: '48px', height: '36px', padding: '0 12px', borderRadius: '9px', border: 'none',
-                              background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '900',
-                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                            }}
-                          >
-                            <Check size={17} strokeWidth={3} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleSolicitarIngresoEnAusencia(emp, inc)}
+                          disabled={Boolean(procesandoId)}
+                          title="Se presentó en puerta: Retener y pedir autorización a Jefatura / RH"
+                          style={{
+                            height: '36px', padding: '0 11px', borderRadius: '9px',
+                            border: '1.5px solid #d97706',
+                            background: 'rgba(245,158,11,0.14)', color: '#d97706', fontSize: '11.5px', fontWeight: '900',
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          }}
+                        >
+                          🚨 Solicitar Ingreso
+                        </button>
                       </div>
                     </div>
                   );
@@ -753,6 +789,20 @@ export default function Caseta() {
                           <span style={{ background: 'rgba(2,132,199,0.12)', color: '#0284c7', padding: '4px 9px', borderRadius: '6px' }}>
                             ✓ Salida sellada
                           </span>
+                        )}
+                        {p.tipo_permiso === 'salida' && p.horaSalidaCaseta && !p.horaEntradaCaseta && !p.requiereRegreso && (
+                          <button
+                            type="button"
+                            onClick={() => handleSolicitarReingresoSalidaDefinitiva(p)}
+                            disabled={Boolean(procesandoId)}
+                            style={{
+                              padding: '4px 9px', borderRadius: '6px', border: '1px solid #d97706',
+                              background: 'rgba(245,158,11,0.14)', color: '#d97706', fontSize: '11px',
+                              fontWeight: '800', cursor: 'pointer'
+                            }}
+                          >
+                            🚨 Solicitar Reingreso
+                          </button>
                         )}
                         {p.horaEntradaCaseta && (
                           <span style={{ background: c.accentSoft, color: c.accent, padding: '4px 9px', borderRadius: '6px' }}>
@@ -1124,21 +1174,20 @@ export default function Caseta() {
                       }}>
                         {inc.etiqueta}
                       </span>
-                      {!esVac && (
-                        <button
+                      <button
                           type="button"
-                          onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
+                          onClick={() => handleSolicitarIngresoEnAusencia(emp, inc)}
                           disabled={Boolean(procesandoId)}
-                          title="Sí se presentó a trabajar (Registrar entrada y cancelar falta)"
+                          title="Se presentó en puerta: Retener y pedir autorización a Jefatura / RH"
                           style={{
-                            minWidth: '48px', height: '36px', padding: '0 12px', borderRadius: '9px', border: 'none',
-                            background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '900',
-                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                            height: '36px', padding: '0 11px', borderRadius: '9px',
+                            border: '1.5px solid #d97706',
+                            background: 'rgba(245,158,11,0.14)', color: '#d97706', fontSize: '11.5px', fontWeight: '900',
+                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                           }}
                         >
-                          <Check size={17} strokeWidth={3} />
+                          🚨 Solicitar Ingreso
                         </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -1354,13 +1403,19 @@ export default function Caseta() {
                       >
                         <Check size={17} strokeWidth={3} /> Dar Paso
                       </button>
-                    ) : (tipoInc === 'ausencia_autorizada' && String(inc?.etiqueta || '').includes('Vacaciones')) ? (
-                      <span style={{
-                        fontSize: '11.5px', fontWeight: '800', color: inc.color,
-                        background: inc.bg, padding: '6px 10px', borderRadius: '8px'
-                      }}>
-                        {inc.etiqueta}
-                      </span>
+                    ) : tipoInc === 'ausencia_autorizada' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSolicitarIngresoEnAusencia(emp, inc)}
+                        disabled={Boolean(procesandoId)}
+                        style={{
+                          height: '42px', padding: '0 13px', borderRadius: '10px',
+                          border: '1.5px solid #d97706', background: 'rgba(245,158,11,0.14)',
+                          color: '#d97706', fontSize: '12px', fontWeight: '900', cursor: 'pointer'
+                        }}
+                      >
+                        🚨 Solicitar Ingreso
+                      </button>
                     ) : (
                       <>
                         <button
