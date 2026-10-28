@@ -136,7 +136,7 @@ export default function Aprobaciones() {
     const d = new Date();
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
   })();
-  const permisosRezagados = listadoActual.filter(s => s.fecha_permiso < hoyIso);
+  const permisosRezagados = [...solicitudesPendientes, ...solicitudesTransito].filter(s => s.fecha_permiso < hoyIso);
 
   const handleRecordarRezagados = async () => {
     if (permisosRezagados.length === 0) return;

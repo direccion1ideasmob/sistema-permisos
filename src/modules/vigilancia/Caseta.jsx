@@ -7,6 +7,7 @@ import {
   obtenerDatosCaseta,
   registrarCheckCaseta,
   registrarAsistenciaLista,
+  registrarRetardoEnPuerta,
   deshacerEntradaReciente,
   deshacerSalidaReciente,
   obtenerFechaLocalHoy
@@ -143,6 +144,25 @@ export default function Caseta() {
       await cargarDatos();
     } catch (err) {
       alert('Error al procesar registro: ' + err.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const handleRetenerPorFaltaSinAviso = async (emp) => {
+    if (!window.confirm(`¿Retener en puerta a ${emp.nombre_completo} por haberse ausentado sin aviso previo?\n\nSe enviará solicitud de permiso a Jefatura / RH mostrando su conteo de faltas acumuladas.`)) return;
+    setProcesandoId(`${emp.id}-falta`);
+    try {
+      await registrarRetardoEnPuerta(
+        emp.id,
+        usuario?.id || null,
+        '[FALTA PREVIA SIN AVISO] El colaborador se presenta tras faltar sin aviso previo. Retenido en Vigilancia para dictamen de Jefatura / RH.'
+      );
+      setBusquedaTexto('');
+      setUltimoRegistradoTexto(`🚨 Retenido en puerta por falta sin aviso: ${emp.nombre_completo}`);
+      await cargarDatos();
+    } catch (err) {
+      alert('Error al retener por falta: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -399,6 +419,12 @@ export default function Caseta() {
     }
   `;
 
+  const todosSinEntradaGlobal = empleadosSede.filter(emp => !mapaAsistencias[emp.id]?.hora_entrada);
+  const ausentesProgramadosGlobal = todosSinEntradaGlobal.filter((emp) => {
+    const inc = mapaIncidenciasHoy[emp.id];
+    return inc?.tipo === 'ausencia_autorizada';
+  });
+
   if (vista === 'pases') {
     const totalPorCruzarYEspera = pasesPorCruzar.length + retenidosEnEspera.length;
 
@@ -445,6 +471,65 @@ export default function Caseta() {
 
         {subTabPases === 'por_cruzar' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+            {ausentesProgramadosGlobal.length > 0 && (
+              <div style={{
+                background: c.surfaceCard,
+                border: `1.5px solid ${c.border}`,
+                borderRadius: '13px',
+                padding: '10px 12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '7px'
+              }}>
+                <div style={{
+                  fontSize: '11.5px', fontWeight: '900', color: c.textMuted,
+                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                }}>
+                  <span>📋 Ausencias de Hoy (Vacaciones / Faltas)</span>
+                  <span>{ausentesProgramadosGlobal.length}</span>
+                </div>
+                {ausentesProgramadosGlobal.map((emp) => {
+                  const inc = mapaIncidenciasHoy[emp.id];
+                  const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
+                  return (
+                    <div key={emp.id} className="caseta-puerta-item" style={{ background: c.bg, border: `1px solid ${c.border}`, padding: '8px 11px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                        <AvatarColaborador u={emp} size={36} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: '13.5px', fontWeight: '800', color: c.text, lineHeight: 1.2 }}>
+                            {formatearApellidosNombre(emp.nombre_completo, emp)}
+                          </div>
+                          <div style={{ fontSize: '11px', color: c.textMuted, fontWeight: '700', marginTop: '2px' }}>
+                            #{emp.numero_empleado} {emp.departamentos?.nombre ? `• ${emp.departamentos.nombre}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '11px', fontWeight: '800', padding: '4px 9px', borderRadius: '7px', color: inc.color, background: inc.bg }}>
+                          {inc.etiqueta}
+                        </span>
+                        {!esVac && (
+                          <button
+                            type="button"
+                            onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
+                            disabled={Boolean(procesandoId)}
+                            title="Sí se presentó a trabajar (Registrar entrada y cancelar falta)"
+                            style={{
+                              minWidth: '48px', height: '36px', padding: '0 12px', borderRadius: '9px', border: 'none',
+                              background: c.accent, color: '#fff', fontSize: '12px', fontWeight: '900',
+                              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                          >
+                            <Check size={17} strokeWidth={3} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {retenidosEnEspera.length > 0 && (
               <div style={{
                 background: c.surfaceCard,
@@ -1273,20 +1358,38 @@ export default function Caseta() {
                         {inc.etiqueta}
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
-                        disabled={Boolean(procesandoId)}
-                        title="Seleccionar trabajador"
-                        style={{
-                          minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
-                          background: c.accent, color: '#fff', fontSize: '13px',
-                          fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-                        }}
-                      >
-                        <Check size={20} strokeWidth={3} />
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleRetenerPorFaltaSinAviso(emp)}
+                          disabled={Boolean(procesandoId)}
+                          title="Retener en puerta porque faltó sin avisar"
+                          style={{
+                            height: '46px', padding: '0 11px', borderRadius: '11px',
+                            border: '1.5px solid rgba(239,68,68,0.45)',
+                            background: 'rgba(239,68,68,0.10)', color: '#ef4444', fontSize: '11.5px',
+                            fontWeight: '800', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          🚨 Faltó s/aviso
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
+                          disabled={Boolean(procesandoId)}
+                          title="Seleccionar trabajador"
+                          style={{
+                            minWidth: '64px', height: '46px', padding: '0 20px', borderRadius: '11px', border: 'none',
+                            background: c.accent, color: '#fff', fontSize: '13px',
+                            fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+                          }}
+                        >
+                          <Check size={20} strokeWidth={3} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

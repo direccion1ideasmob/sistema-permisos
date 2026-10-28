@@ -149,7 +149,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           color: '#10b981',
           bg: 'rgba(16,185,129,0.12)'
         };
-      } else if (tipo === 'falta' && !esRechazado && !seRegresaACasa) {
+      } else if (tipo === 'falta' && !esRechazado && !seRegresaACasa && !horaLlegadaPuerta) {
         mapaIncidenciasHoy[rawPase.usuario_id] = {
           tipo: 'ausencia_autorizada',
           paseId: rawPase.id,
@@ -157,7 +157,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           color: '#8b5cf6',
           bg: 'rgba(139,92,246,0.12)'
         };
-      } else if (tipo === 'retardo' || seRegresaACasa) {
+      } else if (tipo === 'retardo' || seRegresaACasa || (tipo === 'falta' && Boolean(horaLlegadaPuerta))) {
         if (seRegresaACasa) {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_regresa',
@@ -203,7 +203,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     // Los pases de puerta solo aplican para hoy y para Salida o Retardo
     if (fechaTarget !== hoy) return;
-    if (tipo !== 'salida' && tipo !== 'retardo' && !seRegresaACasa) return;
+    const esFaltaRetenidaPuerta = tipo === 'falta' && Boolean(horaLlegadaPuerta);
+    if (tipo !== 'salida' && tipo !== 'retardo' && !seRegresaACasa && !esFaltaRetenidaPuerta) return;
 
     // Si es una salida rechazada o cancelada, o si el empleado ya fue regresado a casa hoy en un retardo, no cruza puerta como salida
     if (tipo === 'salida' && (esRechazado || pagoLower === 'cancelado')) return;
@@ -245,7 +246,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     // 1. Si ya completó su ciclo físico en caseta hoy
     if (
       rawPase.estado_general === 'completado_caseta' ||
-      (tipo === 'retardo' && !seRegresaACasa && yaRegreso) ||
+      ((tipo === 'retardo' || esFaltaRetenidaPuerta) && !seRegresaACasa && yaRegreso) ||
       (seRegresaACasa && yaSeRetiro) ||
       (tipo === 'salida' && yaSalio && (!requiereRegreso || yaRegreso))
     ) {
@@ -258,8 +259,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       return;
     }
 
-    // 2. Si es un retardo que AÚN NO tiene decisión del Jefe -> Retenido en Espera
-    if (tipo === 'retardo' && !jefeYaDecidioRetardo) {
+    // 2. Si es un retardo o falta sin aviso en puerta que AÚN NO tiene decisión -> Retenido en Espera
+    if ((tipo === 'retardo' || esFaltaRetenidaPuerta) && !jefeYaDecidioRetardo) {
       retenidosEnEspera.push(p);
       return;
     }
@@ -317,13 +318,14 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
 
   if (errGet || !permiso) throw new Error('No se encontró el pase.');
 
-  const obsActual = permiso.observaciones || '';
-  const notaDesfase = `⚠️ [HORARIO NO COINCIDE EN CASETA (${horaFormateada} hrs): ${detalleDesfase} — Retenido en puerta para nueva autorización]`;
+  const obsActual = (permiso.observaciones || '').replace(/\s*\|\s*\[HORARIO AUTORIZADO EN CASETA\]/gi, '');
+  const notaDesfase = `⚠️ [HORARIO NO COINCIDE EN CASETA (${horaFormateada} hrs - ${tipoMovimiento.toUpperCase()}): ${detalleDesfase}]`;
   const nuevasObs = `${obsActual} | ${notaDesfase} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.trim();
 
-  // Reabrir firma de RH (y Jefe si aplica) para que autoricen el exceso de tiempo antes de dejarlo pasar
   const updates = {
     estado_general: 'en_firmas',
+    pago: 'Pendiente de dictamen (Exceso de horario)',
+    firma_1_estado: permiso.firma_1_id ? 'pendiente' : permiso.firma_1_estado,
     firma_3_estado: 'pendiente',
     observaciones: nuevasObs
   };
@@ -342,15 +344,15 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
     .eq('activo', true);
 
   const dest = [
-    ...(rhUsers || []).map(u => u.id),
-    permiso.firma_1_id
+    permiso.firma_1_id,
+    ...(rhUsers || []).map(u => u.id)
   ].filter(Boolean);
 
   if (dest.length > 0) {
     try {
       await enviarNotificacionPushUsuarios([...new Set(dest)], {
         titulo: '🚨 HORARIO DE PASE NO COINCIDE EN CASETA',
-        mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n🕒 ${detalleDesfase}\n⏳ Retenido en Vigilancia esperando tu autorización para pasar.`,
+        mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n🕒 ${detalleDesfase}\n⏳ Retenido en Vigilancia esperando nueva autorización.`,
         fotoUrl: permiso.usuarios?.foto_url || null,
         urlDestino: '/aprobaciones'
       });
@@ -378,9 +380,25 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   const tipo = (permiso.tipo_permiso || '').toLowerCase();
   const requiereRegreso = obsActual.toLowerCase().includes('regresa:');
 
-  // VALIDACIÓN DE COINCIDENCIA DE HORAS EN PASE DE SALIDA Y REGRESO (Si no trae flag 'forzado')
-  if (tipo === 'salida' && !mov.includes('forzado') && !/\[HORARIO NO COINCIDE EN CASETA/i.test(obsActual)) {
+  // VALIDACIÓN DE COINCIDENCIA DE HORAS EN PASE DE SALIDA Y REGRESO (Salida y Reingreso)
+  const yaReautorizadoHorario = /\[HORARIO AUTORIZADO EN CASETA\]/i.test(obsActual);
+  if (tipo === 'salida' && !mov.includes('forzado') && !yaReautorizadoHorario) {
     const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    if (mov.includes('salida') || (!obsActual.includes('[SALIDA CASETA:') && !mov.includes('reingreso') && !mov.includes('retiro'))) {
+      const mSalida = obsActual.match(/Salida(?:\s+definitiva)?:\s*(\d{1,2}):(\d{2})/i);
+      if (mSalida) {
+        const minSalidaPactada = parseInt(mSalida[1], 10) * 60 + parseInt(mSalida[2], 10);
+        const diffSalida = Math.abs(minAhora - minSalidaPactada);
+        if (diffSalida > 20) {
+          const hSalPactada = `${String(mSalida[1]).padStart(2, '0')}:${mSalida[2]}`;
+          return await solicitarReautorizacionHorarioSalida(
+            permisoId,
+            'salida',
+            `Intenta salir a las ${horaFormateada} hrs pero su pase autoriza salida a las ${hSalPactada} hrs (Diferencia de ${diffSalida} min)`
+          );
+        }
+      }
+    }
     if (mov.includes('reingreso')) {
       const mRegresa = obsActual.match(/Regresa:\s*(\d{1,2}):(\d{2})/i);
       if (mRegresa) {
@@ -391,7 +409,7 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
           return await solicitarReautorizacionHorarioSalida(
             permisoId,
             'reingreso',
-            `Regresó a las ${horaFormateada} hrs (Hora límite autorizada: ${hPactada} hrs, +${minExceso} min tarde)`
+            `Regresó a las ${horaFormateada} hrs pero su hora límite de regreso era ${hPactada} hrs (+${minExceso} min tarde)`
           );
         }
       }
@@ -443,7 +461,7 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   if (error) throw error;
 
   // Sincronización automática con la tabla asistencias_caseta (Pase de Lista)
-  if (tipo === 'retardo' && !mov.includes('retiro')) {
+  if ((tipo === 'retardo' || tipo === 'falta') && !mov.includes('retiro')) {
     try {
       const horaLista = horaCongelada ? horaCongelada.replace(/\s*hrs/i, '').trim() : horaFormateada;
       await registrarAsistenciaListaConHora(permiso.usuario_id, 'entrada', horaLista);
@@ -750,7 +768,8 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
     await cancelarPasePorInasistenciaOCambio(faltaOrdinariaHoy.id, `Se presentó a laborar en puerta (${horaActual} hrs)`);
   }
 
-  const existentes = activosHoy.filter(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+  const esPorFaltaSinAviso = Boolean(motivoEspecial && /FALTA/i.test(motivoEspecial));
+  const existentes = activosHoy.filter(p => ['retardo', 'falta'].includes((p.tipo_permiso || '').toLowerCase()));
 
   if (existentes && existentes.length > 0) {
     const paseActual = existentes[0];
@@ -870,10 +889,10 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
     fecha_elaboracion: hoyStr,
     fecha_permiso: hoyStr,
     fecha_fin: null,
-    tipo_permiso: 'retardo',
+    tipo_permiso: esPorFaltaSinAviso ? 'falta' : 'retardo',
     pago: 'Pendiente de dictamen',
     asunto_motivo: motivoEspecial || '[PERSONAL] Llegada posterior al límite de tolerancia registrada en caseta.',
-    total_horas: diffHoras,
+    total_horas: esPorFaltaSinAviso ? 8 : diffHoras,
     observaciones: detalleHorarioTexto,
     firma_empleado: true,
     firma_1_id: jefeFinalId,
@@ -908,7 +927,7 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
   if (notificarA.length > 0) {
     try {
       await enviarNotificacionPushUsuarios([...new Set(notificarA.filter(Boolean))], {
-        titulo: '🚨 URGENTE EN PUERTA: RETARDO',
+        titulo: esPorFaltaSinAviso ? '🚨 RETENIDO EN PUERTA POR FALTA SIN AVISO' : '🚨 URGENTE EN PUERTA: RETARDO',
         mensaje: `👤 ${emp.nombre_completo}\n🏠 PERSONAL / FAMILIAR\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando tu autorización.`,
         fotoUrl: emp.foto_url || null,
         urlDestino: '/aprobaciones'

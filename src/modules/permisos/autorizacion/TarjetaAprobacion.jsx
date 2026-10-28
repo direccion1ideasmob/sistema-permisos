@@ -15,7 +15,9 @@ export default function TarjetaAprobacion({
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo || 'U')}&background=334155&color=f8fafc&bold=true`;
 
   const tipo = (solicitud.tipo_permiso || '').toLowerCase();
-  const esRetardo = tipo === 'retardo';
+  const esFaltaEnPuerta = tipo === 'falta' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const esSalidaDesfaseHorario = tipo === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '');
+  const esRetardo = tipo === 'retardo' || esFaltaEnPuerta;
 
   const esRH = usuarioActual?.rol === 'rh_nominas' || usuarioActual?.rol === 'gerente_rh' || usuarioActual?.rol === 'superadmin';
   const soyFirmante1Directo = solicitud.firma_1_id === usuarioActual?.id && solicitud.firma_1_estado === 'pendiente';
@@ -543,7 +545,7 @@ export default function TarjetaAprobacion({
                   background: 'transparent', color: c.textMuted, fontWeight: '700'
                 }}
               >
-                <X size={15} color={c.danger} /> {esRetardo ? 'Regresar a Casa' : 'Rechazar'}
+                <X size={15} color={c.danger} /> {esRetardo ? 'Regresar a Casa' : (esSalidaDesfaseHorario ? 'Denegar Paso' : 'Rechazar')}
               </button>
               <button
                 onClick={() => onAprobar(solicitud)}
@@ -553,7 +555,7 @@ export default function TarjetaAprobacion({
                   backgroundColor: c.accent, color: '#fff', fontWeight: '800'
                 }}
               >
-                <Check size={15} /> {esRetardo ? 'Permitir Acceso' : 'Evaluar'}
+                <Check size={15} /> {(esRetardo || esSalidaDesfaseHorario) ? 'Permitir Acceso' : 'Evaluar'}
               </button>
             </>
           )}

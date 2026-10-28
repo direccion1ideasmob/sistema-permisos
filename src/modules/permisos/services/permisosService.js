@@ -231,7 +231,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const esGerente = solicitud.firma_2_id === usuario.id && solicitud.firma_2_estado === 'pendiente';
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
 
-  const esRetardoRegresaAprob = (solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && String(dictamenPago || '').toLowerCase().includes('regresa');
+  const esRetardoRegresaAprob = ['retardo', 'falta'].includes((solicitud.tipo_permiso || '').toLowerCase()) && String(dictamenPago || '').toLowerCase().includes('regresa');
   const updates = {
     pago: esRetardoRegresaAprob ? 'Sin goce (Se regresa)' : dictamenPago,
     ...(esRetardoRegresaAprob ? { tipo_permiso: 'falta', total_horas: 8 } : {})
@@ -352,7 +352,17 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const estaEnPuerta = /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
   const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
 
-  if (tipoLower === 'retardo' && estaEnPuerta) {
+  // Si era una SALIDA retenida en caseta porque no coincidió la hora, al autorizarla marcamos [HORARIO AUTORIZADO EN CASETA] y sellamos su paso
+  if (tipoLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '') && updates.estado_general === 'autorizado') {
+    try {
+      const obsConAvalHorario = `${updates.observaciones || solicitud.observaciones || ''} | [HORARIO AUTORIZADO EN CASETA]`;
+      await supabase.from('permisos').update({ observaciones: obsConAvalHorario }).eq('id', solicitud.id);
+      const eraSalidaInicial = !/\[SALIDA CASETA:/i.test(solicitud.observaciones || '');
+      await registrarCheckCaseta(solicitud.id, eraSalidaInicial ? 'salida_forzado' : 'reingreso_forzado');
+    } catch (_) {}
+  }
+
+  if ((tipoLower === 'retardo' || tipoLower === 'falta') && estaEnPuerta) {
     const yaResolvioJefeORH =
       updates.estado_general === 'autorizado' ||
       seRegresaDictamen;
@@ -454,7 +464,7 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   const esGerente = solicitud.firma_2_id === usuario.id;
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh' || usuario.rol === 'superadmin';
 
-  const esRetardoRech = (solicitud.tipo_permiso || '').toLowerCase() === 'retardo';
+  const esRetardoRech = ['retardo', 'falta'].includes((solicitud.tipo_permiso || '').toLowerCase());
   const partesNomRech = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
   const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNomRech.length - 2]}` : partesNomRech.join(' ');
   const motivoLimpioRech = String(motivoRechazo || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
