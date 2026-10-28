@@ -75,6 +75,23 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   const empleadosSede = (resEmpleados.data || []).slice().sort((a, b) => compararPorApellidoPaterno(a, b));
   const idsSede = new Set(empleadosSede.map(e => e.id));
 
+  // Detectar quién tuvo una falta SIN AVISO el día hábil anterior para alertar en rojo desde el buscador
+  const ahoraObj = new Date();
+  const ayerObj = new Date(ahoraObj);
+  ayerObj.setDate(ahoraObj.getDate() - (ahoraObj.getDay() === 1 ? 3 : 1));
+  const fechaAyerHab = new Date(ayerObj.getTime() - ayerObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+  const usuariosConFaltaSinAvisoAyer = new Set(
+    (resPermisos.data || [])
+      .filter(p =>
+        p.fecha_permiso === fechaAyerHab &&
+        (p.tipo_permiso || '').toLowerCase() === 'falta' &&
+        /SIN AVISO/i.test(p.asunto_motivo || '') &&
+        !String(p.observaciones || '').includes('[REINCORPORACION AUTORIZADA]')
+      )
+      .map(p => p.usuario_id)
+  );
+
   // Filtrar permisos que correspondan a la sede y a la fecha consultada (o rango de vacaciones)
   const pasesDelDia = (resPermisos.data || []).filter(p => {
     const perteneceSede = !sedeId || p.usuarios?.sede_id === sedeId || idsSede.has(p.usuario_id);
@@ -311,6 +328,17 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
     // 5. Listo para acción inmediata en puerta (Sellar Salida, Sellar Entrada o Confirmar Retiro a Casa)
     pasesPorCruzar.push(p);
+  });
+
+  usuariosConFaltaSinAvisoAyer.forEach(uid => {
+    if (!mapaIncidenciasHoy[uid]) {
+      mapaIncidenciasHoy[uid] = {
+        tipo: 'falta_ayer_sin_aviso',
+        etiqueta: '🚨 Faltó ayer sin aviso — Retener en puerta',
+        color: '#dc2626',
+        bg: 'rgba(220,38,38,0.14)'
+      };
+    }
   });
 
   const mapaAsistencias = {};
@@ -1077,32 +1105,27 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
       throw new Error('Este colaborador ya fue regresado a casa hoy (Falta por retardo). No es posible registrarle entrada.');
     }
 
-    // VERIFICAR SI EL TRABAJADOR TIENE UNA FALTA SIN AVISO RECIENTE PENDIENTE DE JUSTIFICAR O FALTÓ AYER SIN AVISAR
-    if (!forzarDirectoRH && !retardoHoy) {
+    // VERIFICAR SI EL TRABAJADOR TIENE UNA FALTA SIN AVISO DEL DÍA HÁBIL ANTERIOR
+    if (!forzarDirectoRH && !retardoHoy && !faltaHoy) {
       const ayer = new Date(ahora);
-      ayer.setDate(ahora.getDate() - (ahora.getDay() === 1 ? 3 : 1)); // Si hoy es lunes revisa viernes, si no revisa ayer
-      const offsetAyer = ayer.getTimezoneOffset() * 60000;
-      const fechaAyerStr = new Date(ayer.getTime() - offsetAyer).toISOString().split('T')[0];
+      ayer.setDate(ahora.getDate() - (ahora.getDay() === 1 ? 3 : 1));
+      const fechaAyerStr = new Date(ayer.getTime() - ayer.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 
-      const [{ data: huboAsistAyer }, { data: asisAyerEmp }, { data: permAyerEmp }] = await Promise.all([
-        supabase.from('asistencias_caseta').select('id').eq('fecha', fechaAyerStr).limit(1),
-        supabase.from('asistencias_caseta').select('id, hora_entrada').eq('usuario_id', usuarioId).eq('fecha', fechaAyerStr).maybeSingle(),
-        supabase.from('permisos').select('id, tipo_permiso, estado_general, pago').eq('usuario_id', usuarioId).lte('fecha_permiso', fechaAyerStr).in('estado_general', ['autorizado', 'aprobado', 'completado_caseta'])
-      ]);
+      const { data: faltaSinAvisoAyer } = await supabase
+        .from('permisos')
+        .select('id, folio, asunto_motivo, observaciones')
+        .eq('usuario_id', usuarioId)
+        .eq('fecha_permiso', fechaAyerStr)
+        .eq('tipo_permiso', 'falta')
+        .ilike('asunto_motivo', '%SIN AVISO%')
+        .maybeSingle();
 
-      // Solo si ayer hubo operación en planta (hubo pase de lista en caseta) y este trabajador NO entró ni tuvo permiso autorizado
-      if (huboAsistAyer && huboAsistAyer.length > 0 && !asisAyerEmp?.hora_entrada) {
-        const tuvoPermisoValidoAyer = (permAyerEmp || []).some(pa => {
-          const finPa = pa.fecha_fin || pa.fecha_permiso || fechaAyerStr;
-          return finPa >= fechaAyerStr && String(pa.pago || '').toLowerCase() !== 'cancelado';
-        });
-        if (!tuvoPermisoValidoAyer) {
-          return await registrarRetardoEnPuerta(
-            usuarioId,
-            guardiaId,
-            `[FALTA PREVIA SIN AVISO] El colaborador faltó sin avisar el día ${fechaAyerStr} y se presenta en caseta. Requiere autorización de Jefatura / RH.`
-          );
-        }
+      if (faltaSinAvisoAyer && !String(faltaSinAvisoAyer.observaciones || '').includes('[REINCORPORACION AUTORIZADA]')) {
+        return await registrarRetardoEnPuerta(
+          usuarioId,
+          guardiaId,
+          `[FALTA PREVIA SIN AVISO] El colaborador faltó sin avisar el día ${fechaAyerStr} y se presenta en caseta. Requiere autorización de Jefatura / RH.`
+        );
       }
     }
     const vacacionesHoyLista = pasesVigentesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'vacaciones');

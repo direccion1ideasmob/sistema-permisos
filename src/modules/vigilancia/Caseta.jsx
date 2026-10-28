@@ -1,28 +1,27 @@
 import { formatearApellidosNombre } from '../../core/utils/ordenNombre';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../core/auth/AuthContext';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../permisos/aprobacionesStyles';
 import {
   obtenerDatosCaseta,
   registrarCheckCaseta,
   registrarAsistenciaLista,
-  registrarRetardoEnPuerta,
   solicitarAutorizacionInusualCaseta,
   deshacerEntradaReciente,
   deshacerSalidaReciente,
+  obtenerHoraLimiteTolerancia,
   obtenerFechaLocalHoy
 } from './services/vigilanciaService';
 import {
   DoorOpen, RotateCcw, CheckCircle2, LogOut,
   Search, RefreshCw, UserCheck, Users, CalendarOff,
-  Hourglass, CornerUpLeft, X, Check, Undo2
+  Hourglass, CornerUpLeft, X, Check, Undo2, ShieldAlert
 } from 'lucide-react';
 
 export default function Caseta() {
   const { usuario } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const inputBusquedaRef = useRef(null);
 
   const rutaActual = location.pathname;
@@ -53,25 +52,31 @@ export default function Caseta() {
   const [empleadosSede, setEmpleadosSede] = useState([]);
   const [mapaAsistencias, setMapaAsistencias] = useState({});
   const [mapaIncidenciasHoy, setMapaIncidenciasHoy] = useState({});
+  const [horaLimiteStr, setHoraLimiteStr] = useState('07:15');
 
   const [modalConfirmacion, setModalConfirmacion] = useState(null);
-  const [ultimoRegistradoTexto, setUltimoRegistradoTexto] = useState('');
+  const [bannerResultado, setBannerResultado] = useState(null); // { tipo: 'verde' | 'rojo', texto: string }
   const [busquedaTexto, setBusquedaTexto] = useState('');
   const [procesandoId, setProcesandoId] = useState(null);
 
   const sedeGuardia = usuario?.sede_id || null;
   const hoyStr = obtenerFechaLocalHoy();
 
-  const mostrarAvisoTemporal = (texto) => {
-    setUltimoRegistradoTexto(texto);
+  const mostrarBanner = (tipo, texto) => {
+    setBannerResultado({ tipo, texto });
     setTimeout(() => {
-      setUltimoRegistradoTexto('');
-    }, 2600);
+      setBannerResultado(null);
+      if (inputBusquedaRef.current) inputBusquedaRef.current.focus();
+    }, tipo === 'rojo' ? 4000 : 2000);
   };
 
   const cargarDatos = useCallback(async () => {
     try {
-      const data = await obtenerDatosCaseta(sedeGuardia, hoyStr);
+      const [data, lim] = await Promise.all([
+        obtenerDatosCaseta(sedeGuardia, hoyStr),
+        obtenerHoraLimiteTolerancia()
+      ]);
+      setHoraLimiteStr(lim || '07:15');
       setRetenidosEnEspera(data.retenidosEnEspera || []);
       setPasesPorCruzar(data.pasesPorCruzar || []);
       setPersonalFuera(data.personalFuera || []);
@@ -86,17 +91,30 @@ export default function Caseta() {
 
   useEffect(() => {
     cargarDatos();
-    const intervalo = setInterval(cargarDatos, 8000);
+    const intervalo = setInterval(cargarDatos, 6000);
     return () => clearInterval(intervalo);
   }, [cargarDatos]);
 
-  const handleSellarPase = async (id, tipoMovimiento) => {
+  // Saber si en este minuto ya pasó la hora de tolerancia
+  const esDespuesDeTolerancia = () => {
+    const ahora = new Date();
+    const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    const [hL, mL] = (horaLimiteStr || '07:15').split(':').map(Number);
+    const minLim = (isNaN(hL) ? 7 : hL) * 60 + (isNaN(mL) ? 15 : mL);
+    return minAhora > minLim;
+  };
+
+  const handleSellarPase = async (id, tipoMovimiento, nombreEmp = '') => {
     setProcesandoId(id);
     try {
       const res = await registrarCheckCaseta(id, tipoMovimiento);
       if (res?.resultado === 'retenido_por_horario') {
-        alert('⚠️ HORARIO NO COINCIDE:\n' + res.detalleDesfase + '\n\nEl colaborador quedó retenido en la pestaña "En Puerta" mientras Jefatura / RH autoriza.');
+        mostrarBanner('rojo', `🛑 ALTO — HORARIO NO COINCIDE (${res.detalleDesfase}). Hazlo a un lado mientras autoriza Jefatura / RH.`);
         setSubTabPases('por_cruzar');
+      } else if (tipoMovimiento === 'retiro') {
+        mostrarBanner('rojo', `↩️ RETIRO CONFIRMADO ${nombreEmp ? ': ' + nombreEmp : ''}`);
+      } else {
+        mostrarBanner('verde', `✅ ADELANTE — CRUCE REGISTRADO ${nombreEmp ? ': ' + nombreEmp : ''}`);
       }
       await cargarDatos();
     } catch (err) {
@@ -106,26 +124,36 @@ export default function Caseta() {
     }
   };
 
-  const handleConfirmarDesdeModal = async () => {
+  const handleConfirmarEntradaModal = async () => {
     if (!modalConfirmacion || procesandoId) return;
-    const { emp, tipoMarca } = modalConfirmacion;
+    const { emp, inc } = modalConfirmacion;
     const empleadoId = emp.id;
     const nombreColaborador = emp.nombre_completo;
 
-    setProcesandoId(`${empleadoId}-${tipoMarca}`);
+    setProcesandoId(`${empleadoId}-entrada`);
     try {
-      const res = await registrarAsistenciaLista(empleadoId, tipoMarca, usuario?.id || null, false);
+      // Si tenía Vacaciones o Falta programada hoy, solicita reautorización
+      if (inc?.tipo === 'ausencia_autorizada') {
+        const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
+        await solicitarAutorizacionInusualCaseta(
+          inc.paseId,
+          esVac ? 'presentacion_en_vacaciones' : 'presentacion_en_falta'
+        );
+        setModalConfirmacion(null);
+        setBusquedaTexto('');
+        mostrarBanner('rojo', `🛑 ALTO — NO DEJAR PASAR A ${nombreColaborador} (Tenía ${esVac ? 'Vacaciones' : 'Falta'} hoy, esperando firma)`);
+        await cargarDatos();
+        return;
+      }
+
+      const res = await registrarAsistenciaLista(empleadoId, 'entrada', usuario?.id || null, false);
       setModalConfirmacion(null);
       setBusquedaTexto('');
 
-      if (tipoMarca === 'entrada') {
-        if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
-          mostrarAvisoTemporal(`✓ Entrada registrada: ${nombreColaborador}`);
-        } else if (res?.resultado === 'en_espera_rh' || res?.resultado === 'retenido_por_inusual') {
-          mostrarAvisoTemporal(`⏳ Retenido en Pases de Puerta (Esperando firma): ${nombreColaborador}`);
-        }
+      if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
+        mostrarBanner('verde', `✅ ADELANTE — PASA A PLANTA: ${nombreColaborador}`);
       } else {
-        mostrarAvisoTemporal(`✓ Salida de turno registrada: ${nombreColaborador}`);
+        mostrarBanner('rojo', `🛑 ALTO — NO DEJAR PASAR A ${nombreColaborador} (Pásalo a espera en lo que autoriza su Jefe / RH)`);
       }
 
       await cargarDatos();
@@ -136,55 +164,28 @@ export default function Caseta() {
     }
   };
 
-  const handleSolicitarIngresoEnAusencia = async (emp, inc) => {
-    const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
-    const msg = esVac
-      ? `${emp.nombre_completo} está de VACACIONES hoy.\n\n¿Enviar a "Pases de Puerta" para solicitar autorización de reincorporación a Jefatura / RH?`
-      : `${emp.nombre_completo} tenía FALTA programada hoy pero se presentó.\n\n¿Enviar a "Pases de Puerta" para solicitar autorización de ingreso a Jefatura / RH?`;
-    if (!window.confirm(msg)) return;
-
-    setProcesandoId(`${emp.id}-inusual`);
+  // Salida de turno directa en 1 solo clic para no hacer fila a las 5:00 PM
+  const handleSalidaDirecta = async (emp) => {
+    if (procesandoId) return;
+    setProcesandoId(`${emp.id}-salida`);
     try {
-      await solicitarAutorizacionInusualCaseta(
-        inc.paseId,
-        esVac ? 'presentacion_en_vacaciones' : 'presentacion_en_falta'
-      );
-      await cargarDatos();
-      navigate('/caseta');
-      setSubTabPases('por_cruzar');
-    } catch (err) {
-      alert('Error al solicitar autorización: ' + err.message);
-    } finally {
-      setProcesandoId(null);
-    }
-  };
-
-  const handleRetenerPorFaltaSinAviso = async (emp) => {
-    if (!window.confirm(`¿Retener a ${emp.nombre_completo} por haber faltado sin aviso previo?\n\nPasará a "Pases de Puerta" esperando dictamen de Jefatura / RH.`)) return;
-    setProcesandoId(`${emp.id}-falta`);
-    try {
-      await registrarRetardoEnPuerta(
-        emp.id,
-        usuario?.id || null,
-        '[FALTA PREVIA SIN AVISO] El colaborador se presenta tras faltar sin aviso previo. Retenido en Vigilancia para dictamen de Jefatura / RH.'
-      );
+      await registrarAsistenciaLista(emp.id, 'salida', usuario?.id || null, false);
       setBusquedaTexto('');
+      mostrarBanner('verde', `✓ SALIDA DE TURNO REGISTRADA: ${emp.nombre_completo}`);
       await cargarDatos();
-      navigate('/caseta');
-      setSubTabPases('por_cruzar');
     } catch (err) {
-      alert('Error al retener por falta: ' + err.message);
+      alert('Error al registrar salida: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
   };
 
   const handleSolicitarReingresoSalidaDefinitiva = async (pase) => {
-    if (!window.confirm(`${pase.usuarios?.nombre_completo} salió con PASE DEFINITIVO.\n\n¿Retener en puerta y solicitar autorización a Jefatura / RH para permitir su reingreso?`)) return;
     setProcesandoId(pase.id);
     try {
       await solicitarAutorizacionInusualCaseta(pase.id, 'reingreso_salida_definitiva');
       setSubTabPases('por_cruzar');
+      mostrarBanner('rojo', `🛑 ALTO — ${pase.usuarios?.nombre_completo} tenía Salida Definitiva. Esperando autorización para reingresar.`);
       await cargarDatos();
     } catch (err) {
       alert('Error al solicitar reingreso: ' + err.message);
@@ -280,11 +281,11 @@ export default function Caseta() {
       flex-shrink: 0;
     }
     .caseta-btn-action {
-      height: 38px;
-      padding: 0 15px;
+      height: 40px;
+      padding: 0 16px;
       border-radius: 9px;
       border: none;
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 800;
       cursor: pointer;
       display: inline-flex;
@@ -341,8 +342,29 @@ export default function Caseta() {
     }
   `;
 
+  // Banner Semáforo (Verde = Adelante / Rojo = Alto, no dejar pasar)
+  const renderBannerSemaforo = () => {
+    if (!bannerResultado) return null;
+    const esRojo = bannerResultado.tipo === 'rojo';
+    return (
+      <div style={{
+        background: esRojo ? '#dc2626' : '#16a34a',
+        color: '#ffffff',
+        borderRadius: '12px',
+        padding: '13px 16px',
+        fontSize: '15px',
+        fontWeight: '900',
+        textAlign: 'center',
+        boxShadow: esRojo ? '0 8px 24px rgba(220,38,38,0.38)' : '0 6px 18px rgba(22,163,74,0.32)',
+        letterSpacing: '0.01em'
+      }}>
+        {bannerResultado.texto}
+      </div>
+    );
+  };
+
   // ====================================================================
-  // VISTA 1: PASES DE PUERTA (EXCEPCIONES, RETENIDOS Y CRUCES INTERMEDIOS)
+  // VISTA 1: PASES DE PUERTA (SALIDAS DURANTE EL TURNO, REINGRESOS Y DETENIDOS)
   // ====================================================================
   if (vista === 'pases') {
     const totalEnPuerta = pasesPorCruzar.length + retenidosEnEspera.length;
@@ -351,6 +373,8 @@ export default function Caseta() {
       <div className="caseta-wrap">
         <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
         <style>{estilosComunesCaseta}</style>
+
+        {renderBannerSemaforo()}
 
         <div className="tabs-aprobacion-bar caseta-tabs-bar">
           <button
@@ -388,10 +412,8 @@ export default function Caseta() {
           </button>
         </div>
 
-        {/* PESTAÑA 1: EN PUERTA (LISTOS PARA CRUZAR + RETENIDOS ESPERANDO FIRMA) */}
         {subTabPases === 'por_cruzar' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-            {/* A) Listos para cruzar con veredicto ya emitido */}
             {pasesPorCruzar.map((p) => {
               const esSalida = p.tipo_permiso === 'salida';
               const esRegresoCasa = Boolean(p.seRegresaACasa);
@@ -399,7 +421,7 @@ export default function Caseta() {
               const bgBadge = esRegresoCasa ? 'rgba(239,68,68,0.14)' : (esSalida ? 'rgba(2,132,199,0.12)' : 'rgba(22,163,74,0.12)');
               const textoBadge = esRegresoCasa
                 ? '🚫 ORDEN RH: SE REGRESA A CASA'
-                : (esSalida ? (p.requiereRegreso ? '🔵 SALIDA CON REGRESO' : '🔵 SALIDA DEFINITIVA') : '🟢 ACCESO AUTORIZADO');
+                : (esSalida ? (p.requiereRegreso ? '🔵 SALIDA CON REGRESO' : '🔵 SALIDA DEFINITIVA') : '🟢 AUTORIZADO — DAR PASO');
 
               return (
                 <div
@@ -432,7 +454,7 @@ export default function Caseta() {
 
                   <div className="caseta-card-actions">
                     <button
-                      onClick={() => handleSellarPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'))}
+                      onClick={() => handleSellarPase(p.id, esRegresoCasa ? 'retiro' : (esSalida ? 'salida' : 'entrada'), p.usuarios?.nombre_completo)}
                       disabled={procesandoId === p.id}
                       className="caseta-btn-action"
                       style={{ background: colorBorde, color: '#fff' }}
@@ -447,14 +469,13 @@ export default function Caseta() {
               );
             })}
 
-            {/* B) Retenidos en puerta esperando autorización (Con motivo específico y claro) */}
             {retenidosEnEspera.map((p) => (
               <div
                 key={p.id}
                 className="caseta-card"
                 style={{
-                  borderLeft: '5px solid #f59e0b',
-                  background: c.surfaceCard
+                  borderLeft: '5px solid #dc2626',
+                  background: modoOscuro ? 'rgba(220,38,38,0.06)' : '#fff5f5'
                 }}
               >
                 <div className="caseta-card-left">
@@ -464,8 +485,8 @@ export default function Caseta() {
                       {formatearApellidosNombre(p.usuarios?.nombre_completo, p.usuarios)}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px', fontSize: '11.5px', fontWeight: '700' }}>
-                      <span style={{ color: '#d97706', background: 'rgba(245,158,11,0.14)', padding: '2px 8px', borderRadius: '5px' }}>
-                        {p.etiquetaMotivoPuerta || '⏳ Retenido en puerta'}
+                      <span style={{ color: '#dc2626', background: 'rgba(220,38,38,0.14)', padding: '2px 8px', borderRadius: '5px', fontWeight: '800' }}>
+                        {p.etiquetaMotivoPuerta || '🛑 Detenido en puerta'}
                       </span>
                       <span style={{ color: c.textMuted }}>
                         • Esperando firma de: <strong style={{ color: c.text }}>{p.esperandoFirmaDe}</strong>
@@ -475,10 +496,10 @@ export default function Caseta() {
                 </div>
 
                 <span style={{
-                  fontSize: '11.5px', fontWeight: '800', color: '#d97706',
+                  fontSize: '12px', fontWeight: '900', color: '#dc2626',
                   display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0
                 }}>
-                  <Hourglass size={14} /> En espera
+                  <Hourglass size={14} /> NO DEJAR PASAR AÚN
                 </span>
               </div>
             ))}
@@ -488,13 +509,12 @@ export default function Caseta() {
                 background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
                 padding: '36px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
               }}>
-                No hay personas detenidas ni pases pendientes en puerta en este momento.
+                No hay pases pendientes ni personas detenidas en puerta en este momento.
               </div>
             )}
           </div>
         )}
 
-        {/* PESTAÑA 2: POR REGRESAR (FUERA CON PASE TEMPORAL) */}
         {subTabPases === 'reingresos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
             {personalFuera.length === 0 ? (
@@ -521,7 +541,7 @@ export default function Caseta() {
 
                   <div className="caseta-card-actions">
                     <button
-                      onClick={() => handleSellarPase(p.id, 'reingreso')}
+                      onClick={() => handleSellarPase(p.id, 'reingreso', p.usuarios?.nombre_completo)}
                       disabled={procesandoId === p.id}
                       className="caseta-btn-action"
                       style={{ background: '#2563eb', color: '#fff' }}
@@ -536,7 +556,6 @@ export default function Caseta() {
           </div>
         )}
 
-        {/* PESTAÑA 3: SELLADOS HOY */}
         {subTabPases === 'sellados' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
             {crucesCompletadosHoy.length === 0 ? (
@@ -619,10 +638,7 @@ export default function Caseta() {
   }
 
   // ====================================================================
-  // VISTA 2: PASE DE LISTA DIARIO (3 PESTAÑAS LIMPIAS SIN REVOLTIJO)
-  //   1. Por Llegar (Buscador de Entrada)
-  //   2. En Planta (Asistencia actual y Salida de fin de turno)
-  //   3. Ausentes Hoy (Vacaciones y Faltas programadas)
+  // VISTA 2: PASE DE LISTA (FLUJO RÁPIDO CON SEMÁFORO Y SIN BRINCAR DE PANTALLA)
   // ====================================================================
   const termino = (busquedaTexto || '').toLowerCase().trim();
   const letrasSinEspacios = termino.replace(/\s+/g, '');
@@ -633,11 +649,15 @@ export default function Caseta() {
     const inc = mapaIncidenciasHoy[emp.id];
     return inc?.tipo === 'ausencia_autorizada';
   });
-  const pendientesPorLlegar = todosSinEntrada.filter((emp) => {
-    const inc = mapaIncidenciasHoy[emp.id];
-    return inc?.tipo !== 'ausencia_autorizada';
-  });
   const todosEnPlanta = empleadosSede.filter(emp => Boolean(mapaAsistencias[emp.id]?.hora_entrada));
+
+  // Personas actualmente paradas a un lado en la reja (En espera de firma o ya con resolución para darles paso / retiro)
+  const detenidosEnReja = todosSinEntrada.filter((emp) => {
+    const inc = mapaIncidenciasHoy[emp.id];
+    const t = inc?.tipo || 'normal';
+    if (t === 'retardo_regresa' && inc?.yaSeRetiroACasa) return false;
+    return t === 'retardo_en_espera' || t === 'retardo_autorizado' || t === 'retardo_regresa';
+  });
 
   const coincidePorInicioDePalabra = (emp, busq) => {
     const limpioBusq = busq.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -652,7 +672,7 @@ export default function Caseta() {
   };
 
   const coincidenciasEntrada = tieneMinimo3Letras
-    ? pendientesPorLlegar.filter((emp) => coincidePorInicioDePalabra(emp, termino))
+    ? todosSinEntrada.filter((emp) => coincidePorInicioDePalabra(emp, termino))
     : [];
 
   const demasiadasCoincidenciasEntrada = tieneMinimo3Letras && coincidenciasEntrada.length > 3;
@@ -661,18 +681,20 @@ export default function Caseta() {
     ? todosEnPlanta.filter((emp) => coincidePorInicioDePalabra(emp, termino))
     : todosEnPlanta;
 
+  const fueraDeToleranciaAhora = esDespuesDeTolerancia();
+
   return (
     <div className="caseta-wrap">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
       <style>{estilosComunesCaseta}</style>
 
-      {/* MODAL DE DOBLE CONFIRMACIÓN */}
+      {/* MODAL DE CONFIRMACIÓN CON SEMÁFORO (VERDE = ENTRADA NORMAL / ROJO = RETENER EN PUERTA) */}
       {modalConfirmacion && (
         <div
           onClick={() => { if (!procesandoId) setModalConfirmacion(null); }}
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(15, 23, 42, 0.68)', backdropFilter: 'blur(4px)',
+            background: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(4px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
           }}
         >
@@ -680,34 +702,43 @@ export default function Caseta() {
             onClick={(e) => e.stopPropagation()}
             style={{
               background: c.surfaceCard,
-              border: `2px solid ${modalConfirmacion.tipoMarca === 'salida' ? '#0284c7' : c.accent}`,
-              borderRadius: '18px', padding: '24px 22px', width: '100%', maxWidth: '410px',
-              boxShadow: '0 20px 45px rgba(0,0,0,0.35)',
+              border: `2.5px solid ${modalConfirmacion.requiereRetencion ? '#dc2626' : '#16a34a'}`,
+              borderRadius: '18px', padding: '24px 22px', width: '100%', maxWidth: '420px',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.45)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '14px'
             }}
           >
             <span style={{
-              fontSize: '11.5px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.06em',
-              padding: '4px 12px', borderRadius: '999px',
-              background: modalConfirmacion.tipoMarca === 'salida' ? 'rgba(2,132,199,0.14)' : c.accentSoft,
-              color: modalConfirmacion.tipoMarca === 'salida' ? '#0284c7' : c.accent
+              fontSize: '12px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em',
+              padding: '5px 14px', borderRadius: '999px',
+              background: modalConfirmacion.requiereRetencion ? 'rgba(220,38,38,0.15)' : 'rgba(22,163,74,0.15)',
+              color: modalConfirmacion.requiereRetencion ? '#dc2626' : '#16a34a'
             }}>
-              {modalConfirmacion.tipoMarca === 'salida' ? 'Confirmar Fin de Turno' : 'Confirmar Entrada a Planta'}
+              {modalConfirmacion.requiereRetencion ? `🛑 ${modalConfirmacion.motivoRetencion}` : '✅ ENTRADA NORMAL EN TIEMPO'}
             </span>
 
             <AvatarColaborador u={modalConfirmacion.emp} size={68} />
 
             <div>
-              <div style={{ fontSize: '15.5px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
+              <div style={{ fontSize: '16px', fontWeight: '900', color: c.text, lineHeight: 1.25 }}>
                 {formatearApellidosNombre(modalConfirmacion.emp?.nombre_completo, modalConfirmacion.emp)}
               </div>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '5px' }}>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: c.textMuted, marginTop: '4px' }}>
                 #{modalConfirmacion.emp?.numero_empleado}
                 {modalConfirmacion.emp?.departamentos?.nombre ? ` • ${modalConfirmacion.emp.departamentos.nombre}` : ''}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '10px', width: '100%', marginTop: '6px' }}>
+            {modalConfirmacion.requiereRetencion && (
+              <div style={{
+                background: 'rgba(220,38,38,0.10)', border: '1px solid rgba(220,38,38,0.35)',
+                color: '#dc2626', borderRadius: '10px', padding: '8px 12px', fontSize: '12.5px', fontWeight: '800'
+              }}>
+                ⚠️ NO LO DEJES PASAR AÚN. Al confirmar, quedará en espera aquí mismo mientras su Jefe o RH autoriza.
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '10px', width: '100%', marginTop: '4px' }}>
               <button
                 type="button"
                 onClick={() => setModalConfirmacion(null)}
@@ -723,34 +754,35 @@ export default function Caseta() {
 
               <button
                 type="button"
-                onClick={handleConfirmarDesdeModal}
+                onClick={handleConfirmarEntradaModal}
                 disabled={Boolean(procesandoId)}
                 style={{
                   height: '50px', borderRadius: '12px', border: 'none',
-                  background: modalConfirmacion.tipoMarca === 'salida' ? '#0284c7' : c.accent,
-                  color: '#ffffff', fontSize: '15px', fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                  background: modalConfirmacion.requiereRetencion ? '#dc2626' : '#16a34a',
+                  color: '#ffffff', fontSize: '14.5px', fontWeight: '900', cursor: procesandoId ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px'
                 }}
               >
-                <Check size={20} strokeWidth={3} />
-                <span>{procesandoId ? 'Registrando...' : 'Confirmar'}</span>
+                {modalConfirmacion.requiereRetencion ? <ShieldAlert size={19} /> : <Check size={20} strokeWidth={3} />}
+                <span>
+                  {procesandoId
+                    ? 'Procesando...'
+                    : (modalConfirmacion.requiereRetencion ? 'Retener y Pedir Firma' : 'Dar Entrada')}
+                </span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3 PESTAÑAS DEL PASE DE LISTA: POR LLEGAR | EN PLANTA | AUSENTES HOY */}
+      {/* PESTAÑAS DEL PASE DE LISTA */}
       <div className="tabs-aprobacion-bar caseta-tabs-bar">
         <button
           className={`tab-btn ${subTabAsistencia === 'por_llegar' ? 'active' : ''}`}
           onClick={() => setSubTabAsistencia('por_llegar')}
         >
           <Users size={15} />
-          <span>Por Llegar</span>
-          <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
-            {pendientesPorLlegar.length}
-          </span>
+          <span>Entrada ({todosSinEntrada.length})</span>
         </button>
 
         <button
@@ -758,10 +790,7 @@ export default function Caseta() {
           onClick={() => setSubTabAsistencia('en_planta')}
         >
           <UserCheck size={15} />
-          <span>En Planta</span>
-          <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
-            {todosEnPlanta.length}
-          </span>
+          <span>En Planta / Salidas ({todosEnPlanta.length})</span>
         </button>
 
         <button
@@ -769,16 +798,13 @@ export default function Caseta() {
           onClick={() => setSubTabAsistencia('ausentes')}
         >
           <CalendarOff size={15} />
-          <span>Ausentes Hoy</span>
-          {ausentesProgramadosHoy.length > 0 && (
-            <span className="tab-badge" style={{ fontSize: '11px', padding: '1px 6px' }}>
-              {ausentesProgramadosHoy.length}
-            </span>
-          )}
+          <span>Vacaciones / Faltas ({ausentesProgramadosHoy.length})</span>
         </button>
       </div>
 
-      {/* BUSCADOR (SOLO PARA "POR LLEGAR" Y "EN PLANTA") */}
+      {renderBannerSemaforo()}
+
+      {/* BUSCADOR RÁPIDO */}
       {subTabAsistencia !== 'ausentes' && (
         <div
           className="caseta-search-box"
@@ -803,7 +829,7 @@ export default function Caseta() {
                 ref={inputBusquedaRef}
                 type="text"
                 className="caseta-search-input"
-                placeholder="Buscar por apellido o nombre..."
+                placeholder={subTabAsistencia === 'en_planta' ? 'Filtrar personal en planta para dar salida...' : 'Escribe 3 letras del apellido o nombre...'}
                 value={busquedaTexto}
                 onChange={(e) => setBusquedaTexto(e.target.value)}
                 style={{
@@ -843,42 +869,31 @@ export default function Caseta() {
               <RefreshCw size={17} />
             </button>
           </div>
-
-          {ultimoRegistradoTexto && (
-            <div style={{
-              background: c.accentSoft, border: `1.5px solid ${c.accent}`, color: c.accent,
-              borderRadius: '10px', padding: '9px 12px', fontSize: '13.5px', fontWeight: '900', textAlign: 'center'
-            }}>
-              {ultimoRegistradoTexto}
-            </div>
-          )}
         </div>
       )}
 
-      {/* PESTAÑA 1: POR LLEGAR (LIMPIA, SOLO BUSCADOR) */}
+      {/* PESTAÑA 1: ENTRADA MATUTINA */}
       {subTabAsistencia === 'por_llegar' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+          {/* RESULTADOS DEL BUSCADOR CON SEMÁFORO VISUAL ANTES DE CONFIRMAR */}
           {!tieneMinimo3Letras ? (
             <div style={{
               background: c.surfaceCard, border: `1px dashed ${c.border}`, borderRadius: '12px',
-              padding: '32px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
+              padding: '24px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
             }}>
-              Escribe al menos <strong style={{ color: c.text }}>3 letras</strong> del apellido o nombre para registrar entrada.
+              Escribe <strong style={{ color: c.text }}>3 letras</strong> del apellido o nombre para dar entrada (Hora límite hoy: <strong style={{ color: c.text }}>{horaLimiteStr} hrs</strong>).
             </div>
           ) : demasiadasCoincidenciasEntrada ? (
             <div style={{
               background: 'rgba(245, 158, 11, 0.10)', border: '1.5px solid rgba(245, 158, 11, 0.4)',
-              borderRadius: '12px', padding: '24px 18px', textAlign: 'center', color: '#d97706', fontSize: '14px', fontWeight: '800'
+              borderRadius: '12px', padding: '20px 18px', textAlign: 'center', color: '#d97706', fontSize: '14px', fontWeight: '800'
             }}>
-              Hay {coincidenciasEntrada.length} coincidencias.<br />
-              <span style={{ fontSize: '12.5px', fontWeight: '600', color: c.textMuted }}>
-                Escribe una letra más para ver máximo 3 resultados.
-              </span>
+              Hay {coincidenciasEntrada.length} coincidencias. Escribe una letra más.
             </div>
           ) : coincidenciasEntrada.length === 0 ? (
             <div style={{
               background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '12px',
-              padding: '28px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
+              padding: '24px 20px', textAlign: 'center', color: c.textMuted, fontSize: '13.5px', fontWeight: '600'
             }}>
               No se encontró ningún colaborador pendiente de entrada con "{busquedaTexto}".
             </div>
@@ -887,79 +902,183 @@ export default function Caseta() {
               const inc = mapaIncidenciasHoy[emp.id];
               const tipoInc = inc?.tipo || 'normal';
 
+              // Determinar si requiere retención en puerta (Semáforo Rojo) o si pasa directo (Semáforo Verde)
+              let requiereRetencion = false;
+              let motivoRetencion = '';
+
+              if (tipoInc === 'falta_ayer_sin_aviso') {
+                requiereRetencion = true;
+                motivoRetencion = 'FALTÓ AYER SIN AVISO';
+              } else if (tipoInc === 'ausencia_autorizada') {
+                requiereRetencion = true;
+                motivoRetencion = String(inc?.etiqueta || '').includes('Vacaciones') ? 'ESTÁ DE VACACIONES HOY' : 'TIENE FALTA PROGRAMADA HOY';
+              } else if (fueraDeToleranciaAhora && tipoInc !== 'retardo_autorizado') {
+                requiereRetencion = true;
+                motivoRetencion = `LLEGADA TARDE (Límite ${horaLimiteStr} hrs)`;
+              }
+
               return (
                 <div
                   key={emp.id}
                   className="caseta-list-item"
                   style={{
-                    background: c.surfaceCard,
-                    border: `1.5px solid ${c.border}`
+                    background: requiereRetencion ? (modoOscuro ? 'rgba(220,38,38,0.08)' : '#fff5f5') : c.surfaceCard,
+                    border: `2px solid ${requiereRetencion ? '#dc2626' : '#16a34a'}`
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                    <AvatarColaborador u={emp} size={40} />
+                    <AvatarColaborador u={emp} size={42} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className="caseta-emp-name" style={{ color: c.text }}>
                         {formatearApellidosNombre(emp.nombre_completo, emp)}
                       </div>
-                      <div style={{ fontSize: '11.5px', color: c.textMuted, fontWeight: '600', marginTop: '2px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', color: c.textMuted, fontWeight: '700', marginTop: '3px' }}>
                         <strong style={{ color: c.text }}>#{emp.numero_empleado}</strong>
-                        {emp.departamentos?.nombre && ` • ${emp.departamentos.nombre}`}
+                        {emp.departamentos?.nombre && <span>• {emp.departamentos.nombre}</span>}
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '5px', fontWeight: '800', fontSize: '11px',
+                          background: requiereRetencion ? 'rgba(220,38,38,0.15)' : 'rgba(22,163,74,0.15)',
+                          color: requiereRetencion ? '#dc2626' : '#16a34a'
+                        }}>
+                          {requiereRetencion ? `🛑 ${motivoRetencion}` : '🟢 PASA A PLANTA'}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                     {tipoInc === 'retardo_en_espera' ? (
+                      <span style={{
+                        padding: '8px 12px', borderRadius: '9px', background: 'rgba(220,38,38,0.14)',
+                        color: '#dc2626', fontSize: '12px', fontWeight: '900'
+                      }}>
+                        🛑 Ya detenido esperando firma
+                      </span>
+                    ) : tipoInc === 'retardo_autorizado' ? (
                       <button
                         type="button"
-                        onClick={() => navigate('/caseta')}
+                        onClick={() => handleSellarPase(inc.paseId, 'entrada', emp.nombre_completo)}
+                        disabled={Boolean(procesandoId)}
                         style={{
-                          height: '38px', padding: '0 12px', borderRadius: '8px',
-                          border: '1px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.14)',
-                          color: '#d97706', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer'
+                          height: '44px', padding: '0 16px', borderRadius: '10px', border: 'none',
+                          background: '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '900', cursor: 'pointer'
                         }}
                       >
-                        ⏳ Ver en Pases de Puerta
+                        ✅ Dar Paso
                       </button>
                     ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleRetenerPorFaltaSinAviso(emp)}
-                          disabled={Boolean(procesandoId)}
-                          title="Retener porque faltó sin aviso"
-                          style={{
-                            height: '44px', padding: '0 11px', borderRadius: '10px',
-                            border: '1.5px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)',
-                            color: '#ef4444', fontSize: '11.5px', fontWeight: '800', cursor: 'pointer'
-                          }}
-                        >
-                          Faltó s/aviso
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModalConfirmacion({ emp, tipoMarca: 'entrada' })}
-                          disabled={Boolean(procesandoId)}
-                          style={{
-                            minWidth: '60px', height: '44px', padding: '0 18px', borderRadius: '10px', border: 'none',
-                            background: c.accent, color: '#fff', fontSize: '13px', fontWeight: '900',
-                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-                          }}
-                        >
-                          <Check size={20} strokeWidth={3} />
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => setModalConfirmacion({ emp, inc, requiereRetencion, motivoRetencion })}
+                        disabled={Boolean(procesandoId)}
+                        style={{
+                          height: '46px', padding: '0 18px', borderRadius: '11px', border: 'none',
+                          background: requiereRetencion ? '#dc2626' : '#16a34a',
+                          color: '#fff', fontSize: '13px', fontWeight: '900', cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                        }}
+                      >
+                        {requiereRetencion ? (
+                          <>🛑 Retener a un lado</>
+                        ) : (
+                          <><Check size={19} strokeWidth={3} /> Dar Entrada</>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
               );
             })
           )}
+
+          {/* CAJÓN EN LA MISMA PANTALLA: PERSONAS DETENIDAS EN LA REJA ESPERANDO RESPUESTA */}
+          {detenidosEnReja.length > 0 && (
+            <div style={{
+              background: c.surfaceCard,
+              border: '2px solid #dc2626',
+              borderRadius: '14px',
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{
+                fontSize: '12px', fontWeight: '900', color: '#dc2626',
+                textTransform: 'uppercase', letterSpacing: '0.03em',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+              }}>
+                <span>🛑 Personas detenidas a un lado en la reja (No dejar pasar hasta que cambie a verde)</span>
+                <span>{detenidosEnReja.length}</span>
+              </div>
+
+              {detenidosEnReja.map((emp) => {
+                const inc = mapaIncidenciasHoy[emp.id];
+                const t = inc?.tipo;
+                const yaAutorizado = t === 'retardo_autorizado';
+                const seRetira = t === 'retardo_regresa';
+
+                return (
+                  <div
+                    key={emp.id}
+                    className="caseta-list-item"
+                    style={{
+                      background: yaAutorizado
+                        ? (modoOscuro ? 'rgba(22,163,74,0.16)' : '#f0fdf4')
+                        : (modoOscuro ? 'rgba(220,38,38,0.10)' : '#fef2f2'),
+                      border: `1.5px solid ${yaAutorizado ? '#16a34a' : '#dc2626'}`,
+                      padding: '9px 12px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      <AvatarColaborador u={emp} size={38} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>
+                          {formatearApellidosNombre(emp.nombre_completo, emp)}
+                        </div>
+                        <div style={{ fontSize: '11.5px', fontWeight: '800', color: yaAutorizado ? '#16a34a' : '#dc2626', marginTop: '2px' }}>
+                          {inc?.etiqueta}
+                        </div>
+                      </div>
+                    </div>
+
+                    {yaAutorizado ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSellarPase(inc.paseId, 'entrada', emp.nombre_completo)}
+                        disabled={Boolean(procesandoId)}
+                        style={{
+                          height: '40px', padding: '0 16px', borderRadius: '9px', border: 'none',
+                          background: '#16a34a', color: '#fff', fontSize: '12.5px', fontWeight: '900', cursor: 'pointer'
+                        }}
+                      >
+                        ✅ Dar Paso a Planta
+                      </button>
+                    ) : seRetira ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSellarPase(inc.paseId, 'retiro', emp.nombre_completo)}
+                        disabled={Boolean(procesandoId)}
+                        style={{
+                          height: '40px', padding: '0 14px', borderRadius: '9px', border: 'none',
+                          background: '#dc2626', color: '#fff', fontSize: '12.5px', fontWeight: '900', cursor: 'pointer'
+                        }}
+                      >
+                        ↩️ Confirmar Retiro a Casa
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '11.5px', fontWeight: '900', color: '#dc2626', whiteSpace: 'nowrap' }}>
+                        ⏳ Esperando firma...
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* PESTAÑA 2: EN PLANTA (SOLO ASISTENCIA DEL DÍA Y SALIDA DE TURNO) */}
+      {/* PESTAÑA 2: EN PLANTA / SALIDAS RÁPIDAS EN 1 CLIC */}
       {subTabAsistencia === 'en_planta' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
           {todosEnPlanta.length === 0 ? (
@@ -1029,15 +1148,15 @@ export default function Caseta() {
                       <>
                         <button
                           type="button"
-                          onClick={() => setModalConfirmacion({ emp, tipoMarca: 'salida' })}
+                          onClick={() => handleSalidaDirecta(emp)}
                           disabled={Boolean(procesandoId)}
                           style={{
-                            height: '38px', padding: '0 14px', borderRadius: '9px', border: `1.5px solid ${c.border}`,
-                            background: c.bg, color: c.text, fontSize: '12px', fontWeight: '800',
+                            height: '40px', padding: '0 16px', borderRadius: '9px', border: 'none',
+                            background: '#0284c7', color: '#ffffff', fontSize: '12.5px', fontWeight: '800',
                             cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
                           }}
                         >
-                          <LogOut size={14} /> Salida
+                          <LogOut size={14} /> Dar Salida
                         </button>
                         <button
                           type="button"
@@ -1062,7 +1181,7 @@ export default function Caseta() {
         </div>
       )}
 
-      {/* PESTAÑA 3: AUSENTES HOY (VACACIONES Y FALTAS PROGRAMADAS — SIN TECLEAR NADA) */}
+      {/* PESTAÑA 3: VACACIONES Y FALTAS DE HOY */}
       {subTabAsistencia === 'ausentes' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
           {ausentesProgramadosHoy.length === 0 ? (
@@ -1107,15 +1226,23 @@ export default function Caseta() {
 
                   <button
                     type="button"
-                    onClick={() => handleSolicitarIngresoEnAusencia(emp, inc)}
+                    onClick={() => {
+                      setSubTabAsistencia('por_llegar');
+                      setModalConfirmacion({
+                        emp,
+                        inc,
+                        requiereRetencion: true,
+                        motivoRetencion: String(inc?.etiqueta || '').includes('Vacaciones') ? 'ESTÁ DE VACACIONES HOY' : 'TIENE FALTA PROGRAMADA HOY'
+                      });
+                    }}
                     disabled={Boolean(procesandoId)}
                     style={{
                       height: '38px', padding: '0 13px', borderRadius: '9px',
-                      border: '1.5px solid #d97706', background: 'rgba(245,158,11,0.12)',
-                      color: '#d97706', fontSize: '12px', fontWeight: '800', cursor: 'pointer', flexShrink: 0
+                      border: '1.5px solid #dc2626', background: 'rgba(220,38,38,0.10)',
+                      color: '#dc2626', fontSize: '12px', fontWeight: '800', cursor: 'pointer', flexShrink: 0
                     }}
                   >
-                    Solicitar Acceso
+                    🛑 Se presentó (Pedir Firma)
                   </button>
                 </div>
               );
