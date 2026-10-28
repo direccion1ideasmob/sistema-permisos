@@ -1066,7 +1066,7 @@ export default function Caseta() {
             {/* PESTAÑA 1: ENTRADA */}
       {subTabAsistencia === 'por_llegar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          {ausentesProgramadosHoy.length > 0 && (
+          {(
             <div style={{
               background: c.surfaceCard,
               border: `1.5px solid ${c.border}`,
@@ -1089,7 +1089,11 @@ export default function Caseta() {
                 <span>📋 Ausencias Programadas Hoy (Vacaciones / Faltas)</span>
                 <span>{ausentesProgramadosHoy.length}</span>
               </div>
-              {ausentesProgramadosHoy.map((emp) => {
+              {ausentesProgramadosHoy.length === 0 ? (
+                <div style={{ fontSize: '12px', color: c.textMuted, fontWeight: '600', padding: '4px 2px' }}>
+                  Ningún colaborador registrado con Vacaciones o Falta programada para hoy.
+                </div>
+              ) : ausentesProgramadosHoy.map((emp) => {
                 const inc = mapaIncidenciasHoy[emp.id];
                 const esVac = String(inc?.etiqueta || '').toLowerCase().includes('vacaciones');
                 return (

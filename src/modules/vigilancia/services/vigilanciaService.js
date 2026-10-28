@@ -53,7 +53,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     supabase
       .from('permisos')
       .select(`
-        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, pago, observaciones,
+        id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, pago, asunto_motivo, observaciones,
         firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado,
         estado_general, created_at,
         usuarios:usuario_id (id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, foto_url, area, puesto, sede_id, departamentos:departamento_id (nombre)),
@@ -168,14 +168,18 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             bg: 'rgba(239,68,68,0.14)'
           };
         } else if (!jefeYaDecidioRetardo) {
+          const esFaltaSinAviso = tipo === 'falta' || /FALTA PREVIA SIN AVISO|FALTA SIN AVISO/i.test(rawPase.asunto_motivo || '') || /FALTA PREVIA SIN AVISO/i.test(obs);
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_en_espera',
             paseId: rawPase.id,
             esperandoFirmaDe,
             horaLlegadaPuerta,
-            etiqueta: `⏳ Esperando a: ${esperandoFirmaDe}`,
-            color: '#d97706',
-            bg: 'rgba(245,158,11,0.14)'
+            esFaltaSinAviso,
+            etiqueta: esFaltaSinAviso
+              ? `🚨 RETENIDO POR FALTA SIN AVISO • Esperando a: ${esperandoFirmaDe}`
+              : `⏳ RETARDO EN PUERTA • Esperando a: ${esperandoFirmaDe}`,
+            color: esFaltaSinAviso ? '#dc2626' : '#d97706',
+            bg: esFaltaSinAviso ? 'rgba(220,38,38,0.14)' : 'rgba(245,158,11,0.14)'
           };
         } else {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
@@ -190,14 +194,26 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           };
         }
       } else if (tipo === 'salida' && !esRechazado) {
+        const retenidoPorHora = rawPase.estado_general === 'en_firmas' && /\[HORARIO NO COINCIDE EN CASETA/i.test(obs);
         const estaFuera = yaSalio && requiereRegreso && !yaRegreso;
-        mapaIncidenciasHoy[rawPase.usuario_id] = {
-          tipo: estaFuera ? 'salida_fuera' : 'salida_autorizada',
-          paseId: rawPase.id,
-          etiqueta: estaFuera ? '🔵 Fuera (Pendiente reingreso)' : '🔵 Pase de Salida',
-          color: '#0284c7',
-          bg: 'rgba(2,132,199,0.12)'
-        };
+        if (retenidoPorHora) {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: 'retardo_en_espera',
+            paseId: rawPase.id,
+            esperandoFirmaDe,
+            etiqueta: `⚠️ HORARIO DE PASE NO COINCIDE • Esperando a: ${esperandoFirmaDe}`,
+            color: '#dc2626',
+            bg: 'rgba(220,38,38,0.14)'
+          };
+        } else {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: estaFuera ? 'salida_fuera' : 'salida_autorizada',
+            paseId: rawPase.id,
+            etiqueta: estaFuera ? '🔵 Fuera (Pendiente reingreso)' : '🔵 Pase de Salida',
+            color: '#0284c7',
+            bg: 'rgba(2,132,199,0.12)'
+          };
+        }
       }
     }
 
