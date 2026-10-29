@@ -14,6 +14,8 @@ export const parsearDatosObservaciones = (obs = '') => {
 
   const segHorario = segmentos.find(s =>
     !/^\[.*\]$/.test(s) &&
+    !/llegada en puerta/i.test(s) &&
+    !/^⚠️/i.test(s) &&
     !/VoBo /i.test(s) &&
     !/^Nota /i.test(s) &&
     !/^Res:/i.test(s) &&
