@@ -20,5 +20,6 @@
   "theme_color": "#000000",
   "display": "standalone",
   "orientation": "portrait",
-  "scope": "/"
+  "scope": "/",
+  "id": "/?app=standalone2"
 }
