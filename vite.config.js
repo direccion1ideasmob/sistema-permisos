@@ -13,27 +13,30 @@ export default defineConfig({
       injectManifest: {
         injectionPoint: undefined
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
+        id: '/',
+        name: 'Mobiliarium Permisos',
+        short_name: 'Mobiliarium',
+        description: 'Sistema de Permisos y Pases de Salida',
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        name: 'RH ACCESOS & SALIDAS',
-        short_name: 'ACCESOS',
-        description: 'Sistema de Permisos y Pases de Salida',
-        theme_color: '#000000',
-        background_color: '#ffffff',
+        display_override: ['standalone', 'fullscreen'],
+        background_color: '#1e1e1e',
+        theme_color: '#1e1e1e',
         orientation: 'portrait',
         icons: [
           {
-            src: '/LogoVerde-removebg-preview.png',
+            src: '/pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
-            src: '/LogoVerde-removebg-preview.png',
+            src: '/pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       }
