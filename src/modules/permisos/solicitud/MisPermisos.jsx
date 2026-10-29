@@ -796,7 +796,8 @@ export default function MisPermisos() {
                         }
 
                         const tieneRegistroCaseta = Boolean(horaSalidaCaseta || horaEntradaCaseta || horaRegresadoCaseta);
-                        const folioLimpio = (esAutorizado && p.folio && !p.folio.startsWith('REQ-') && !p.folio.startsWith('CAS-')) ? p.folio : 'SIN FOLIO';
+                        const tieneFolioOficial = Boolean(p.folio && !p.folio.startsWith('REQ-') && !p.folio.startsWith('CAS-'));
+                        const folioLimpio = tieneFolioOficial ? p.folio : 'SIN FOLIO';
 
                         return (
                           <div

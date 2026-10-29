@@ -251,10 +251,13 @@ export default function TablaHistorial({
           return false;
         }
       }
+      const tieneFolioOficialConsecutivo = Boolean(s.folio && !String(s.folio).startsWith('REQ-') && !String(s.folio).startsWith('CAS-'));
       if (filtroEstado === 'cancelado') {
         if (!esCancelado) return false;
+      } else if (filtroEstado === 'todos') {
+        // Ocultar únicamente borradores REQ-/CAS- cancelados, pero MANTENER visibles los Folios Oficiales cancelados para que nunca se salte un número en el consecutivo (ej. 0004, 0005 Cancelado, 0006)
+        if (esCancelado && !tieneFolioOficialConsecutivo) return false;
       } else {
-        // Por defecto los cancelados no ensucian la bandeja principal de RH
         if (esCancelado) return false;
         if (filtroEstado === 'autorizado' && !esAut) return false;
         if (filtroEstado === 'rechazado' && (s.estado_general !== 'rechazado' && !esRegresadoFiltro)) return false;
