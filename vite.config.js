@@ -15,12 +15,15 @@ export default defineConfig({
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
         name: 'RH ACCESOS & SALIDAS',
         short_name: 'ACCESOS',
         description: 'Sistema de Permisos y Pases de Salida',
         theme_color: '#000000',
         background_color: '#ffffff',
-        display: 'standalone',
+        display: 'minimal-ui',
         orientation: 'portrait',
         icons: [
           {
