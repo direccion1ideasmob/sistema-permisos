@@ -450,7 +450,7 @@ export default function Sidebar({
 const s = {
   sidebar: { 
     zIndex: 300, 
-    height: '100vh',
+    height: '100dvh', maxHeight: '100dvh',
     maxHeight: '100vh',
     overflow: 'hidden', 
     display: 'flex', 

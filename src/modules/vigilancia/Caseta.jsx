@@ -398,6 +398,85 @@ export default function Caseta() {
     e => Boolean(mapaAsistencias[e.id]?.hora_entrada) && !mapaAsistencias[e.id]?.hora_salida
   );
 
+
+  const estilosMovilCaseta = `
+    .caseta-contenedor {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+      max-width: 820px;
+      margin: 0 auto;
+      box-sizing: border-box;
+      font-family: "Inter", sans-serif;
+    }
+    .caseta-tarjeta-guardia {
+      border-radius: 16px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      box-sizing: border-box;
+      width: 100%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    .caseta-btn-accion {
+      height: 54px;
+      min-width: 160px;
+      padding: 0 22px;
+      border-radius: 13px;
+      border: none;
+      font-size: 16px;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+    .caseta-tabs-actividad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .caseta-input-busqueda {
+      width: 100%;
+      height: 62px;
+      padding: 0 54px 0 54px;
+      border-radius: 14px;
+      font-size: 20px;
+      font-weight: 800;
+      box-sizing: border-box;
+      outline: none;
+    }
+    @media (max-width: 768px) {
+      .caseta-contenedor {
+        padding-top: 44px;
+        gap: 12px;
+      }
+      .caseta-tarjeta-guardia {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 13px 14px !important;
+        gap: 12px !important;
+      }
+      .caseta-btn-accion {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 48px !important;
+        font-size: 15px !important;
+      }
+      .caseta-tabs-actividad {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+      }
+      .caseta-input-busqueda {
+        height: 52px !important;
+        font-size: 16px !important;
+        padding: 0 44px 0 44px !important;
+      }
+    }
+  `;
+
   // Tarjeta Grande y Fácil de Tocar para el Guardia
   const renderTarjetaGuardia = (emp) => {
     const acc = obtenerAccionSimple(emp);
@@ -407,17 +486,11 @@ export default function Caseta() {
       <div
         key={emp.id}
         onClick={() => { if (!acc.deshabilitado) tocarTarjeta(emp); }}
+        className="caseta-tarjeta-guardia"
         style={{
           background: acc.fondo,
           border: `2.5px solid ${acc.color}`,
-          borderRadius: '16px',
-          padding: '14px 18px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '14px',
-          cursor: acc.deshabilitado ? 'default' : 'pointer',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+          cursor: acc.deshabilitado ? 'default' : 'pointer'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
@@ -457,7 +530,7 @@ export default function Caseta() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, width: 'auto' }}>
           
           <button
           type="button"
@@ -466,18 +539,11 @@ export default function Caseta() {
             e.stopPropagation();
             tocarTarjeta(emp);
           }}
+          className="caseta-btn-accion"
           style={{
-            height: '54px',
-            minWidth: '160px',
-            padding: '0 22px',
-            borderRadius: '13px',
-            border: 'none',
             background: acc.deshabilitado ? 'rgba(245,158,11,0.2)' : acc.color,
             color: acc.deshabilitado ? '#d97706' : '#ffffff',
-            fontSize: '16px',
-            fontWeight: '900',
-            cursor: acc.deshabilitado ? 'default' : 'pointer',
-            flexShrink: 0
+            cursor: acc.deshabilitado ? 'default' : 'pointer'
           }}
         >
           {cargando ? '...' : acc.boton}
@@ -492,8 +558,9 @@ export default function Caseta() {
   // ====================================================================
   if (esPaseDeLista) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '820px', margin: '0 auto', fontFamily: '"Inter", sans-serif' }}>
+      <div className="caseta-contenedor">
         <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+        <style>{estilosMovilCaseta}</style>
       {confirmarAnularEntrada && (
         <div
           onClick={() => setConfirmarAnularEntrada(null)}
@@ -622,18 +689,11 @@ export default function Caseta() {
                   setBusqueda('');
                 }
               }}
+              className="caseta-input-busqueda"
               style={{
-                width: '100%',
-                height: '62px',
-                padding: '0 54px 0 54px',
-                borderRadius: '14px',
                 border: `2px solid ${c.border}`,
                 background: c.bg,
-                color: c.text,
-                fontSize: '20px',
-                fontWeight: '800',
-                boxSizing: 'border-box',
-                outline: 'none'
+                color: c.text
               }}
             />
             {busqueda && (
@@ -683,8 +743,9 @@ export default function Caseta() {
   // VISTA 2: 🏢 PASES DE PUERTA (3 BOTONES GRANDES ARRIBA Y TARJETAS GRANDES)
   // ====================================================================
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '820px', margin: '0 auto', fontFamily: '"Inter", sans-serif' }}>
+    <div className="caseta-contenedor">
       <style>{generarEstilosAprobaciones(c, modoOscuro)}</style>
+        <style>{estilosMovilCaseta}</style>
       {confirmarAnularEntrada && (
         <div
           onClick={() => setConfirmarAnularEntrada(null)}
@@ -758,7 +819,7 @@ export default function Caseta() {
       )}
 
       {/* 3 BOTONES GRANDES Y CLAROS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+      <div className="caseta-tabs-actividad">
         <button
           type="button"
           onClick={() => setTabPuerta('pases')}
