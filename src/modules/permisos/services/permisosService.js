@@ -16,19 +16,54 @@ export const obtenerPermisosUsuario = async (usuarioId) => {
 
 // 2. ESCALAR PERMISO POR INACTIVIDAD DEL JEFE (MisPermisos)
 export const escalarPermisoAGerencia = async (permiso) => {
+  if (permiso.firma_1_id) {
+    const { data: f1User } = await supabase.from('usuarios').select('id, rol').eq('id', permiso.firma_1_id).maybeSingle();
+    if (f1User?.rol === 'encargado') {
+      const jefeDeptoId = await buscarJefeDeptoSuperior(f1User.id, permiso.usuarios?.departamento_id);
+      if (jefeDeptoId && jefeDeptoId !== f1User.id) {
+        const { error: errRel } = await supabase
+          .from('permisos')
+          .update({
+            firma_1_id: jefeDeptoId,
+            firma_1_estado: 'pendiente',
+            observaciones: `${permiso.observaciones || ''} | ⚠️ Escalado a Jefatura de Departamento por inactividad de Subárea.`
+          })
+          .eq('id', permiso.id);
+        if (errRel) throw errRel;
+        await enviarNotificacionPushUsuarios(jefeDeptoId, {
+          titulo: `⚠️ ESCALAMIENTO: ${permiso.tipo_permiso.toUpperCase()}`,
+          mensaje: `El Supervisor de Subárea no respondió a tiempo. Se requiere tu autorización para el folio ${permiso.folio}.`,
+          urlDestino: '/aprobaciones'
+        });
+        return;
+      }
+    }
+  }
+
+  const vaAGerencia = permiso.firma_2_estado === 'pendiente' && Boolean(permiso.firma_2_id);
+  const etiquetaDestino = vaAGerencia ? 'Gerencia' : 'Recursos Humanos';
+
   const { error } = await supabase
     .from('permisos')
-    .update({ 
+    .update({
       firma_1_estado: 'escalado',
-      observaciones: `${permiso.observaciones || ''} | ⚠️ Escalado a Gerencia por inactividad del Jefe.`
+      observaciones: `${permiso.observaciones || ''} | ⚠️ Escalado a ${etiquetaDestino} por inactividad del Jefe.`
     })
     .eq('id', permiso.id);
 
   if (error) throw error;
 
-  const siguienteId = permiso.firma_2_estado === 'pendiente' ? permiso.firma_2_id : permiso.firma_3_id;
-  if (siguienteId) {
-    await enviarNotificacionPushUsuarios(siguienteId, {
+  let destinatarios = [];
+  if (vaAGerencia) {
+    destinatarios = [permiso.firma_2_id];
+  } else {
+    const { data: rhUsers } = await supabase.from('usuarios').select('id').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true);
+    destinatarios = (rhUsers || []).map(u => u.id);
+    if (destinatarios.length === 0 && permiso.firma_3_id) destinatarios = [permiso.firma_3_id];
+  }
+
+  if (destinatarios.length > 0) {
+    await enviarNotificacionPushUsuarios([...new Set(destinatarios)], {
       titulo: `⚠️ ESCALAMIENTO: ${permiso.tipo_permiso.toUpperCase()}`,
       mensaje: `El Jefe de Área no respondió a tiempo. Se requiere tu autorización para el folio ${permiso.folio}.`,
       urlDestino: '/aprobaciones'
@@ -226,7 +261,7 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   solicitud = { ...solicitud, ...actualBD };
   const esFirmante1Actual =
     solicitud.firma_1_estado === 'pendiente' &&
-    (solicitud.firma_1_id === usuario.id || ['encargado', 'jefe_area'].includes(usuario.rol));
+    (solicitud.firma_1_id === usuario.id || (!solicitud.firma_1_id && ['encargado', 'jefe_area'].includes(usuario.rol)));
 
   const esGerente = solicitud.firma_2_id === usuario.id && solicitud.firma_2_estado === 'pendiente';
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh';
@@ -300,9 +335,9 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   // CIERRE DE FIRMA 3 (RH / SUPLENCIA):
   // Si Victoria acaba de firmar la Firma 1 de Nora en este mismo clic, NO cierra Firma 3 todavía (pasa a José Coca).
   // Pero si Firma 1 y Firma 2 ya estaban listas de antes (o si quien firma es José Coca), cierra Firma 3 y genera Folio Oficial.
-  const firma1EstabaListaAntes = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(solicitud.firma_1_estado);
-  const firma1Lista = !huboRelevoSubareaADepto && ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_1_estado || solicitud.firma_1_estado);
-  const firma2Lista = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(updates.firma_2_estado || solicitud.firma_2_estado);
+  const firma1EstabaListaAntes = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(solicitud.firma_1_estado);
+  const firma1Lista = !huboRelevoSubareaADepto && ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(updates.firma_1_estado || solicitud.firma_1_estado);
+  const firma2Lista = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(updates.firma_2_estado || solicitud.firma_2_estado);
 
   const puedeCerrarFirma3EnEsteClic = usuario.rol === 'gerente_rh' || firma1EstabaListaAntes;
 
@@ -314,8 +349,16 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     const nominaEmpleado = (solicitud.usuarios?.tipo_personal || solicitud.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
     let letra = nominaEmpleado.includes('admin') ? 'A' : (nominaEmpleado.includes('obra') ? 'O' : 'P');
     const anio = new Date().getFullYear().toString().slice(-2);
-    nuevoFolioGenerado = await generarFolioOficial(letra, anio);
-    updates.folio = nuevoFolioGenerado;
+    if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
+      if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
+      nuevoFolioGenerado = await generarFolioOficial(letra, anio);
+      updates.folio = nuevoFolioGenerado;
+    } else {
+      nuevoFolioGenerado = solicitud.folio;
+    }
+    } else {
+      nuevoFolioGenerado = solicitud.folio;
+    }
   } else if (esRH && firma1Lista && firma2Lista && puedeCerrarFirma3EnEsteClic) {
     updates.firma_3_estado = 'autorizado';
     updates.estado_general = 'autorizado';
@@ -328,8 +371,16 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     else if (nominaEmpleado.includes('obra')) letra = 'O';
 
     const anio = new Date().getFullYear().toString().slice(-2);
-    nuevoFolioGenerado = await generarFolioOficial(letra, anio);
-    updates.folio = nuevoFolioGenerado;
+    if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
+      if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
+      nuevoFolioGenerado = await generarFolioOficial(letra, anio);
+      updates.folio = nuevoFolioGenerado;
+    } else {
+      nuevoFolioGenerado = solicitud.folio;
+    }
+    } else {
+      nuevoFolioGenerado = solicitud.folio;
+    }
   }
 
   if (comentarios && String(comentarios).trim()) {
@@ -362,23 +413,13 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
       const obsConAvalInusual = `${updates.observaciones || obsOriginalInusual} | [COMPORTAMIENTO INUSUAL AUTORIZADO]`;
 
       if (/presentó en caseta.*FALTA|Tenía FALTA programada/i.test(obsOriginalInusual)) {
-        // Tenía falta programada hoy, se presentó y le autorizaron ingresar -> Se cancela la falta y se registra su entrada en lista
+        // Conserva estado 'autorizado' con [COMPORTAMIENTO INUSUAL AUTORIZADO] para que el guardia en Caseta vea el botón VERDE "✓ DEJAR PASAR"
         await supabase.from('permisos').update({
-          estado_general: 'rechazado',
-          pago: 'Cancelado',
-          observaciones: `${obsConAvalInusual} | [PASE CANCELADO: Ingreso autorizado en puerta a las ${horaRealPuerta} hrs]`
+          observaciones: `${obsConAvalInusual} | [ Reincorporación en día de falta autorizada a las ${horaRealPuerta} hrs ]`
         }).eq('id', solicitud.id);
-        await registrarCheckCaseta(solicitud.id, 'entrada');
       } else if (/VACACIONES.*reincorporarse antes/i.test(obsOriginalInusual)) {
-        // Estaba de vacaciones y le autorizaron reincorporarse hoy -> Ajustar vacaciones y registrar entrada hoy
         const hoyIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
-        if (solicitud.fecha_permiso >= hoyIso) {
-          await supabase.from('permisos').update({
-            estado_general: 'rechazado',
-            pago: 'Cancelado',
-            observaciones: `${obsConAvalInusual} | [PASE CANCELADO: Reincorporación anticipada autorizada el ${hoyIso}]`
-          }).eq('id', solicitud.id);
-        } else {
+        if (solicitud.fecha_permiso < hoyIso) {
           const ayerDate = new Date();
           ayerDate.setDate(ayerDate.getDate() - 1);
           const ayerIso = new Date(ayerDate.getTime() - ayerDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
@@ -386,45 +427,55 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
             fecha_fin: ayerIso,
             observaciones: `${obsConAvalInusual} | [Vacaciones recortadas al ${ayerIso} por reincorporación autorizada en puerta]`
           }).eq('id', solicitud.id);
-        }
-        const { data: exAsis } = await supabase.from('asistencias_caseta').select('id').eq('usuario_id', solicitud.usuario_id).eq('fecha', hoyIso).maybeSingle();
-        if (!exAsis) {
-          await supabase.from('asistencias_caseta').insert([{ usuario_id: solicitud.usuario_id, fecha: hoyIso, hora_entrada: horaRealPuerta }]);
+        } else {
+          await supabase.from('permisos').update({
+            observaciones: `${obsConAvalInusual} | [Reincorporación anticipada de vacaciones autorizada el ${hoyIso}]`
+          }).eq('id', solicitud.id);
         }
       } else if (/SALIDA DEFINITIVA.*reingresar/i.test(obsOriginalInusual)) {
         await supabase.from('permisos').update({
           observaciones: `${obsConAvalInusual} (Regresa: ${horaRealPuerta} hrs)`
         }).eq('id', solicitud.id);
-        await registrarCheckCaseta(solicitud.id, 'reingreso_forzado');
       } else {
         await supabase.from('permisos').update({ observaciones: obsConAvalInusual }).eq('id', solicitud.id);
-        await registrarCheckCaseta(solicitud.id, 'entrada');
       }
     } catch (eIn) {
       console.warn('Aviso al resolver comportamiento inusual:', eIn);
     }
   }
 
-  // Si era una SALIDA retenida en caseta porque no coincidió la hora, al autorizarla marcamos [HORARIO AUTORIZADO EN CASETA] y sellamos su paso
+  // Si era una SALIDA retenida en caseta porque no coincidió la hora, al autorizarla marcamos [HORARIO AUTORIZADO EN CASETA] para que el guardia le dé paso
   if (tipoLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '') && updates.estado_general === 'autorizado') {
     try {
       const obsConAvalHorario = `${updates.observaciones || solicitud.observaciones || ''} | [HORARIO AUTORIZADO EN CASETA]`;
       await supabase.from('permisos').update({ observaciones: obsConAvalHorario }).eq('id', solicitud.id);
-      const eraSalidaInicial = !/\[SALIDA CASETA:/i.test(solicitud.observaciones || '');
-      await registrarCheckCaseta(solicitud.id, eraSalidaInicial ? 'salida_forzado' : 'reingreso_forzado');
     } catch (_) {}
   }
 
-  if ((tipoLower === 'retardo' || tipoLower === 'falta') && estaEnPuerta) {
+  // Si era un colaborador retenido hoy por [FALTA PREVIA SIN AVISO] y ya fue autorizado su acceso hoy, marcar [REINCORPORACION AUTORIZADA] en su falta anterior
+  if (/FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || '') && updates.estado_general === 'autorizado' && !seRegresaDictamen) {
+    try {
+      const { data: faltasPrevias } = await supabase
+        .from('permisos')
+        .select('id, observaciones')
+        .eq('usuario_id', solicitud.usuario_id)
+        .eq('tipo_permiso', 'falta')
+        .ilike('asunto_motivo', '%SIN AVISO%');
+      for (const fp of (faltasPrevias || [])) {
+        if (!String(fp.observaciones || '').includes('[REINCORPORACION AUTORIZADA]')) {
+          await supabase
+            .from('permisos')
+            .update({ observaciones: `${fp.observaciones || ''} | [REINCORPORACION AUTORIZADA]` })
+            .eq('id', fp.id);
+        }
+      }
+    } catch (_) {}
+  }
+
+  if ((tipoLower === 'retardo' || tipoLower === 'falta' || esInusualCaseta) && estaEnPuerta) {
     const yaResolvioJefeORH =
       updates.estado_general === 'autorizado' ||
       seRegresaDictamen;
-
-    if (yaResolvioJefeORH && !seRegresaDictamen) {
-      try {
-        await registrarCheckCaseta(solicitud.id, 'entrada');
-      } catch (_) {}
-    }
 
     if (yaResolvioJefeORH) {
       try {
@@ -517,7 +568,11 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   const esGerente = solicitud.firma_2_id === usuario.id;
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh' || usuario.rol === 'superadmin';
 
-  const esRetardoRech = ['retardo', 'falta'].includes((solicitud.tipo_permiso || '').toLowerCase());
+  const tipoRechLower = (solicitud.tipo_permiso || '').toLowerCase();
+  const obsRechActual = String(solicitud.observaciones || '');
+  const esInusualRech = /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(obsRechActual);
+  const esDesfaseSalidaRech = tipoRechLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(obsRechActual);
+  const esRetardoRech = tipoRechLower === 'retardo' || (tipoRechLower === 'falta' && /FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || ''));
   const partesNomRech = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
   const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNomRech.length - 2]}` : partesNomRech.join(' ');
   const motivoLimpioRech = String(motivoRechazo || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
@@ -526,8 +581,8 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     ? `Nota Dictamen (${nomCortoRech}): Se regresa a casa — ${motivoLimpioRech}`
     : `RECHAZO (${nomCortoRech}): ${motivoLimpioRech}`;
 
-  const updates = {
-    estado_general: esRetardoRech ? 'autorizado' : 'rechazado',
+  let updates = {
+    estado_general: (esRetardoRech || esInusualRech || esDesfaseSalidaRech) ? 'autorizado' : 'rechazado',
     ...(esRetardoRech ? {
       tipo_permiso: 'falta',
       pago: 'Sin goce (Se regresa)',
@@ -535,6 +590,25 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     } : {}),
     observaciones: `${solicitud.observaciones || ''} | ${etiquetaBitacora}`
   };
+
+  if (esInusualRech && (tipoRechLower === 'vacaciones' || tipoRechLower === 'falta')) {
+    const obsRestaurada = obsRechActual
+      .replace(/\s*\|\s*⚠️\s*\[COMPORTAMIENTO INUSUAL EN CASETA[^\]]*\]/gi, '')
+      .replace(/\s*\|\s*\[LLEGADA EN PUERTA:[^\]]*\]/gi, '')
+      .trim();
+    updates = {
+      estado_general: 'autorizado',
+      pago: tipoRechLower === 'vacaciones' ? 'Con goce' : (solicitud.pago && !solicitud.pago.includes('Cambio en Caseta') ? solicitud.pago : 'Sin goce'),
+      observaciones: `${obsRestaurada} | ${etiquetaBitacora}`
+    };
+  } else if (esDesfaseSalidaRech) {
+    const yaHabiaSalido = /\[SALIDA CASETA:/i.test(obsRechActual);
+    updates = {
+      estado_general: yaHabiaSalido ? 'autorizado' : 'rechazado',
+      pago: yaHabiaSalido ? 'Sin goce (Se regresa)' : 'Rechazado',
+      observaciones: `${obsRechActual} | ${etiquetaBitacora}`
+    };
+  }
 
   // Si es un retardo donde se dictamina "Se regresa" y aún tiene folio REQ-, asignarle Folio Oficial
   if (esRetardoRech && String(solicitud.folio || '').startsWith('REQ-')) {
@@ -651,7 +725,7 @@ export const crearNuevaSolicitudPermiso = async ({
 
     const pagoL = String(p.pago || '').toLowerCase();
     const obsL = String(p.observaciones || '');
-    const esCancelado = pagoL === 'cancelado' || /CANCELADO por/i.test(obsL);
+    const esCancelado = pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL);
     if (esCancelado) return false;
 
     const esRegresoCasa = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
@@ -688,9 +762,7 @@ export const crearNuevaSolicitudPermiso = async ({
     if (asistenciaDia?.hora_entrada) {
       throw new Error(`No es posible solicitar un Retardo para esta fecha porque ya cuentas con registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
     }
-    if (salidasPrevias.length > 0) {
-      throw new Error(`No es posible solicitar un Retardo porque ya tienes un pase de Salida (${salidasPrevias[0].folio}) registrado para esta fecha.`);
-    }
+    // Un pase de Salida programado para más tarde no impide registrar un Retardo por la mañana
   }
 
   // 4) HUECO 2 y HUECO 3: Reglas al solicitar una SALIDA ANTICIPADA
@@ -703,7 +775,7 @@ export const crearNuevaSolicitudPermiso = async ({
       throw new Error(`Tienes un pase de Retardo (${retardoPrevio.folio}) pendiente de autorización. Podrás solicitar una Salida una vez que tu entrada haya sido autorizada.`);
     }
     // HUECO 2: No permitir 2 salidas activas el mismo día (a menos que una salida temporal previa ya haya reingresado por Caseta)
-    const salidaAbierta = salidasPrevias.find(s => !/\[REINGRESO CASETA:/i.test(String(s.observaciones || '')));
+    const salidaAbierta = salidasPrevias.find(s => !/\[(?:REINGRESO|ENTRADA) CASETA:/i.test(String(s.observaciones || '')) && s.estado_general !== 'completado_caseta');
     if (salidaAbierta) {
       throw new Error(`Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para esta fecha. No es posible duplicar pases de salida.`);
     }
@@ -750,30 +822,55 @@ export const crearNuevaSolicitudPermiso = async ({
 
   // === PASO 1: DETERMINAR FIRMA 1 (SUPERVISOR DE SUBÁREA / JEFE DE DEPTO / TITULAR NÓMINAS) ===
   let jefeFinalId = null;
+  const rolSol = (rolUsuario || '').toLowerCase();
+  const esSolicitanteGerenteOSuper = ['gerente_produccion', 'gerente_admin', 'gerente_rh', 'superadmin'].includes(rolSol);
+  const esSolicitanteJefeDepto = rolSol === 'jefe_area' || rolSol === 'rh_nominas';
+  const esSolicitanteEncargado = rolSol === 'encargado';
 
-  let reportaDirectoAGerente = false;
-  if (reportaAId) {
+  let reportaDirectoAGerente = esSolicitanteGerenteOSuper || esSolicitanteJefeDepto;
+  if (reportaAId && !esSolicitanteGerenteOSuper) {
     const { data: supDirecto } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
     if (supDirecto && supDirecto.activo) {
-      if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
+      if (esSolicitanteJefeDepto) {
+        if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
+          reportaDirectoAGerente = true;
+        }
+      } else if (esSolicitanteEncargado) {
+        if (supDirecto.rol === 'jefe_area' || supDirecto.rol === 'rh_nominas') {
+          jefeFinalId = supDirecto.id;
+        } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
+          reportaDirectoAGerente = true;
+        }
+      } else if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
         jefeFinalId = supDirecto.id;
       } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
         reportaDirectoAGerente = true;
       }
     }
   }
-  if (!jefeFinalId && !reportaDirectoAGerente) {
-    // Si no tiene reporta_a_id explícito, busca primero encargado o jefe_area de su misma subárea
-    const mandoMismaArea =
-      mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
-      mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
 
-    if (mandoMismaArea) {
-      jefeFinalId = mandoMismaArea.id;
-    } else if (depto.jefe_id && depto.jefe_id !== userId) {
-      jefeFinalId = depto.jefe_id;
-    } else if ( areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
-      jefeFinalId = mandosEnDepto[0].id;
+  if (!jefeFinalId && !reportaDirectoAGerente) {
+    if (esSolicitanteEncargado) {
+      // Un encargado de subárea sólo sube al Jefe de Departamento (jefe_area), nunca a otro encargado
+      const jefeDeptoArriba = mandosEnDepto.find(j => j.rol === 'jefe_area' && j.id !== userId);
+      if (depto.jefe_id && depto.jefe_id !== userId) {
+        jefeFinalId = depto.jefe_id;
+      } else if (jefeDeptoArriba) {
+        jefeFinalId = jefeDeptoArriba.id;
+      }
+    } else {
+      // Empleado / Operador: busca primero encargado o jefe_area de su misma subárea
+      const mandoMismaArea =
+        mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
+        mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
+
+      if (mandoMismaArea) {
+        jefeFinalId = mandoMismaArea.id;
+      } else if (depto.jefe_id && depto.jefe_id !== userId) {
+        jefeFinalId = depto.jefe_id;
+      } else if (areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
+        jefeFinalId = mandosEnDepto[0].id;
+      }
     }
   }
 
@@ -832,7 +929,7 @@ export const crearNuevaSolicitudPermiso = async ({
   }
 
   const hayPendientes = [estadoFirma1, estadoFirma2, estadoFirma3].includes('pendiente');
-  const estadoGeneral = hayPendientes ? 'en_firmas' : 'aprobado';
+  const estadoGeneral = hayPendientes ? 'en_firmas' : 'autorizado';
 
   let esSantaCatarina = false;
   if (sedeId) {
@@ -840,7 +937,12 @@ export const crearNuevaSolicitudPermiso = async ({
     if (sedeData && sedeData.nombre.toLowerCase().includes('catarina')) esSantaCatarina = true;
   }
 
-  const folioTemporal = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
+  let folioTemporal = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
+  if (!hayPendientes) {
+    const letraAuto = clasificacionDepto.includes('admin') ? 'A' : (clasificacionDepto.includes('obra') ? 'O' : 'P');
+    const anioAuto = new Date().getFullYear().toString().slice(-2);
+    folioTemporal = await generarFolioOficial(letraAuto, anioAuto);
+  }
 
   let detalleHorarioTexto = '';
   if (tipoPermiso === 'salida') {
@@ -864,7 +966,7 @@ export const crearNuevaSolicitudPermiso = async ({
       fecha_permiso: fechaPermiso,
       fecha_fin: tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : null,
       tipo_permiso: tipoPermiso,
-      pago: 'Pendiente de dictamen',
+      pago: hayPendientes ? 'Pendiente de dictamen' : 'Con goce',
       asunto_motivo: tipoPermiso === 'vacaciones' ? `[VACACIONES] ${motivo.trim()}` : `[${naturaleza.toUpperCase()}] ${motivo.trim()}`,
       total_horas: totalHoras,
       observaciones: detalleHorarioTexto,
@@ -963,7 +1065,7 @@ export const obtenerPermisoPorId = async (permisoId) => {
       *,
       usuarios:usuario_id (
         id, nombre_completo, numero_empleado, area, puesto, tipo_personal, foto_url, departamento_id,
-        departamentos:departamento_id (nombre)
+        departamentos:departamento_id (nombre, clasificacion)
       )
     `)
     .eq('id', permisoId)
@@ -1095,6 +1197,15 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
 
 // 14. RECHAZAR DESDE LINK RÁPIDO DE JEFATURA (AprobarDirecto)
 export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => {
+  const { data: actualBD } = await supabase
+    .from("permisos")
+    .select("id, folio, tipo_permiso, estado_general, pago, observaciones, firma_1_estado, firma_2_estado, firma_3_estado")
+    .eq("id", permiso.id)
+    .maybeSingle();
+  if (actualBD && ["autorizado", "aprobado", "completado_caseta", "rechazado", "cancelado"].includes(actualBD.estado_general)) {
+    throw new Error(`Esta solicitud ya fue dictaminada previamente (Folio ${actualBD.folio}).`);
+  }
+  if (actualBD) permiso = { ...permiso, ...actualBD };
   const esRet = (permiso.tipo_permiso || '').toLowerCase() === 'retardo';
   let folioOficial = permiso.folio;
   if (esRet && String(permiso.folio || '').startsWith('REQ-')) {

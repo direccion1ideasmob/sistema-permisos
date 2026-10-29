@@ -106,8 +106,8 @@ export default function Aprobaciones() {
     if (s.usuario_id === usuario.id) return false;
     if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)) return false;
 
-    const firma1OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_1_estado);
-    const firma2OK = ['autorizado', 'auto_aprobado', 'omitido', 'escalado'].includes(s.firma_2_estado);
+    const firma1OK = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(s.firma_1_estado);
+    const firma2OK = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(s.firma_2_estado);
 
     if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return true;
 

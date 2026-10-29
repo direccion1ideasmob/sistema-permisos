@@ -173,7 +173,7 @@ export default function MisPermisos() {
         texto: 'APROBADO',
         icono: <ShieldCheck size={14} />
       };
-    } else if (['escalado', 'omitido'].includes(est)) {
+    } else if (['escalado', 'omitido', 'no_aplica'].includes(est)) {
       config = {
         bg: 'rgba(100, 116, 139, 0.08)',
         border: c.border,
@@ -899,10 +899,25 @@ export default function MisPermisos() {
                                 )}
 
                                 {!esAutorizado && motivoRechazo && (
-                                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#dc2626', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', padding: '7px 12px', borderRadius: '8px' }}>
-                                    Motivo de rechazo: {motivoRechazo}
-                                  </div>
-                                )}
+                                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#dc2626', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', padding: '7px 12px', borderRadius: '8px' }}>
+                                      Motivo de rechazo: {motivoRechazo}
+                                    </div>
+                                  )}
+                                  {esAutorizado && !seRegreso && !tieneSelloFisicoCaseta(p) && p.fecha_permiso >= new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0] && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); cancelarMiSolicitud(p); }}
+                                        style={{
+                                          padding: '7px 13px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
+                                          background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '12px', fontWeight: '800',
+                                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px'
+                                        }}
+                                      >
+                                        <XCircle size={13.5} /> Cancelar solicitud (Ya no la ocuparé)
+                                      </button>
+                                    </div>
+                                  )}
                               </div>
                             )}
                           </div>

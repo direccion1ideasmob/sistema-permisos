@@ -23,7 +23,7 @@ const extraerHorasCaseta = (obs = '') => {
 
 const extraerHorarioProgramado = (obs = '') => {
   const partes = String(obs).split('|').map(p => p.trim()).filter(Boolean);
-  const lineaHorario = partes.find(p => !p.toLowerCase().includes('llegada en puerta')) || partes[0] || '';
+  const lineaHorario = partes.find(p => !/llegada en puerta|^⚠️|^\[|VoBo |Nota /i.test(p)) || partes[0] || '';
   return lineaHorario
     .replace(/🕒|📅/g, '')
     .replace(/^Llegada estimada:\s*/i, 'Estimada: ')
@@ -131,8 +131,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     const requiereRegreso = obs.toLowerCase().includes('regresa:');
 
     const tieneVoBoSubarea = /VoBo Sub[áa]rea:/i.test(obs);
-    const f1Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido'].includes(rawPase.firma_1_estado) || tieneVoBoSubarea;
-    const f2Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido'].includes(rawPase.firma_2_estado);
+    const f1Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido', 'no_aplica'].includes(rawPase.firma_1_estado) || tieneVoBoSubarea;
+    const f2Resuelta = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado', 'omitido', 'no_aplica'].includes(rawPase.firma_2_estado);
 
     const jefeYaDecidioRetardo =
       ['autorizado', 'aprobado', 'completado_caseta', 'rechazado'].includes(rawPase.estado_general) ||
@@ -156,8 +156,10 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     else if (mSub) autorizadoPor = mSub[1].trim();
     else if (rawPase.firmante1?.nombre_completo && f1Resuelta) autorizadoPor = rawPase.firmante1.nombre_completo;
 
-    // Guardar en mapaIncidenciasHoy con su 'tipo' exacto para que Caseta.jsx lo muestre siempre
-    if (!mapaIncidenciasHoy[rawPase.usuario_id]) {
+    // Guardar en mapaIncidenciasHoy dando prioridad a pases activos sobre rechazados
+    const incExistente = mapaIncidenciasHoy[rawPase.usuario_id];
+    const puedeEscribirIncidencia = !incExistente || (esRechazado === false && incExistente.esRechazado);
+    if (puedeEscribirIncidencia) {
       if (tipo === 'vacaciones' && !esRechazado && !(rawPase.estado_general === 'en_firmas' && Boolean(horaLlegadaPuerta))) {
         mapaIncidenciasHoy[rawPase.usuario_id] = {
           tipo: 'ausencia_autorizada',
@@ -215,7 +217,9 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
         }
       } else if (tipo === 'salida' && !esRechazado) {
         const retenidoPorHora = rawPase.estado_general === 'en_firmas' && /\[HORARIO NO COINCIDE EN CASETA/i.test(obs);
-        const estaFuera = yaSalio && requiereRegreso && !yaRegreso;
+        const reautorizadoHora = rawPase.estado_general === 'autorizado' && /\[HORARIO AUTORIZADO EN CASETA\]/i.test(obs);
+        const reingresoDefAutorizado = rawPase.estado_general === 'autorizado' && /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obs) && yaSalio && !yaRegreso;
+        const estaFuera = yaSalio && (requiereRegreso || reingresoDefAutorizado) && !yaRegreso;
         if (retenidoPorHora) {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_en_espera',
@@ -224,6 +228,14 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             etiqueta: `⚠️ HORARIO DE PASE NO COINCIDE • Esperando a: ${esperandoFirmaDe}`,
             color: '#dc2626',
             bg: 'rgba(220,38,38,0.14)'
+          };
+        } else if (reautorizadoHora || reingresoDefAutorizado) {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: estaFuera ? 'reingreso_autorizado' : 'salida_autorizada',
+            paseId: rawPase.id,
+            etiqueta: estaFuera ? '✅ REINGRESO AUTORIZADO — DAR PASO' : '✅ SALIDA AUTORIZADA — DAR PASO',
+            color: '#16a34a',
+            bg: 'rgba(22,163,74,0.16)'
           };
         } else {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
@@ -327,6 +339,11 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       return;
     }
 
+    // 4B. Si es un retardo anticipado solicitado desde casa que ya fue autorizado pero el trabajador AÚN NO llega a la puerta (!horaLlegadaPuerta), no ponerlo en "Personas esperando en la puerta" todavía
+    if (tipo === 'retardo' && !seRegresaACasa && !horaLlegadaPuerta) {
+      return;
+    }
+
     // 5. Listo para acción inmediata en puerta (Sellar Salida, Sellar Entrada o Confirmar Retiro a Casa)
     pasesPorCruzar.push(p);
   });
@@ -399,10 +416,13 @@ export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia
   const selloInusual = `⚠️ [COMPORTAMIENTO INUSUAL EN CASETA (${horaFormateada} hrs): ${descripcionInusual}]`;
   const nuevasObs = `${obsLimpia} | ${selloInusual} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.replace(/^\s*\|\s*/, '').trim();
 
+  const f1Activa = Boolean(permiso.firma_1_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_1_estado);
+  const f2Activa = Boolean(permiso.firma_2_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_2_estado);
   const updates = {
     estado_general: 'en_firmas',
     pago: 'Pendiente de dictamen (Cambio en Caseta)',
-    firma_1_estado: permiso.firma_1_id ? 'pendiente' : permiso.firma_1_estado,
+    firma_1_estado: f1Activa ? 'pendiente' : 'omitido',
+    firma_2_estado: f2Activa ? 'pendiente' : 'omitido',
     firma_3_estado: 'pendiente',
     observaciones: nuevasObs
   };
@@ -455,10 +475,13 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
   const notaDesfase = `⚠️ [HORARIO NO COINCIDE EN CASETA (${horaFormateada} hrs - ${tipoMovimiento.toUpperCase()}): ${detalleDesfase}]`;
   const nuevasObs = `${obsActual} | ${notaDesfase} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.trim();
 
+  const f1Activa = Boolean(permiso.firma_1_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_1_estado);
+  const f2Activa = Boolean(permiso.firma_2_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_2_estado);
   const updates = {
     estado_general: 'en_firmas',
     pago: 'Pendiente de dictamen (Exceso de horario)',
-    firma_1_estado: permiso.firma_1_id ? 'pendiente' : permiso.firma_1_estado,
+    firma_1_estado: f1Activa ? 'pendiente' : 'omitido',
+    firma_2_estado: f2Activa ? 'pendiente' : 'omitido',
     firma_3_estado: 'pendiente',
     observaciones: nuevasObs
   };
@@ -563,8 +586,19 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
     return;
   }
 
-  let etiquetaBitacora = `[ENTRADA CASETA: ${horaCongelada || `${horaFormateada} hrs`}]`;
+  if (mov === 'entrada' && /\[ENTRADA CASETA:/i.test(obsActual)) return { resultado: 'ya_sellado' };
+  if (mov.includes('reingreso') && /\[REINGRESO CASETA:/i.test(obsActual)) return { resultado: 'ya_sellado' };
+
+  const horaEfectivaCruce = horaCongelada || `${horaFormateada} hrs`;
+  let etiquetaBitacora = `[ENTRADA CASETA: ${horaEfectivaCruce}]`;
   let cierraCicloCaseta = true;
+  let totalHorasReales = null;
+
+  const parsearMin = (strHora) => {
+    const m = String(strHora || '').match(/(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  };
 
   if (mov.includes('retiro')) {
     etiquetaBitacora = `[REGRESADO EN PUERTA: ${horaFormateada} hrs]`;
@@ -573,12 +607,37 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
     etiquetaBitacora = `[SALIDA CASETA: ${horaFormateada} hrs]`;
     cierraCicloCaseta = !requiereRegreso;
   } else if (mov.includes('reingreso')) {
-    etiquetaBitacora = `[REINGRESO CASETA: ${horaFormateada} hrs]`;
+    etiquetaBitacora = `[REINGRESO CASETA: ${horaEfectivaCruce}]`;
     cierraCicloCaseta = true;
+    const mSalPrevia = obsActual.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
+    const minSalReal = mSalPrevia ? parsearMin(mSalPrevia[1]) : null;
+    const minReingReal = parsearMin(horaEfectivaCruce);
+    if (minSalReal !== null && minReingReal !== null && minReingReal > minSalReal) {
+      totalHorasReales = parseFloat(((minReingReal - minSalReal) / 60).toFixed(2));
+    }
+  } else if (tipo === 'retardo') {
+    const minLlegadaReal = parsearMin(horaEfectivaCruce);
+    if (minLlegadaReal !== null && minLlegadaReal > 7 * 60) {
+      totalHorasReales = parseFloat(((minLlegadaReal - 7 * 60) / 60).toFixed(2));
+    }
   }
 
   const nuevasObservaciones = `${obsActual} | ${etiquetaBitacora}`.trim();
-  const updates = { observaciones: nuevasObservaciones };
+  const updates = {
+    observaciones: nuevasObservaciones,
+    ...(totalHorasReales !== null ? { total_horas: totalHorasReales } : {})
+  };
+
+  // Si era una Falta programada o Vacaciones donde se autorizó que entrara hoy a trabajar, al darle paso en Caseta se ajusta el pase
+  if ((tipo === 'falta' || tipo === 'vacaciones') && /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obsActual) && !mov.includes('retiro')) {
+    const hoyIsoCheck = obtenerFechaLocalHoy();
+    if (tipo === 'falta' || permiso.fecha_permiso >= hoyIsoCheck) {
+      updates.estado_general = 'rechazado';
+      updates.pago = 'Cancelado';
+      updates.observaciones = `${nuevasObservaciones} | [PASE CANCELADO: Ingreso a laborar registrado en Caseta]`;
+      cierraCicloCaseta = false;
+    }
+  }
 
   // Solo cambiamos estado_general a 'completado_caseta' si ya tenía folio oficial ('autorizado' / 'aprobado').
   // Si seguía 'en_firmas', se conserva 'en_firmas' para que RH cierre la cadena y genere su folio oficial.
@@ -594,7 +653,7 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   if (error) throw error;
 
   // Sincronización automática con la tabla asistencias_caseta (Pase de Lista)
-  if ((tipo === 'retardo' || tipo === 'falta') && !mov.includes('retiro')) {
+  if ((tipo === 'retardo' || tipo === 'falta' || tipo === 'vacaciones') && !mov.includes('retiro')) {
     try {
       const horaLista = horaCongelada ? horaCongelada.replace(/\s*hrs/i, '').trim() : horaFormateada;
       await registrarAsistenciaListaConHora(permiso.usuario_id, 'entrada', horaLista);
@@ -955,12 +1014,27 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
   const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== emp.id);
 
   let jefeFinalId = null;
-  let reportaDirectoAGerente = false;
+  const rolSol = (emp.rol || '').toLowerCase();
+  const esSolicitanteGerenteOSuper = ['gerente_produccion', 'gerente_admin', 'gerente_rh', 'superadmin'].includes(rolSol);
+  const esSolicitanteJefeDepto = rolSol === 'jefe_area' || rolSol === 'rh_nominas';
+  const esSolicitanteEncargado = rolSol === 'encargado';
 
-  if (reportaAId) {
+  let reportaDirectoAGerente = esSolicitanteGerenteOSuper || esSolicitanteJefeDepto;
+
+  if (reportaAId && !esSolicitanteGerenteOSuper) {
     const { data: supDirecto } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
     if (supDirecto && supDirecto.activo) {
-      if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
+      if (esSolicitanteJefeDepto) {
+        if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
+          reportaDirectoAGerente = true;
+        }
+      } else if (esSolicitanteEncargado) {
+        if (supDirecto.rol === 'jefe_area' || supDirecto.rol === 'rh_nominas') {
+          jefeFinalId = supDirecto.id;
+        } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
+          reportaDirectoAGerente = true;
+        }
+      } else if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
         jefeFinalId = supDirecto.id;
       } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
         reportaDirectoAGerente = true;
@@ -969,16 +1043,25 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
   }
 
   if (!jefeFinalId && !reportaDirectoAGerente) {
-    const mandoMismaArea =
-      mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
-      mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
+    if (esSolicitanteEncargado) {
+      const jefeDeptoArriba = mandosEnDepto.find(j => j.rol === 'jefe_area' && j.id !== emp.id);
+      if (depto?.jefe_id && depto.jefe_id !== emp.id) {
+        jefeFinalId = depto.jefe_id;
+      } else if (jefeDeptoArriba) {
+        jefeFinalId = jefeDeptoArriba.id;
+      }
+    } else {
+      const mandoMismaArea =
+        mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
+        mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
 
-    if (mandoMismaArea) {
-      jefeFinalId = mandoMismaArea.id;
-    } else if (depto?.jefe_id && depto.jefe_id !== emp.id) {
-      jefeFinalId = depto.jefe_id;
-    } else if (areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
-      jefeFinalId = mandosEnDepto[0].id;
+      if (mandoMismaArea) {
+        jefeFinalId = mandoMismaArea.id;
+      } else if (depto?.jefe_id && depto.jefe_id !== emp.id) {
+        jefeFinalId = depto.jefe_id;
+      } else if (areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
+        jefeFinalId = mandosEnDepto[0].id;
+      }
     }
   }
 
@@ -1004,8 +1087,10 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
   let estadoFirma2 = gerenteFinalId ? (gerenteFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
   let estadoFirma3 = rhFinalId ? (rhFinalId === emp.id ? 'auto_aprobado' : 'pendiente') : 'omitido';
 
-  const esRetardoAdmin = rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin');
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || esRetardoAdmin) {
+  const esDivisionAdmin = rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin');
+  const tieneJefeRevisor = estadoFirma1 === 'pendiente';
+  const omitirGerenteAdminPorRetardo = esDivisionAdmin && tieneJefeRevisor;
+  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || omitirGerenteAdminPorRetardo) {
     estadoFirma2 = 'omitido';
   }
 
@@ -1021,10 +1106,10 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
     fecha_elaboracion: hoyStr,
     fecha_permiso: hoyStr,
     fecha_fin: null,
-    tipo_permiso: esPorFaltaSinAviso ? 'falta' : 'retardo',
+    tipo_permiso: 'retardo',
     pago: 'Pendiente de dictamen',
     asunto_motivo: motivoEspecial || '[PERSONAL] Llegada posterior al límite de tolerancia registrada en caseta.',
-    total_horas: esPorFaltaSinAviso ? 8 : diffHoras,
+    total_horas: diffHoras,
     observaciones: detalleHorarioTexto,
     firma_empleado: true,
     firma_1_id: jefeFinalId,
@@ -1256,10 +1341,12 @@ export const deshacerEntradaReciente = async (usuarioId) => {
     .eq("tipo_permiso", "retardo");
 
   for (const pr of (pasesRet || [])) {
-    if (/\[ENTRADA CASETA:/i.test(pr.observaciones || "")) {
+    if (/\[(?:ENTRADA CASETA|LLEGADA EN PUERTA):/i.test(pr.observaciones || "")) {
       const obsLimpia = String(pr.observaciones || "")
         .replace(/\s*\|\s*\[ENTRADA CASETA:\s*[^\]]+\]/ig, "")
         .replace(/\[ENTRADA CASETA:\s*[^\]]+\]\s*\|?\s*/ig, "")
+        .replace(/\s*\|\s*\[LLEGADA EN PUERTA:\s*[^\]]+\]/ig, "")
+        .replace(/🕒\s*Llegada en puerta:\s*[^|]+\|?\s*/ig, "")
         .trim();
       await supabase
         .from("permisos")

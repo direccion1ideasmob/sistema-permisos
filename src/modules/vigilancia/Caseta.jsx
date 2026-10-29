@@ -145,10 +145,11 @@ export default function Caseta() {
 
     // 3. Viene regresando de la calle con pase
     if (paseFuera) {
+      const yaReautorizadoRegreso = /\[HORARIO AUTORIZADO EN CASETA\]|\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(paseFuera.observacionesRaw || '');
       return {
-        color: '#2563eb',
-        fondo: modoOscuro ? 'rgba(37,99,235,0.10)' : '#eff6ff',
-        estado: '🔵 Regresa de pase',
+        color: yaReautorizadoRegreso ? '#16a34a' : '#2563eb',
+        fondo: yaReautorizadoRegreso ? (modoOscuro ? 'rgba(22,163,74,0.14)' : '#f0fdf4') : (modoOscuro ? 'rgba(37,99,235,0.10)' : '#eff6ff'),
+        estado: yaReautorizadoRegreso ? '✅ Reingreso autorizado' : '🔵 Regresa de pase',
         boton: '✓ DAR REINGRESO',
         tipoAccion: 'REINGRESO_PASE',
         paseId: paseFuera.id
@@ -280,12 +281,16 @@ export default function Caseta() {
         );
         mostrarAviso('rojo', `✋ DETENIDO: Se pidió autorización para ${emp.nombre_completo}`);
       } else if (acc.tipoAccion === 'ENTRADA_AUTORIZADA') {
-        const res = await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, false);
-        if (res?.resultado === 'retenido_por_inusual' || res?.resultado === 'en_espera_rh') {
-          mostrarAviso('rojo', `✋ DETENIDO: Llegó más tarde de la hora autorizada. Se pidió firma.`);
-        } else {
-          if (acc.paseId) await registrarCheckCaseta(acc.paseId, 'entrada');
+        if (acc.paseId) {
+          await registrarCheckCaseta(acc.paseId, 'entrada');
           mostrarAviso('verde', `✅ PASA A PLANTA: ${emp.nombre_completo}`, () => revertirEntrada(emp.id));
+        } else {
+          const res = await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, true);
+          if (res?.resultado === 'retenido_por_inusual' || res?.resultado === 'en_espera_rh') {
+            mostrarAviso('rojo', `✋ DETENIDO: Llegó más tarde de la hora autorizada. Se pidió firma.`);
+          } else {
+            mostrarAviso('verde', `✅ PASA A PLANTA: ${emp.nombre_completo}`, () => revertirEntrada(emp.id));
+          }
         }
       } else if (acc.tipoAccion === 'SALIDA_PASE') {
         const res = await registrarCheckCaseta(acc.paseId, 'salida');
@@ -380,7 +385,8 @@ export default function Caseta() {
   // Listas simples
   const idsDetenidos = new Set([
     ...retenidosEnEspera.map(p => p.usuario_id),
-    ...pasesPorCruzar.filter(p => p.tipo_permiso !== 'salida' || p.seRegresaACasa).map(p => p.usuario_id)
+    ...pasesPorCruzar.filter(p => p.tipo_permiso !== 'salida' || p.seRegresaACasa || /\[HORARIO AUTORIZADO EN CASETA\]/i.test(p.observacionesRaw || '')).map(p => p.usuario_id),
+    ...personalFuera.filter(p => /\[HORARIO AUTORIZADO EN CASETA\]|\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(p.observacionesRaw || '')).map(p => p.usuario_id)
   ]);
   const listaDetenidosEnPuerta = empleadosSede.filter(e => idsDetenidos.has(e.id));
 
@@ -394,8 +400,9 @@ export default function Caseta() {
     e => !mapaAsistencias[e.id]?.hora_entrada && mapaIncidenciasHoy[e.id]?.tipo === 'ausencia_autorizada'
   );
 
+  const idsFueraCalle = new Set(personalFuera.map(p => p.usuario_id));
   const listaEnPlanta = empleadosSede.filter(
-    e => Boolean(mapaAsistencias[e.id]?.hora_entrada) && !mapaAsistencias[e.id]?.hora_salida
+    e => Boolean(mapaAsistencias[e.id]?.hora_entrada) && !mapaAsistencias[e.id]?.hora_salida && !idsFueraCalle.has(e.id)
   );
 
 

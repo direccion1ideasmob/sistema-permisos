@@ -27,12 +27,15 @@ export default function TarjetaAprobacion({
   const esPropioPermiso = solicitud.usuario_id === usuarioActual?.id;
   const mostrarOverride = !esPropioPermiso && esRH && esPendiente && !soyFirmante1Directo && (estaAtoradoConJefe || estaAtoradoConGerente);
 
+  const firma1Lista = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(solicitud.firma_1_estado);
+  const firma2Lista = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(solicitud.firma_2_estado);
+
   const esMiTurno = () => {
     if (esPropioPermiso) return false;
     if (soyFirmante1Directo) return true;
-    if (['jefe_area', 'encargado'].includes(usuarioActual?.rol) && solicitud.firma_1_estado === 'pendiente') return true;
-    if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
-    if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_2_estado !== 'pendiente' && solicitud.firma_1_estado !== 'pendiente') return true;
+    if (['jefe_area', 'encargado'].includes(usuarioActual?.rol) && solicitud.firma_1_estado === 'pendiente' && (!solicitud.firma_1_id || solicitud.firma_1_id === usuarioActual?.id)) return true;
+    if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && firma1Lista) return true;
+    if (esRH && solicitud.firma_3_estado === 'pendiente' && firma1Lista && firma2Lista) return true;
     return false;
   };
 

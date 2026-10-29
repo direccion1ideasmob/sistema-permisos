@@ -19,7 +19,8 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
 
   const hace7Dias = new Date(hoy);
   hace7Dias.setDate(hoy.getDate() - 7);
-  const minDate = formatearLocal(hace7Dias);
+  const esAdminRHForm = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(rolUsuario);
+  const minDate = esAdminRHForm ? formatearLocal(hace7Dias) : fechaHoy;
 
   const [tipoPermiso, setTipoPermiso] = useState('');
   const [naturaleza, setNaturaleza] = useState('');
@@ -75,22 +76,35 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         ]);
 
         if (cancelado) return;
-        const activos = (data || []).filter(p => {
-          const finP = p.fecha_fin || p.fecha_permiso;
-          if (!(p.fecha_permiso <= finConsulta && finP >= fechaPermiso)) return false;
+        const esCanceladoPase = (p) => {
           const pagoL = String(p.pago || '').toLowerCase();
           const obsL = String(p.observaciones || '');
-          if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL)) return false;
+          return pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL);
+        };
+
+        // Permisos que se traslapan con el rango completo (usado para validar vacaciones)
+        const activosRango = (data || []).filter(p => {
+          const finP = p.fecha_fin || p.fecha_permiso;
+          if (!(p.fecha_permiso <= finConsulta && finP >= fechaPermiso)) return false;
+          if (esCanceladoPase(p)) return false;
+          const pagoL = String(p.pago || '').toLowerCase();
+          const obsL = String(p.observaciones || '');
           const esRegreso = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
           if (p.estado_general === 'rechazado' && !esRegreso) return false;
           return true;
         });
 
-        const regCasa = activos.find(p => (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || ''));
-        const faltaOVac = activos.find(p => ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase()));
-        const retardoHoy = activos.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
-        const salidasHoy = activos.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
-        const salidaAbierta = salidasHoy.find(s => !/\[REINGRESO CASETA:/i.test(String(s.observaciones || '')));
+        // Permisos exclusivos del día exacto seleccionado en fechaPermiso (evita que un permiso de mañana bloquee hoy)
+        const activosDiaExacto = activosRango.filter(p => {
+          const finP = p.fecha_fin || p.fecha_permiso;
+          return p.fecha_permiso <= fechaPermiso && finP >= fechaPermiso;
+        });
+
+        const regCasa = activosDiaExacto.find(p => (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || ''));
+        const faltaOVac = activosDiaExacto.find(p => ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase()));
+        const retardoHoy = activosDiaExacto.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+        const salidasHoy = activosDiaExacto.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
+        const salidaAbierta = salidasHoy.find(s => !/\[(?:REINGRESO|ENTRADA) CASETA:/i.test(String(s.observaciones || '')) && s.estado_general !== 'completado_caseta');
         const tieneSelloRetardo = retardoHoy && /\[(?:LLEGADA EN PUERTA|ENTRADA CASETA|REINGRESO CASETA):/i.test(retardoHoy.observaciones || '');
 
         const mapaBloqueos = {};
@@ -128,8 +142,6 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           mapaBloqueos.retardo = `Ya tienes un pase de Retardo (${retardoHoy.folio}) registrado para el ${fechaPermiso}.`;
         } else if (asistHoy?.hora_entrada) {
           mapaBloqueos.retardo = `Ya cuentas con registro de entrada en planta (${asistHoy.hora_entrada} hrs) el ${fechaPermiso}.`;
-        } else if (salidasHoy.length > 0) {
-          mapaBloqueos.retardo = `Ya tienes un pase de Salida (${salidasHoy[0].folio}) para el ${fechaPermiso}.`;
         }
 
         if (retardoHoy && retardoHoy.estado_general === 'en_firmas') {
@@ -149,6 +161,10 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           mapaBloqueos.vacaciones = `Ya cuentas con un pase de Salida Anticipada (${salidasHoy[0].folio}) para el ${fechaPermiso}. No puedes registrar Vacaciones el mismo día.`;
         }
 
+        if (!mapaBloqueos.vacaciones && tipoPermiso === 'vacaciones' && fechaFinVacaciones && activosRango.length > 0) {
+          const conflictoRango = activosRango[0];
+          mapaBloqueos.vacaciones = `El rango seleccionado se traslapa con otro permiso (${conflictoRango.folio} del ${conflictoRango.fecha_permiso}).`;
+        }
         const todosBloqueados = ['salida', 'retardo', 'falta', 'vacaciones'].every(k => Boolean(mapaBloqueos[k]));
         setJornadaTotalmenteCerrada(todosBloqueados);
         setTiposBloqueadosMapa(mapaBloqueos);
@@ -179,8 +195,12 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   useEffect(() => {
     if (tipoPermiso === 'vacaciones') {
       setNaturaleza('Vacaciones');
-    } else if (naturaleza === 'Vacaciones' && tipoPermiso !== 'vacaciones') {
-      setNaturaleza('');
+      if (!fechaFinVacaciones || fechaFinVacaciones < fechaPermiso) {
+        setFechaFinVacaciones(fechaPermiso);
+      }
+    } else {
+      if (naturaleza === 'Vacaciones') setNaturaleza('');
+      if (fechaFinVacaciones) setFechaFinVacaciones('');
     }
 
     if (tipoPermiso === 'retardo') {
@@ -219,7 +239,16 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
 
   const calcularHoras = () => {
     if (!tipoPermiso) return 0;
-    if (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') return 8;
+    if (tipoPermiso === 'falta') return 8;
+    if (tipoPermiso === 'vacaciones') {
+      if (!fechaFinVacaciones || fechaFinVacaciones < fechaPermiso) return 8;
+      const [y1, m1, d1] = fechaPermiso.split('-').map(Number);
+      const [y2, m2, d2] = fechaFinVacaciones.split('-').map(Number);
+      const inicioD = new Date(y1, m1 - 1, d1);
+      const finD = new Date(y2, m2 - 1, d2);
+      const dias = Math.max(1, Math.round((finD - inicioD) / 86400000) + 1);
+      return dias * 8;
+    }
 
     if (tipoPermiso === 'retardo') {
       const [h, m] = (horaLlegadaRetardo || '07:30').split(':').map(Number);
@@ -306,6 +335,13 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       if (minutosLlegada <= minutosLimite) {
         return alert(`Incongruencia detectada: La tolerancia de entrada es hasta las ${horaLimiteRH} hrs. Un pase de retardo solo aplica para llegadas posteriores a las ${horaLimiteRH} hrs.`);
       }
+      if (fechaPermiso === fechaHoy && !['gerente_rh', 'rh_nominas', 'superadmin'].includes(rolUsuario)) {
+        const ahoraRealRet = new Date();
+        const minAhoraRet = ahoraRealRet.getHours() * 60 + ahoraRealRet.getMinutes();
+        if (minutosLlegada < minAhoraRet - 15) {
+          return alert(`Incongruencia de horario: No puedes registrar un aviso de llegada para hoy a las ${horaLlegadaRetardo} hrs porque esa hora ya pasó.`);
+        }
+      }
     }
 
     const etiquetaAviso = esRetardoUrgente ? "AVISO URGENTE DE RETARDO" : `SOLICITUD DE ${tipoPermiso.toUpperCase()}`;
@@ -340,6 +376,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
       setTipoPermiso('');
       setNaturaleza('');
       setMotivo('');
+      setFechaFinVacaciones('');
       setRegresaMismoDia(false);
       setRecargarBloqueosTick(prev => prev + 1);
 

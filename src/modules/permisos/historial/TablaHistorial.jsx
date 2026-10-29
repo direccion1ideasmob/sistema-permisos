@@ -223,7 +223,7 @@ export default function TablaHistorial({
 
     return ordenadas.filter(s => {
       const u = s.usuarios || {};
-      const esCancelado = (s.pago || '').toLowerCase() === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+      const esCancelado = (s.pago || '').toLowerCase() === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '') || /\[PASE CANCELADO/i.test(s.observaciones || '');
       const esRegresadoFiltro = (s.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(s.observaciones || '');
       const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
 
@@ -331,7 +331,7 @@ export default function TablaHistorial({
 
   const ChipFirmaDetalle = ({ rolLabel, nombre, estado, cerrado = true }) => {
     const est = (estado || 'pendiente').toLowerCase();
-    if (est === 'omitido' || (cerrado && est === 'pendiente') || (!nombre && est !== 'rechazado')) return null;
+    if (['omitido', 'no_aplica'].includes(est) || (cerrado && est === 'pendiente') || (!nombre && est !== 'rechazado')) return null;
 
     const ok = ['autorizado', 'aprobado', 'auto_aprobado', 'escalado'].includes(est);
     const rech = est === 'rechazado';
@@ -794,7 +794,7 @@ export default function TablaHistorial({
                   {solicitudesPaginadas.map(s => {
                     const u = s.usuarios || {};
                     const pagoLow = (s.pago || '').toLowerCase();
-                    const esCancelado = pagoLow === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+                    const esCancelado = pagoLow === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '') || /\[PASE CANCELADO/i.test(s.observaciones || '');
                     const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
                     const seRegresoCasa = pagoLow.includes('regresa');
                     const esAlertaPago = seRegresoCasa || pagoLow.includes('sin goce');
@@ -1055,7 +1055,7 @@ export default function TablaHistorial({
             {solicitudesPaginadas.map(s => {
               const u = s.usuarios || {};
               const pagoLow = (s.pago || '').toLowerCase();
-              const esCancelado = pagoLow === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '');
+              const esCancelado = pagoLow === 'cancelado' || /CANCELADO por/i.test(s.observaciones || '') || /\[PASE CANCELADO/i.test(s.observaciones || '');
               const esAut = !esCancelado && ['autorizado', 'aprobado', 'completado_caseta'].includes(s.estado_general);
               const seRegresoCasa = pagoLow.includes('regresa');
               const expandido = expandidos.includes(s.id);
