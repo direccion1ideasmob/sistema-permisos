@@ -23,7 +23,6 @@ export default defineConfig({
         description: 'Sistema de Permisos y Pases de Salida',
         theme_color: '#000000',
         background_color: '#ffffff',
-        display: 'minimal-ui',
         orientation: 'portrait',
         icons: [
           {
