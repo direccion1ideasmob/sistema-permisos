@@ -846,110 +846,124 @@ export default function VistaArbol({
         </div>
       )}
 
-      {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL */}
-      {userEditando && (
-        <div onClick={() => setUserEditando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '16px' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
-              <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{userEditando.nombre_completo}</div>
-              <button onClick={() => setUserEditando(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
+   {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL */}
+      {userEditando && (() => {
+        const esCabezaDivision = ['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(userEditando.rol);
+        return (
+          <div onClick={() => setUserEditando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '16px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
+                <div>
+                  {esCabezaDivision && (
+                    <div style={{ fontSize: '10px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>Titular de División</div>
+                  )}
+                  <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{userEditando.nombre_completo}</div>
+                </div>
+                <button onClick={() => setUserEditando(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
+              </div>
+
+              <form onSubmit={guardarReubicacionUsuario} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {!esCabezaDivision && (
+                  <>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Departamento</label>
+                      <select
+                        value={userEditando.departamento_id}
+                        onChange={e => {
+                          const nuevoDeptoId = e.target.value;
+                          const dObj = departamentos.find(d => d.id === nuevoDeptoId);
+                          setUserEditando({
+                            ...userEditando,
+                            departamento_id: nuevoDeptoId,
+                            area: dObj ? dObj.nombre : '',
+                            reporta_a_id: dObj?.jefe_id && dObj.jefe_id !== userEditando.id ? dObj.jefe_id : ''
+                          });
+                        }}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
+                      >
+                        {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Subárea (Opcional)</label>
+                      <input
+                        list="areas-coherentes-arbol"
+                        value={userEditando.area}
+                        onChange={e => setUserEditando({ ...userEditando, area: e.target.value.toUpperCase() })}
+                        placeholder="Ej. HERRAJES, NOMINAS..."
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
+                      />
+                      <datalist id="areas-coherentes-arbol">
+                        {areasDelDeptoSeleccionado.map(a => <option key={a} value={a} />)}
+                      </datalist>
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Puesto</label>
+                  <input
+                    list="puestos-coherentes-arbol"
+                    value={userEditando.puesto}
+                    onChange={e => setUserEditando({ ...userEditando, puesto: e.target.value.toUpperCase() })}
+                    placeholder="Ej. GERENTE DE PRODUCCIÓN, SUPERVISOR..."
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
+                  />
+                  <datalist id="puestos-coherentes-arbol">
+                    {puestosDelDeptoSeleccionado.map(p => <option key={p} value={p} />)}
+                  </datalist>
+                </div>
+
+                {!esCabezaDivision && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                      {esUserEditandoJefe ? 'Quién autoriza a este Jefe (Su Jefe Inmediato)' : 'Jefe Inmediato (Firma 1)'}
+                    </label>
+                    <select
+                      value={userEditando.reporta_a_id || ''}
+                      onChange={e => setUserEditando({ ...userEditando, reporta_a_id: e.target.value })}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
+                    >
+                      <option value="">
+                        {esUserEditandoJefe ? 'NO REQUIERE (Pasa directo a RH)' : 'El Jefe del Departamento'}
+                      </option>
+                      {posiblesJefesParaUsuario.map(j => (
+                        <option key={j.id} value={j.id}>{formatearNombreNaturalMayus(j)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Rol en el Sistema</label>
+                  <select
+                    value={userEditando.rol}
+                    onChange={e => setUserEditando({ ...userEditando, rol: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
+                  >
+                    <option value="empleado">EMPLEADO / OPERADOR</option>
+                    <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR</option>
+                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
+                    <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
+                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                    <option value="rh_nominas">TITULAR RH / NÓMINAS</option>
+                    <option value="caseta">CASETA / VIGILANCIA</option>
+                    <option value="superadmin">SUPER ADMINISTRADOR</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <button type="button" onClick={() => setUserEditando(null)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Cancelar</button>
+                  <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '6px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={guardarReubicacionUsuario} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Departamento</label>
-                <select
-                  value={userEditando.departamento_id}
-                  onChange={e => {
-                    const nuevoDeptoId = e.target.value;
-                    const dObj = departamentos.find(d => d.id === nuevoDeptoId);
-                    setUserEditando({
-                      ...userEditando,
-                      departamento_id: nuevoDeptoId,
-                      area: dObj ? dObj.nombre : '',
-                      reporta_a_id: dObj?.jefe_id && dObj.jefe_id !== userEditando.id ? dObj.jefe_id : ''
-                    });
-                  }}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
-                >
-                  {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Subárea (Opcional)</label>
-                <input
-                  list="areas-coherentes-arbol"
-                  value={userEditando.area}
-                  onChange={e => setUserEditando({ ...userEditando, area: e.target.value.toUpperCase() })}
-                  placeholder="Ej. HERRAJES, NOMINAS..."
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
-                />
-                <datalist id="areas-coherentes-arbol">
-                  {areasDelDeptoSeleccionado.map(a => <option key={a} value={a} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Puesto</label>
-                <input
-                  list="puestos-coherentes-arbol"
-                  value={userEditando.puesto}
-                  onChange={e => setUserEditando({ ...userEditando, puesto: e.target.value.toUpperCase() })}
-                  placeholder="Ej. SUPERVISOR, OPERADOR..."
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
-                />
-                <datalist id="puestos-coherentes-arbol">
-                  {puestosDelDeptoSeleccionado.map(p => <option key={p} value={p} />)}
-                </datalist>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                  {esUserEditandoJefe ? 'Quién autoriza a este Jefe (Su Jefe Inmediato)' : 'Jefe Inmediato (Firma 1)'}
-                </label>
-                <select
-                  value={userEditando.reporta_a_id || ''}
-                  onChange={e => setUserEditando({ ...userEditando, reporta_a_id: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
-                >
-                  <option value="">
-                    {esUserEditandoJefe ? 'NO REQUIERE (Pasa directo a RH)' : 'El Jefe del Departamento'}
-                  </option>
-                  {posiblesJefesParaUsuario.map(j => (
-                    <option key={j.id} value={j.id}>{formatearNombreNaturalMayus(j)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Rol en el Sistema</label>
-                <select
-                  value={userEditando.rol}
-                  onChange={e => setUserEditando({ ...userEditando, rol: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
-                >
-                  <option value="empleado">EMPLEADO / OPERADOR</option>
-                  <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR</option>
-                  <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
-                  <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
-                  <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
-                  <option value="rh_nominas">TITULAR RH / NÓMINAS</option>
-                  <option value="caseta">CASETA / VIGILANCIA</option>
-                  <option value="superadmin">SUPER ADMINISTRADOR</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button type="button" onClick={() => setUserEditando(null)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '6px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <ModalSeguridadPin
         abierto={modalPinAbierto}
