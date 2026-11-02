@@ -54,15 +54,13 @@ export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, d
     gerenteFinalId = null;
   } else if (esSolicitanteJefe) {
     // 2. Si pide un Jefe de Área (ej. Suheilli, Juan Antonio, René, Rubén):
-    // Miramos quién es SU Jefe Inmediato en su tarjeta (reporta_a_id).
-    // Si tiene asignado a Pedro o Reynaldo, va a Firma 2. Si no tiene a nadie (o tiene a RH), pasa directo a RH.
+    // Si en la Tabla General de Firmas el departamento dice que el Jefe SÍ requiere firma del Gerente (jefe_requiere_gerente !== false),
+    // pasa al Gerente del departamento (ej. Pedro o Reynaldo). Si dice NO, pasa directo a RH.
     jefeFinalId = null;
-    if (reportaAId && reportaAId !== userId && reportaAId !== rhFinalId) {
-      const { data: supJefe } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
-      if (supJefe && supJefe.activo !== false && supJefe.rol !== 'gerente_rh') {
-        gerenteFinalId = supJefe.id;
-      }
+    if (depto?.jefe_requiere_gerente !== false && depto?.gerente_id && depto.gerente_id !== userId && depto.gerente_id !== rhFinalId) {
+      gerenteFinalId = depto.gerente_id;
     }
+  
   } else {
     // 3. Si pide un Empleado:
     // Firma 1: Su Jefe Inmediato individual (reporta_a_id) o el Jefe del Departamento (depto.jefe_id)
