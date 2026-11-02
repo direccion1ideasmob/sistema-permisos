@@ -7,6 +7,32 @@ export const estandarizar = (texto) => {
     .replace(/[\u0300-\u036f]/g, "");
 };
 
+export const ROLES_VALIDADOR_SUPERIOR = [
+  'gerente_rh',
+  'gerente_produccion',
+  'gerente_admin',
+  'gerente_division',
+  'validador_superior'
+];
+
+export const ROLES_JEFATURA_DEPARTAMENTO = [
+  'jefe_area',
+  'encargado',
+  'rh_nominas',
+  ...ROLES_VALIDADOR_SUPERIOR,
+  'superadmin'
+];
+
+export const esRolValidadorSuperior = (rol) => {
+  const r = (rol || '').toLowerCase().trim();
+  return ROLES_VALIDADOR_SUPERIOR.includes(r);
+};
+
+export const esRolMando = (rol) => {
+  const r = (rol || '').toLowerCase().trim();
+  return ROLES_JEFATURA_DEPARTAMENTO.includes(r);
+};
+
 export const obtenerBadgeRol = (rol, modoOscuro) => {
   const r = (rol || 'empleado').toLowerCase().trim();
 
@@ -19,14 +45,16 @@ export const obtenerBadgeRol = (rol, modoOscuro) => {
       border: modoOscuro ? 'rgba(234, 179, 8, 0.3)' : '#fde047'
     };
   }
-  if (['gerente_rh', 'gerente_produccion', 'gerente_admin'].includes(r)) {
+  if (ROLES_VALIDADOR_SUPERIOR.includes(r)) {
     const etiquetas = {
       gerente_rh: 'GERENCIA RH',
       gerente_produccion: 'GERENCIA PLANTA',
-      gerente_admin: 'GERENCIA ADMÓN'
+      gerente_admin: 'GERENCIA ADMÓN',
+      gerente_division: 'VALIDADOR DIVISIÓN',
+      validador_superior: 'VALIDADOR SUPERIOR'
     };
     return {
-      label: etiquetas[r] || 'GERENCIA',
+      label: etiquetas[r] || 'GERENCIA / VALIDADOR',
       accentBar: '#f59e0b',
       bg: modoOscuro ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
       text: modoOscuro ? '#fbbf24' : '#b45309',
@@ -61,6 +89,58 @@ export const obtenerBadgeRol = (rol, modoOscuro) => {
     bg: modoOscuro ? '#171717' : '#f5f5f5',
     text: modoOscuro ? '#a3a3a3' : '#525252',
     border: modoOscuro ? '#404040' : '#e5e5e5'
+  };
+};
+
+export const obtenerNombreCorto = (u) => {
+  if (!u) return '';
+  if (u.nombre && u.apellido_paterno) {
+    const primerNombre = u.nombre.trim().split(/\s+/)[0];
+    return `${primerNombre} ${u.apellido_paterno.trim()}`.toUpperCase();
+  }
+  const partes = String(u.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 2) return partes.join(' ').toUpperCase();
+  return `${partes[0]} ${partes[partes.length - 2]}`.toUpperCase();
+};
+
+export const describirRutaEcualizador = (depto, usuarios = []) => {
+  if (!depto) {
+    return {
+      rutaEmpleados: 'Directo a RH',
+      rutaJefe: 'Directo a RH',
+      jefeObj: null,
+      gerenteObj: null
+    };
+  }
+
+  const jefeObj = depto.jefe_id ? usuarios.find(u => u.id === depto.jefe_id) : null;
+  const gerenteObj = depto.gerente_id ? usuarios.find(u => u.id === depto.gerente_id) : null;
+  const rhObj = usuarios.find(u => u.rol === 'gerente_rh' && u.activo !== false);
+
+  const nomJefe = jefeObj ? obtenerNombreCorto(jefeObj) : 'Jefe Directo';
+  const nomGerente = gerenteObj ? obtenerNombreCorto(gerenteObj) : 'Gerencia';
+  const esGerenteMismoRH = gerenteObj && (gerenteObj.rol === 'gerente_rh' || (rhObj && gerenteObj.id === rhObj.id));
+
+  const pasosEmp = [];
+  if (depto.emp_requiere_jefe !== false && (jefeObj || depto.nombre === 'RECURSOS HUMANOS')) {
+    pasosEmp.push(jefeObj ? nomJefe : 'Sub-jefa Área');
+  }
+  if (depto.emp_requiere_gerente === true && gerenteObj && !esGerenteMismoRH && (!jefeObj || gerenteObj.id !== jefeObj.id)) {
+    pasosEmp.push(nomGerente);
+  }
+  pasosEmp.push('RH');
+
+  const pasosJefe = [];
+  if (depto.jefe_requiere_gerente !== false && gerenteObj && !esGerenteMismoRH && (!jefeObj || gerenteObj.id !== jefeObj.id)) {
+    pasosJefe.push(nomGerente);
+  }
+  pasosJefe.push('RH');
+
+  return {
+    rutaEmpleados: pasosEmp.join(' → '),
+    rutaJefe: pasosJefe.join(' → '),
+    jefeObj,
+    gerenteObj
   };
 };
 

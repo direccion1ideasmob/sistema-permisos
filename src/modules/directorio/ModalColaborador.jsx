@@ -1,17 +1,20 @@
-import React, { useState, useRef } from 'react';
-import { X, Camera, Image, Eye, UserPlus, Shield, Briefcase, PenTool, CheckCircle } from 'lucide-react';
-import { estandarizar } from './utils/directorioHelpers';
+import React, { useState, useRef, useMemo } from 'react';
+import { X, Camera, Image, Eye, UserPlus, Shield, Briefcase, PenTool, CheckCircle, GitBranch } from 'lucide-react';
+import { estandarizar, esRolValidadorSuperior, describirRutaEcualizador } from './utils/directorioHelpers';
 import { registrarNuevoColaborador } from './services/directorioService';
 import { obtenerTemaGlobal } from '../../core/theme/temaGlobal';
+import { compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 
 export default function ModalColaborador({ 
-  onClose, onSuccess, departamentos = [], areas = [], puestos = [], sedes = [], modoOscuro 
+  onClose, onSuccess, usuarios = [], departamentos = [], areas = [], puestos = [], sedes = [], modoOscuro 
 }) {
   const [formData, setFormData] = useState({
     numero_empleado: '', nombre: '', apellido_paterno: '', apellido_materno: '',
     nombre_completo: '', fecha_nacimiento: '', fecha_ingreso: '', celular: '',
     telefono: '', correo: '', tipo_personal: 'produccion', sede_id: '', departamento_id: '',
-    area: '', puesto: '', rol: 'empleado', usuario_login: '', pin: ''
+    area: '', puesto: '', rol: 'empleado', reporta_a_id: '', es_titular_depto: false,
+    nuevo_depto_gerente_id: '', nuevo_depto_emp_jefe: true, nuevo_depto_emp_gerente: false, nuevo_depto_jefe_gerente: true,
+    usuario_login: '', pin: ''
   });
 
   const [fotoArchivo, setFotoArchivo] = useState(null);
@@ -37,6 +40,38 @@ export default function ModalColaborador({
     label: tema.textMuted,
     accentGlow: 'rgba(22, 163, 74, 0.15)',
   };
+
+  const deptoSeleccionadoObj = useMemo(
+    () => departamentos.find(d => d.id === formData.departamento_id) || null,
+    [departamentos, formData.departamento_id]
+  );
+
+  const infoRutaDepto = useMemo(
+    () => deptoSeleccionadoObj ? describirRutaEcualizador(deptoSeleccionadoObj, usuarios) : null,
+    [deptoSeleccionadoObj, usuarios]
+  );
+
+  const posiblesJefesDirectos = useMemo(() => {
+    return (usuarios || [])
+      .filter(u => u.activo !== false && !['empleado', 'caseta'].includes(u.rol))
+      .sort((a, b) => {
+        const aMismo = formData.departamento_id && a.departamento_id === formData.departamento_id ? 0 : 1;
+        const bMismo = formData.departamento_id && b.departamento_id === formData.departamento_id ? 0 : 1;
+        if (aMismo !== bMismo) return aMismo - bMismo;
+        return compararPorApellidoPaterno(a, b);
+      });
+  }, [usuarios, formData.departamento_id]);
+
+  const validadoresSuperioresDisponibles = useMemo(() => {
+    return (usuarios || [])
+      .filter(u => u.activo !== false && !['empleado', 'caseta'].includes(u.rol))
+      .sort((a, b) => {
+        const aVal = esRolValidadorSuperior(a.rol) ? 0 : 1;
+        const bVal = esRolValidadorSuperior(b.rol) ? 0 : 1;
+        if (aVal !== bVal) return aVal - bVal;
+        return compararPorApellidoPaterno(a, b);
+      });
+  }, [usuarios]);
 
   const handlePartesNombreChange = (campo, valor) => {
     const valUpper = valor.toUpperCase();
@@ -116,7 +151,7 @@ export default function ModalColaborador({
             key={i} 
             onClick={() => {
               if (tipo === 'sede') { setFormData({...formData, sede_id: item.id}); setCreandoNuevo({...creandoNuevo, sede: false}); setTextosNuevos({...textosNuevos, sede: ''}); }
-              else if (tipo === 'depto') { setFormData({...formData, departamento_id: item.id}); setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}); }
+              else if (tipo === 'depto') { setFormData({...formData, departamento_id: item.id, reporta_a_id: item.jefe_id || ''}); setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}); }
               else if (tipo === 'area') { setFormData({...formData, area: item}); setCreandoNuevo({...creandoNuevo, area: false}); setTextosNuevos({...textosNuevos, area: ''}); }
               else if (tipo === 'puesto') { setFormData({...formData, puesto: item}); setCreandoNuevo({...creandoNuevo, puesto: false}); setTextosNuevos({...textosNuevos, puesto: ''}); }
             }}
@@ -214,7 +249,7 @@ export default function ModalColaborador({
             <div>
               <div className="section-header">
                 <div style={{ background: c.accentSoft, padding: '7px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Briefcase size={15} /></div>
-                <span className="section-title">Ubicación y Puesto</span>
+                <span className="section-title">Ubicación, Puesto y Cadena de Mando</span>
               </div>
               
               <div className="form-grid cols-2">
@@ -238,9 +273,11 @@ export default function ModalColaborador({
                 </div>
 
                 <div className="input-group">
-                  <label className="clean-label">Tipo de Nómina *</label>
+                  <label className="clean-label">Tipo de Nómina (Independiente de jerarquía) *</label>
                   <select className="clean-input" value={formData.tipo_personal} onChange={e => setFormData({...formData, tipo_personal: e.target.value})}>
-                    <option value="produccion">PRODUCCIÓN</option><option value="administrativo">ADMINISTRATIVO</option><option value="obra">OBRA</option>
+                    <option value="produccion">PRODUCCIÓN (Folio P)</option>
+                    <option value="administrativo">ADMINISTRATIVO (Folio A)</option>
+                    <option value="obra">OBRA (Folio O)</option>
                   </select>
                 </div>
               </div>
@@ -249,18 +286,49 @@ export default function ModalColaborador({
                 <div className="input-group">
                   <label className="clean-label">Departamento *</label>
                   {!creandoNuevo.depto ? (
-                    <select required className="clean-input" value={formData.departamento_id} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, depto: true}) : setFormData({...formData, departamento_id: e.target.value})}>
+                    <select
+                      required
+                      className="clean-input"
+                      value={formData.departamento_id}
+                      onChange={e => {
+                        if (e.target.value === 'NEW') {
+                          setCreandoNuevo({ ...creandoNuevo, depto: true });
+                        } else {
+                          const dSel = departamentos.find(d => d.id === e.target.value);
+                          setFormData({
+                            ...formData,
+                            departamento_id: e.target.value,
+                            reporta_a_id: dSel?.jefe_id || ''
+                          });
+                        }
+                      }}
+                    >
                       <option value="">Seleccionar departamento</option>
                       {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                      <option value="NEW">+ Crear o Buscar Depto...</option>
+                      <option value="NEW">+ Crear Nuevo Departamento...</option>
                     </select>
                   ) : (
-                    <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div className="inline-create-box">
-                        <input autoFocus type="text" className="clean-input" placeholder="Ej. SISTEMAS..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value.toUpperCase()})} />
+                        <input autoFocus type="text" className="clean-input" placeholder="Ej. COMPRAS, EMBARQUES..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value.toUpperCase()})} />
                         <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
                       </div>
                       {buscarSugerencias(textosNuevos.depto, departamentos, 'depto')}
+                      <div style={{ padding: '10px', borderRadius: '8px', background: c.surfaceCard, border: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={{ fontSize: '10px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>
+                          ¿De qué Gerencia / Validador colgará este nuevo departamento?
+                        </span>
+                        <select
+                          className="clean-input"
+                          value={formData.nuevo_depto_gerente_id}
+                          onChange={e => setFormData({ ...formData, nuevo_depto_gerente_id: e.target.value })}
+                        >
+                          <option value="">Autónomo / Directo a Recursos Humanos</option>
+                          {validadoresSuperioresDisponibles.map(g => (
+                            <option key={g.id} value={g.id}>{g.nombre_completo} ({g.puesto || g.rol.replace(/_/g, ' ')})</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -285,49 +353,90 @@ export default function ModalColaborador({
                 </div>
               </div>
 
-              <div className="input-group" style={{ marginTop: '14px' }}>
-                <label className="clean-label">Puesto Específico (Opcional)</label>
-                {!creandoNuevo.puesto ? (
-                  <select className="clean-input" value={formData.puesto} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, puesto: true}) : setFormData({...formData, puesto: e.target.value})}>
-                    <option value="">SIN PUESTO ESPECIFICADO</option>
-                    {puestos.map(p => <option key={p} value={p}>{p}</option>)}
-                    <option value="NEW">+ Crear Nuevo Puesto...</option>
-                  </select>
-                ) : (
-                  <div>
-                    <div className="inline-create-box">
-                      <input autoFocus type="text" className="clean-input" placeholder="Nombre del puesto..." value={textosNuevos.puesto} onChange={e => setTextosNuevos({...textosNuevos, puesto: e.target.value.toUpperCase()})} />
-                      <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, puesto: false}); setTextosNuevos({...textosNuevos, puesto: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
+              <div className="form-grid cols-2" style={{ marginTop: '14px' }}>
+                <div className="input-group">
+                  <label className="clean-label">Puesto Específico (Texto libre)</label>
+                  {!creandoNuevo.puesto ? (
+                    <select className="clean-input" value={formData.puesto} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, puesto: true}) : setFormData({...formData, puesto: e.target.value})}>
+                      <option value="">SIN PUESTO ESPECIFICADO</option>
+                      {puestos.map(p => <option key={p} value={p}>{p}</option>)}
+                      <option value="NEW">+ Crear Nuevo Puesto...</option>
+                    </select>
+                  ) : (
+                    <div>
+                      <div className="inline-create-box">
+                        <input autoFocus type="text" className="clean-input" placeholder="Nombre del puesto..." value={textosNuevos.puesto} onChange={e => setTextosNuevos({...textosNuevos, puesto: e.target.value.toUpperCase()})} />
+                        <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, puesto: false}); setTextosNuevos({...textosNuevos, puesto: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
+                      </div>
+                      {buscarSugerencias(textosNuevos.puesto, puestos, 'puesto')}
                     </div>
-                    {buscarSugerencias(textosNuevos.puesto, puestos, 'puesto')}
-                  </div>
-                )}
+                  )}
+                </div>
+
+                <div className="input-group">
+                  <label className="clean-label">Jefe Directo / Reporta a</label>
+                  <select
+                    className="clean-input"
+                    value={formData.reporta_a_id}
+                    onChange={e => setFormData({ ...formData, reporta_a_id: e.target.value })}
+                  >
+                    <option value="">Automático según el Ecualizador del Departamento</option>
+                    {posiblesJefesDirectos.map(j => (
+                      <option key={j.id} value={j.id}>{j.nombre_completo} — ({j.area || j.puesto})</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
+              {infoRutaDepto && !creandoNuevo.depto && (
+                <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: c.accentSoft, border: `1px solid ${c.accent}`, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: c.text }}>
+                  <GitBranch size={15} color={c.accent} style={{ flexShrink: 0 }} />
+                  <div>
+                    <strong>Ruta activa del departamento {deptoSeleccionadoObj.nombre}:</strong> Empleados ({infoRutaDepto.rutaEmpleados}) • Jefatura ({infoRutaDepto.rutaJefe})
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
               <div className="section-header">
                 <div style={{ background: c.accentSoft, padding: '7px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Shield size={15} /></div>
-                <span className="section-title">Accesos al Sistema ERP</span>
+                <span className="section-title">Nivel de Autoridad y Accesos ERP</span>
               </div>
               
               <div className="form-grid cols-2">
                 <div className="input-group">
-                  <label className="clean-label">Rol en el Sistema *</label>
+                  <label className="clean-label">Rol / Nivel de Autorización *</label>
                   <select required className="clean-input" value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})}>
-                    <option value="empleado">EMPLEADO / OPERADOR (NIVEL 4)</option>
-                  <option value="encargado">ENCARGADO / SUPERVISOR SUBÁREA (NIVEL 3)</option>
-                    <option value="jefe_area">JEFE DE ÁREA (PRIMER FILTRO)</option>
-                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (PLANTA)</option>
-                    <option value="gerente_admin">GERENTE ADMINISTRATIVO (OFICINA)</option>
-                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
-                    <option value="rh_nominas">RH / NÓMINAS (OPERATIVO)</option>
+                    <option value="empleado">EMPLEADO / OPERADOR (Solo solicita permisos)</option>
+                    <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR (Autoriza Firma 1)</option>
+                    <option value="gerente_division">VALIDADOR SUPERIOR / NUEVA GERENCIA (Autoriza Firma 2)</option>
+                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (Planta)</option>
+                    <option value="gerente_admin">GERENTE ADMINISTRATIVO (Oficina)</option>
+                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS (Firma 3 Final)</option>
+                    <option value="rh_nominas">TITULAR RH / NÓMINAS (Dictamina nómina)</option>
                     <option value="caseta">CASETA / VIGILANCIA</option>
                     <option value="superadmin">SUPER ADMINISTRADOR</option>
                   </select>
                 </div>
                 <div className="input-group"><label className="clean-label">Correo Institucional *</label><input type="email" required className="clean-input no-upper" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value.toLowerCase()})} /></div>
               </div>
+
+              {(formData.rol === 'jefe_area' || esRolValidadorSuperior(formData.rol)) && (
+                <label style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', background: c.surfaceCard, border: `1px solid ${c.accent}`, cursor: 'pointer', fontSize: '12.5px', fontWeight: '700', color: c.text }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.es_titular_depto)}
+                    onChange={e => setFormData({ ...formData, es_titular_depto: e.target.checked })}
+                  />
+                  <span>
+                    {esRolValidadorSuperior(formData.rol)
+                      ? 'Asignar como Validador Superior / Cabeza de este Departamento en el Ecualizador'
+                      : 'Asignar como Jefe Titular de este Departamento en el Ecualizador (Firma 1)'}
+                  </span>
+                </label>
+              )}
+
               <div className="form-grid cols-2" style={{ marginTop: '14px' }}>
                 <div className="input-group"><label className="clean-label">Usuario Login *</label><input type="text" required className="clean-input no-upper" value={formData.usuario_login} onChange={e => setFormData({...formData, usuario_login: e.target.value.toLowerCase().replace(/\s+/g, '')})} /></div>
                 <div className="input-group"><label className="clean-label">PIN de Seguridad (Mín 6) *</label><input type="text" minLength={6} maxLength={10} required className="clean-input no-upper" placeholder="Ej. 123456" value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value})} /></div>

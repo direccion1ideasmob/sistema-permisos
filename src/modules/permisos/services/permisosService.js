@@ -1,6 +1,167 @@
 import { registrarCheckCaseta, sincronizarCierreTurnoAutomatico } from '../../vigilancia/services/vigilanciaService';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
+import { esRolValidadorSuperior } from '../../directorio/utils/directorioHelpers';
+
+// ============================================================================
+// MOTOR CENTRAL DEL ECUALIZADOR DE FIRMAS (COMPARTIDO CON CASETA DE VIGILANCIA)
+// ============================================================================
+export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, deptoId }) => {
+  const [resDepto, resSolicitante, resTodosEmpDepto, resRHUsers] = await Promise.all([
+    deptoId
+      ? supabase
+          .from('departamentos')
+          .select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id, emp_requiere_jefe, emp_requiere_gerente, jefe_requiere_gerente')
+          .eq('id', deptoId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from('usuarios').select('id, area, rol, reporta_a_id, tipo_personal').eq('id', userId).maybeSingle(),
+    deptoId
+      ? supabase.from('usuarios').select('id, area, rol, activo').eq('departamento_id', deptoId).eq('activo', true)
+      : Promise.resolve({ data: [] }),
+    supabase.from('usuarios').select('id, rol').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true)
+  ]);
+
+  const depto = resDepto.data;
+  const solicitante = resSolicitante.data;
+  const listaDepto = resTodosEmpDepto.data || [];
+  const listaRH = resRHUsers.data || [];
+
+  const gerenteRH = listaRH.find(u => u.rol === 'gerente_rh') || listaRH[0] || null;
+  const rhFinalId = gerenteRH?.id || depto?.rh_id || null;
+
+  const rolSol = (rolUsuario || solicitante?.rol || 'empleado').toLowerCase().trim();
+  const reportaAId = solicitante?.reporta_a_id || null;
+
+  // Verificar si el solicitante es Validador Superior / Gerente, o si es el Jefe Titular del Departamento
+  const esSolicitanteValidadorSuperior =
+    esRolValidadorSuperior(rolSol) ||
+    rolSol === 'superadmin' ||
+    (depto?.gerente_id && depto.gerente_id === userId);
+
+  const tieneSubordinadosDirectos = listaDepto.some(u => u.reporta_a_id === userId && u.id !== userId);
+  const esSolicitanteJefe =
+    !esSolicitanteValidadorSuperior &&
+    ((depto?.jefe_id && depto.jefe_id === userId) ||
+      rolSol === 'jefe_area' ||
+      rolSol === 'rh_nominas' ||
+      (rolSol === 'encargado' && (!depto?.jefe_id || depto.jefe_id === userId)) ||
+      tieneSubordinadosDirectos);
+
+  // Obtener datos del Gerente configurado en el departamento
+  let gerenteDeptoObj = null;
+  if (depto?.gerente_id) {
+    const { data: gData } = await supabase
+      .from('usuarios')
+      .select('id, rol, activo')
+      .eq('id', depto.gerente_id)
+      .maybeSingle();
+    if (gData && gData.activo !== false) {
+      gerenteDeptoObj = gData;
+    }
+  }
+
+  // Interruptores del Ecualizador del departamento (con defaults seguros)
+  const swEmpRequiereJefe = depto ? depto.emp_requiere_jefe !== false : true;
+  const swEmpRequiereGerente = depto ? Boolean(depto.emp_requiere_gerente) : false;
+  const swJefeRequiereGerente = depto ? depto.jefe_requiere_gerente !== false : true;
+
+  let jefeFinalId = null;
+  let gerenteFinalId = null;
+
+  if (esSolicitanteValidadorSuperior) {
+    // 1. Si quien pide el permiso es un Gerente de División / Validador Superior -> Pasa directo a RH
+    jefeFinalId = null;
+    gerenteFinalId = null;
+  } else if (esSolicitanteJefe) {
+    // 2. Si quien pide el permiso es el Jefe del Departamento (o Sub-jefa de área):
+    // Firma 1 se omite porque él mismo es jefatura; Firma 2 depende del switch jefe_requiere_gerente
+    jefeFinalId = null;
+    if (swJefeRequiereGerente && gerenteDeptoObj && gerenteDeptoObj.id !== userId) {
+      gerenteFinalId = gerenteDeptoObj.id;
+    }
+  } else {
+    // 3. Si quien pide el permiso es un Empleado / Operador:
+    // A) Evaluar Firma 1 según el switch emp_requiere_jefe
+    if (swEmpRequiereJefe) {
+      if (reportaAId && reportaAId !== userId) {
+        const { data: supDirecto } = await supabase
+          .from('usuarios')
+          .select('id, rol, activo')
+          .eq('id', reportaAId)
+          .maybeSingle();
+        if (supDirecto && supDirecto.activo !== false) {
+          // Si su reporta_a_id apunta directamente al Gerente de la división y no hay jefe de área, no duplicar en Firma 1
+          if (gerenteDeptoObj && supDirecto.id === gerenteDeptoObj.id && (!depto?.jefe_id || depto.jefe_id === gerenteDeptoObj.id)) {
+            jefeFinalId = null;
+          } else {
+            jefeFinalId = supDirecto.id;
+          }
+        }
+      }
+
+      if (!jefeFinalId && depto?.jefe_id && depto.jefe_id !== userId) {
+        jefeFinalId = depto.jefe_id;
+      }
+
+      // Fallback si en el departamento hay un jefe_area en su misma área aunque no estuviera en depto.jefe_id
+      if (!jefeFinalId) {
+        const areaSol = (solicitante?.area || '').trim().toUpperCase();
+        const mandoArea = listaDepto.find(
+          u => ['jefe_area', 'encargado'].includes(u.rol) && u.id !== userId && (u.area || '').trim().toUpperCase() === areaSol
+        );
+        if (mandoArea) jefeFinalId = mandoArea.id;
+      }
+    }
+
+    // B) Evaluar Firma 2 según el switch emp_requiere_gerente
+    if (swEmpRequiereGerente && gerenteDeptoObj && gerenteDeptoObj.id !== userId && gerenteDeptoObj.id !== jefeFinalId) {
+      gerenteFinalId = gerenteDeptoObj.id;
+    }
+  }
+
+  // Si el Gerente de Firma 2 resulta ser la misma persona que cierra Firma 3 (José Coca), omitir Firma 2 para no duplicar su firma
+  const esGerenteMismoRH =
+    gerenteFinalId &&
+    (gerenteFinalId === rhFinalId || gerenteDeptoObj?.rol === 'gerente_rh');
+
+  if (esGerenteMismoRH) {
+    gerenteFinalId = null;
+  }
+
+  let estadoFirma1 = jefeFinalId ? (jefeFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
+  let estadoFirma2 = gerenteFinalId ? (gerenteFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
+  let estadoFirma3 = rhFinalId ? (rhFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
+
+  if (rolSol === 'superadmin') {
+    estadoFirma1 = 'auto_aprobado';
+    estadoFirma2 = 'auto_aprobado';
+    estadoFirma3 = 'auto_aprobado';
+  }
+
+  // Determinar a quién notificar en el primer eslabón pendiente
+  let notificarA = [];
+  if (estadoFirma1 === 'pendiente' && jefeFinalId) {
+    notificarA = [jefeFinalId];
+  } else if (estadoFirma2 === 'pendiente' && gerenteFinalId) {
+    notificarA = [gerenteFinalId];
+  } else if (estadoFirma3 === 'pendiente') {
+    const destinatariosRH = listaRH.filter(u => u.id !== userId).map(u => u.id);
+    notificarA = destinatariosRH.length > 0 ? destinatariosRH : [rhFinalId].filter(id => id && id !== userId);
+  }
+
+  return {
+    depto,
+    listaRH,
+    jefeFinalId,
+    gerenteFinalId,
+    rhFinalId,
+    estadoFirma1,
+    estadoFirma2,
+    estadoFirma3,
+    notificarA
+  };
+};
 
 // 1. OBTENER PERMISOS DE UN EMPLEADO (MisPermisos)
 export const obtenerPermisosUsuario = async (usuarioId) => {
@@ -103,7 +264,6 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
   return total;
 };
 
-
 // 3.B VERIFICAR ACUMULACIÓN DE FALTAS (Últimos 30 días — Alerta RH a las 3 faltas)
 export const contarFaltasRecientes30Dias = async (usuarioId, permisoId = null, fechaBase = new Date()) => {
   if (!usuarioId) return 0;
@@ -164,7 +324,7 @@ export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuar
       *,
       usuarios:usuario_id (
         id, numero_empleado, nombre_completo, area, puesto, tipo_personal, foto_url, firma_url, departamento_id, reporta_a_id, sedes:sede_id (nombre), supervisor:reporta_a_id (id, nombre_completo, rol, puesto, firma_url),
-        departamentos:departamento_id (id, nombre, clasificacion, jefe_id)
+        departamentos:departamento_id (id, nombre, clasificacion, jefe_id, gerente_id, emp_requiere_jefe, emp_requiere_gerente, jefe_requiere_gerente)
       ),
       firmante1:firma_1_id (id, nombre_completo, rol, puesto, firma_url),
       firmante2:firma_2_id (id, nombre_completo, rol, puesto, firma_url),
@@ -174,8 +334,8 @@ export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuar
   if (soloEnFirmas) {
     query = query.eq("estado_general", "en_firmas");
   } else if (usuarioId && (rol === "jefe_area" || rol === "encargado")) {
-    query = query.eq("firma_1_id", usuarioId).limit(100);
-  } else if (usuarioId && rol && rol.includes("gerente")) {
+    query = query.or(`firma_1_id.eq.${usuarioId},firma_2_id.eq.${usuarioId}`).limit(100);
+  } else if (usuarioId && rol && (rol.includes("gerente") || rol === "validador_superior")) {
     query = query.or(`firma_2_id.eq.${usuarioId},firma_1_id.eq.${usuarioId}`).limit(100);
   }
 
@@ -239,13 +399,12 @@ const buscarJefeDeptoSuperior = async (supervisorId, deptoId) => {
   return null;
 };
 
-// 6. PROCESAR APROBACIÓN Y ENRUTAMIENTO INTELIGENTE DE 4 NIVELES (Aprobaciones)
+// 6. PROCESAR APROBACIÓN Y ENRUTAMIENTO INTELIGENTE (Aprobaciones)
 export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago, comentarios }) => {
   if (solicitud.usuario_id === usuario.id && usuario.rol !== "superadmin") {
     throw new Error("Por control interno, no puedes autorizar ni dictaminar tu propia solicitud.");
   }
 
-  // Verificación en vivo anti-colisión (evita doble dictamen simultáneo entre Jefe y RH)
   const { data: actualBD, error: errCheck } = await supabase
     .from('permisos')
     .select('id, folio, tipo_permiso, estado_general, pago, observaciones, firma_1_id, firma_1_estado, firma_2_id, firma_2_estado, firma_3_id, firma_3_estado')
@@ -285,8 +444,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   };
 
   if (esFirmante1Actual) {
-    // CASO A: Si quien aprueba Firma 1 es un Supervisor de Subárea (encargado, ej. Ricardo Morúa),
-    // verificamos si arriba de él hay un Jefe de Departamento (jefe_area, ej. René Morales).
     if (usuario.rol === 'encargado') {
       const jefeDeptoId = await buscarJefeDeptoSuperior(usuario.id, solicitud.usuarios?.departamento_id);
       if (jefeDeptoId && jefeDeptoId !== usuario.id) {
@@ -298,7 +455,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
       }
     }
 
-    // CASO B: Si es Jefe de Departamento (o un encargado sin otro jefe_area arriba, o Victoria como jefa de Nora), cierra Firma 1
     if (!huboRelevoSubareaADepto) {
       updates.firma_1_estado = "autorizado";
       if (!solicitud.firma_1_id) updates.firma_1_id = usuario.id;
@@ -311,7 +467,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
         siguientesEnFirmar.push(solicitud.firma_2_id);
       } else if (solicitud.firma_3_estado === 'pendiente') {
         const rhUsers = await obtenerUsuariosRH();
-        // Si quien acaba de firmar Firma 1 fue Victoria (rh_nominas), notificamos prioritariamente al Gerente de RH (José Coca)
         const filtrados = usuario.rol === 'rh_nominas'
           ? rhUsers.filter(u => u.id !== usuario.id).map(u => u.id)
           : rhUsers.map(u => u.id);
@@ -332,9 +487,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     }
   }
 
-  // CIERRE DE FIRMA 3 (RH / SUPLENCIA):
-  // Si Victoria acaba de firmar la Firma 1 de Nora en este mismo clic, NO cierra Firma 3 todavía (pasa a José Coca).
-  // Pero si Firma 1 y Firma 2 ya estaban listas de antes (o si quien firma es José Coca), cierra Firma 3 y genera Folio Oficial.
   const firma1EstabaListaAntes = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(solicitud.firma_1_estado);
   const firma1Lista = !huboRelevoSubareaADepto && ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(updates.firma_1_estado || solicitud.firma_1_estado);
   const firma2Lista = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(updates.firma_2_estado || solicitud.firma_2_estado);
@@ -350,12 +502,8 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     let letra = nominaEmpleado.includes('admin') ? 'A' : (nominaEmpleado.includes('obra') ? 'O' : 'P');
     const anio = new Date().getFullYear().toString().slice(-2);
     if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
-      if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
       nuevoFolioGenerado = await generarFolioOficial(letra, anio);
       updates.folio = nuevoFolioGenerado;
-    } else {
-      nuevoFolioGenerado = solicitud.folio;
-    }
     } else {
       nuevoFolioGenerado = solicitud.folio;
     }
@@ -372,12 +520,8 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
 
     const anio = new Date().getFullYear().toString().slice(-2);
     if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
-      if (!solicitud.folio || String(solicitud.folio).startsWith('REQ-') || String(solicitud.folio).startsWith('CAS-')) {
       nuevoFolioGenerado = await generarFolioOficial(letra, anio);
       updates.folio = nuevoFolioGenerado;
-    } else {
-      nuevoFolioGenerado = solicitud.folio;
-    }
     } else {
       nuevoFolioGenerado = solicitud.folio;
     }
@@ -398,12 +542,10 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
   if (error) throw error;
 
-  // 1) AVISO CORTO A CASETA SI ES RETARDO EN PUERTA Y YA HUBO DECISIÓN DE JEFE O RH
   const tipoLower = (solicitud.tipo_permiso || '').toLowerCase();
   const estaEnPuerta = /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
   const seRegresaDictamen = String(dictamenPago || '').toLowerCase().includes('regresa');
 
-  // RESOLUCIÓN DE COMPORTAMIENTOS INUSUALES EN CASETA CUANDO RH / JEFATURA DA ACCESO
   const obsOriginalInusual = solicitud.observaciones || '';
   const esInusualCaseta = /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(obsOriginalInusual);
   if (esInusualCaseta && updates.estado_general === 'autorizado' && !seRegresaDictamen) {
@@ -413,7 +555,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
       const obsConAvalInusual = `${updates.observaciones || obsOriginalInusual} | [COMPORTAMIENTO INUSUAL AUTORIZADO]`;
 
       if (/presentó en caseta.*FALTA|Tenía FALTA programada/i.test(obsOriginalInusual)) {
-        // Conserva estado 'autorizado' con [COMPORTAMIENTO INUSUAL AUTORIZADO] para que el guardia en Caseta vea el botón VERDE "✓ DEJAR PASAR"
         await supabase.from('permisos').update({
           observaciones: `${obsConAvalInusual} | [ Reincorporación en día de falta autorizada a las ${horaRealPuerta} hrs ]`
         }).eq('id', solicitud.id);
@@ -444,7 +585,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     }
   }
 
-  // Si era una SALIDA retenida en caseta porque no coincidió la hora, al autorizarla marcamos [HORARIO AUTORIZADO EN CASETA] para que el guardia le dé paso
   if (tipoLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '') && updates.estado_general === 'autorizado') {
     try {
       const obsConAvalHorario = `${updates.observaciones || solicitud.observaciones || ''} | [HORARIO AUTORIZADO EN CASETA]`;
@@ -452,7 +592,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     } catch (_) {}
   }
 
-  // Si era un colaborador retenido hoy por [FALTA PREVIA SIN AVISO] y ya fue autorizado su acceso hoy, marcar [REINCORPORACION AUTORIZADA] en su falta anterior
   if (/FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || '') && updates.estado_general === 'autorizado' && !seRegresaDictamen) {
     try {
       const { data: faltasPrevias } = await supabase
@@ -495,7 +634,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     }
   }
 
-  // 2) AVISO CORTO A CASETA CUANDO UN PASE DE SALIDA QUEDA AUTORIZADO
   if (tipoLower === 'salida' && updates.estado_general === 'autorizado') {
     try {
       const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
@@ -511,7 +649,6 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     } catch (_) {}
   }
 
-  // 3) NOTIFICACIÓN AL EMPLEADO O AL SIGUIENTE FIRMANTE EN LA CADENA
   if (updates.estado_general === 'autorizado') {
     const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
     await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
@@ -574,7 +711,7 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   const esDesfaseSalidaRech = tipoRechLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(obsRechActual);
   const esRetardoRech = tipoRechLower === 'retardo' || (tipoRechLower === 'falta' && /FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || ''));
   const partesNomRech = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
-  const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNomRech.length - 2]}` : partesNomRech.join(' ');
+  const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNom.length - 2]}` : partesNom.join(' ');
   const motivoLimpioRech = String(motivoRechazo || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
 
   const etiquetaBitacora = esRetardoRech
@@ -610,7 +747,6 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     };
   }
 
-  // Si es un retardo donde se dictamina "Se regresa" y aún tiene folio REQ-, asignarle Folio Oficial
   if (esRetardoRech && String(solicitud.folio || '').startsWith('REQ-')) {
     const nominaEmpleado = (solicitud.usuarios?.tipo_personal || solicitud.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
     let letra = 'P';
@@ -620,7 +756,6 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     updates.folio = await generarFolioOficial(letra, anio);
   }
 
-  // Asignar SIEMPRE el usuario.id real de quien dictaminó y omitir las etapas posteriores que ya no intervinieron
   if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_1_id !== usuario.id) {
     updates.firma_3_id = usuario.id;
     updates.firma_3_estado = esRetardoRech ? 'autorizado' : 'rechazado';
@@ -643,7 +778,6 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   const { error } = await supabase.from('permisos').update(updates).eq('id', solicitud.id);
   if (error) throw error;
 
-  // Si era un retardo esperando en puerta, avisar a Caseta sin detalles administrativos
   if ((solicitud.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '')) {
     try {
       const { data: guardias } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
@@ -694,13 +828,12 @@ export const forzarSaltoFirmaRH = async (solicitud) => {
   }
 };
 
-// 9. CREAR NUEVA SOLICITUD DE PASE CON ENRUTADOR DE 4 NIVELES (Operador -> Supervisor Subárea -> Jefe Depto -> Gerente División -> RH)
+// 9. CREAR NUEVA SOLICITUD DE PASE GOBERNADA POR EL ECUALIZADOR DE DEPARTAMENTOS
 export const crearNuevaSolicitudPermiso = async ({
   userId, rolUsuario, deptoId, sedeId, tipoPersonal, nombreSolicitante, fotoSolicitante,
   tipoPermiso, naturaleza, fechaHoy, fechaPermiso, fechaFinVacaciones,
   horaSalida, regresaMismoDia, horaRegreso, horaLlegadaRetardo, motivo, totalHoras, esRetardoUrgente
 }) => {
-  // === VALIDACIÓN ESTRICTA DE COHERENCIA DIARIA DEL COLABORADOR ===
   const fechaInicioNueva = fechaPermiso;
   const fechaFinNueva = tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : fechaPermiso;
 
@@ -743,18 +876,15 @@ export const crearNuevaSolicitudPermiso = async ({
   const retardoPrevio = activosMismaFecha.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
   const salidasPrevias = activosMismaFecha.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
 
-  // 1) Si ya fue regresado a casa en esa fecha (Falta por retardo) -> Bloquear CUALQUIER solicitud
   if (paseRegresadoACasa) {
     throw new Error(`No es posible generar otro permiso para esta fecha porque ya existe un dictamen de retiro de planta (Falta por retardo • Folio ${paseRegresadoACasa.folio}).`);
   }
 
-  // 2) Si ya tiene una Falta o Vacaciones en esa fecha -> Bloquear CUALQUIER solicitud
   if (paseAusenciaCompleta) {
     const etiquetaExistente = (paseAusenciaCompleta.tipo_permiso || '').toUpperCase();
     throw new Error(`No es posible registrar este permiso porque ya existe un registro de ${etiquetaExistente} (${paseAusenciaCompleta.folio}) para esta fecha.`);
   }
 
-  // 3) HUECO 1: Si pide un RETARDO pero YA registró entrada normal en Caseta o YA tiene un pase de Salida ese día
   if (tipoPermiso === 'retardo') {
     if (retardoPrevio) {
       throw new Error(`Ya existe un registro de retardo (${retardoPrevio.folio}) para esta fecha. No es posible generar dos retardos el mismo día.`);
@@ -762,26 +892,21 @@ export const crearNuevaSolicitudPermiso = async ({
     if (asistenciaDia?.hora_entrada) {
       throw new Error(`No es posible solicitar un Retardo para esta fecha porque ya cuentas con registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
     }
-    // Un pase de Salida programado para más tarde no impide registrar un Retardo por la mañana
   }
 
-  // 4) HUECO 2 y HUECO 3: Reglas al solicitar una SALIDA ANTICIPADA
   if (tipoPermiso === 'salida') {
     if (asistenciaDia?.hora_salida) {
       throw new Error(`No es posible solicitar una Salida porque ya registraste tu salida definitiva de planta hoy (${asistenciaDia.hora_salida} hrs).`);
     }
-    // HUECO 3: Si tiene un retardo que todavía está en_firmas (esperando autorización), no puede pedir salida hasta que se autorice su entrada
     if (retardoPrevio && retardoPrevio.estado_general === 'en_firmas') {
       throw new Error(`Tienes un pase de Retardo (${retardoPrevio.folio}) pendiente de autorización. Podrás solicitar una Salida una vez que tu entrada haya sido autorizada.`);
     }
-    // HUECO 2: No permitir 2 salidas activas el mismo día (a menos que una salida temporal previa ya haya reingresado por Caseta)
     const salidaAbierta = salidasPrevias.find(s => !/\[(?:REINGRESO|ENTRADA) CASETA:/i.test(String(s.observaciones || '')) && s.estado_general !== 'completado_caseta');
     if (salidaAbierta) {
       throw new Error(`Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para esta fecha. No es posible duplicar pases de salida.`);
     }
   }
 
-  // 5) Si pide FALTA o VACACIONES pero hoy ya entró a planta o ya tiene sello en Caseta -> Bloquear
   if (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') {
     if (asistenciaDia?.hora_entrada) {
       throw new Error(`No es posible registrar una ${tipoPermiso} para esta fecha porque ya tienes registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
@@ -792,7 +917,6 @@ export const crearNuevaSolicitudPermiso = async ({
     if (retardoPrevio && tieneSelloFisicoCaseta(retardoPrevio)) {
       throw new Error(`No es posible registrar una ${tipoPermiso} para hoy porque ya tienes un registro de llegada en Caseta (${retardoPrevio.folio}).`);
     }
-    // Si tenía un aviso de retardo previo ese día SIN sello físico de caseta y ahora reporta Falta, cancelar únicamente el retardo previo
     const pasesSinSello = (retardoPrevio && !tieneSelloFisicoCaseta(retardoPrevio)) ? [retardoPrevio] : [];
     for (const pPrev of pasesSinSello) {
       await supabase
@@ -806,127 +930,23 @@ export const crearNuevaSolicitudPermiso = async ({
     }
   }
 
-  const [{ data: depto, error: errD }, { data: usuarioSolicitante }, { data: todosEmpDepto }] = await Promise.all([
-    supabase.from('departamentos').select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id').eq('id', deptoId).single(),
-    supabase.from('usuarios').select('area, reporta_a_id, tipo_personal').eq('id', userId).maybeSingle(),
-    supabase.from('usuarios').select('id, area, rol').eq('departamento_id', deptoId).eq('activo', true)
-  ]);
+  // === RESOLUCIÓN CENTRALIZADA MEDIANTE EL ECUALIZADOR DEL DEPARTAMENTO ===
+  const {
+    depto,
+    jefeFinalId,
+    gerenteFinalId,
+    rhFinalId,
+    estadoFirma1,
+    estadoFirma2,
+    estadoFirma3,
+    notificarA
+  } = await resolverCadenaFirmasPorEcualizador({
+    userId,
+    rolUsuario,
+    deptoId
+  });
 
-  if (errD || !depto) throw new Error("No se encontró el departamento del colaborador.");
-
-  const areaSolicitante = (usuarioSolicitante?.area || '').trim().toUpperCase();
-  const reportaAId = usuarioSolicitante?.reporta_a_id || null;
-  const listaDepto = todosEmpDepto || [];
-  const areasEnDepto = new Set(listaDepto.map(u => (u.area || '').trim().toUpperCase()).filter(Boolean));
-  const mandosEnDepto = listaDepto.filter(u => ['encargado', 'jefe_area'].includes(u.rol) && u.id !== userId);
-
-  // === PASO 1: DETERMINAR FIRMA 1 (SUPERVISOR DE SUBÁREA / JEFE DE DEPTO / TITULAR NÓMINAS) ===
-  let jefeFinalId = null;
-  const rolSol = (rolUsuario || '').toLowerCase();
-  const esSolicitanteGerenteOSuper = ['gerente_produccion', 'gerente_admin', 'gerente_rh', 'superadmin'].includes(rolSol);
-  const esSolicitanteJefeDepto = rolSol === 'jefe_area' || rolSol === 'rh_nominas';
-  const esSolicitanteEncargado = rolSol === 'encargado';
-
-  let reportaDirectoAGerente = esSolicitanteGerenteOSuper || esSolicitanteJefeDepto;
-  if (reportaAId && !esSolicitanteGerenteOSuper) {
-    const { data: supDirecto } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
-    if (supDirecto && supDirecto.activo) {
-      if (esSolicitanteJefeDepto) {
-        if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
-          reportaDirectoAGerente = true;
-        }
-      } else if (esSolicitanteEncargado) {
-        if (supDirecto.rol === 'jefe_area' || supDirecto.rol === 'rh_nominas') {
-          jefeFinalId = supDirecto.id;
-        } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
-          reportaDirectoAGerente = true;
-        }
-      } else if (['encargado', 'jefe_area', 'rh_nominas'].includes(supDirecto.rol)) {
-        jefeFinalId = supDirecto.id;
-      } else if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(supDirecto.rol)) {
-        reportaDirectoAGerente = true;
-      }
-    }
-  }
-
-  if (!jefeFinalId && !reportaDirectoAGerente) {
-    if (esSolicitanteEncargado) {
-      // Un encargado de subárea sólo sube al Jefe de Departamento (jefe_area), nunca a otro encargado
-      const jefeDeptoArriba = mandosEnDepto.find(j => j.rol === 'jefe_area' && j.id !== userId);
-      if (depto.jefe_id && depto.jefe_id !== userId) {
-        jefeFinalId = depto.jefe_id;
-      } else if (jefeDeptoArriba) {
-        jefeFinalId = jefeDeptoArriba.id;
-      }
-    } else {
-      // Empleado / Operador: busca primero encargado o jefe_area de su misma subárea
-      const mandoMismaArea =
-        mandosEnDepto.find(j => j.rol === 'encargado' && (j.area || '').trim().toUpperCase() === areaSolicitante) ||
-        mandosEnDepto.find(j => j.rol === 'jefe_area' && (j.area || '').trim().toUpperCase() === areaSolicitante);
-
-      if (mandoMismaArea) {
-        jefeFinalId = mandoMismaArea.id;
-      } else if (depto.jefe_id && depto.jefe_id !== userId) {
-        jefeFinalId = depto.jefe_id;
-      } else if (areasEnDepto.size <= 1 && mandosEnDepto.length > 0) {
-        jefeFinalId = mandosEnDepto[0].id;
-      }
-    }
-  }
-
-  // === PASO 2: DETERMINAR FIRMA 2 (GERENCIA DE DIVISIÓN) Y FIRMA 3 (RH) ===
-  const esDeptoRH = (depto.clasificacion || '').toLowerCase().includes('rh') || depto.nombre.toUpperCase().includes('RECURSOS HUMANOS') || depto.nombre.toUpperCase().includes('VIGILANCIA') || depto.nombre.toUpperCase() === 'RH';
-  const clasificacionDepto = (depto.clasificacion || tipoPersonal || 'produccion').toLowerCase();
-  const rolGerenteFallback = clasificacionDepto.includes('admin') ? 'gerente_admin' : (clasificacionDepto.includes('rh') ? 'gerente_rh' : 'gerente_produccion');
-
-  const [{ data: gerenteDeptoData }, { data: gerenteFallbackData }, { data: rhUsersData }] = await Promise.all([
-    depto.gerente_id ? supabase.from('usuarios').select('id, rol').eq('id', depto.gerente_id).maybeSingle() : Promise.resolve({ data: null }),
-    supabase.from('usuarios').select('id, rol').eq('rol', rolGerenteFallback).eq('activo', true).limit(1).maybeSingle(),
-    supabase.from('usuarios').select('id, rol').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true)
-  ]);
-
-  const listaRH = rhUsersData || [];
-  const gerenteRH = listaRH.find(u => u.rol === 'gerente_rh') || listaRH[0];
-  const rhFinalId = gerenteRH?.id || depto.rh_id || null;
-
-  let gerenteFinalId = gerenteDeptoData?.id || (esDeptoRH ? rhFinalId : gerenteFallbackData?.id) || null;
-  let rolDelGerenteDepto = gerenteDeptoData?.rol || (esDeptoRH ? 'gerente_rh' : gerenteFallbackData?.rol);
-
-  // === PASO 3: ÁRBITRO DE ESTADOS ===
-  let estadoFirma1 = jefeFinalId ? (jefeFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
-  let estadoFirma2 = gerenteFinalId ? (gerenteFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
-  let estadoFirma3 = rhFinalId ? (rhFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
-
-  // REGLA GERENCIA ADMIN (Pedro Simón):
-  // En retardos de Administración, si el colaborador SÍ tiene Jefe de Área que lo revise (estadoFirma1 === 'pendiente'),
-  // se omite a Pedro Simón (pasa de Jefe de Área -> RH).
-  // Pedro Simón SOLO autoriza retardos de quienes NO tienen Jefe de Área arriba (o son Jefes de Área que le reportan directo a él).
-  const esDivisionAdmin = rolDelGerenteDepto === 'gerente_admin' || clasificacionDepto.includes('admin');
-  const tieneJefeRevisor = estadoFirma1 === 'pendiente';
-  const omitirGerenteAdminPorRetardo =
-    tipoPermiso === 'retardo' && esDivisionAdmin && tieneJefeRevisor;
-
-  // FUSIÓN INTELIGENTE: Si la división ya es comandada por José Coca (RH / Vigilancia) o aplica omisión de retardo en Admin con Jefe
-  if (esDeptoRH || rolDelGerenteDepto === 'gerente_rh' || gerenteFinalId === rhFinalId || omitirGerenteAdminPorRetardo) {
-    estadoFirma2 = 'omitido';
-  }
-
-  if (rolUsuario === 'superadmin') {
-    estadoFirma1 = 'auto_aprobado';
-    estadoFirma2 = 'auto_aprobado';
-    estadoFirma3 = 'auto_aprobado';
-  }
-
-  // ¿A quién se le notifica primero?
-  let notificarA = [];
-  if (estadoFirma1 === 'pendiente') {
-    notificarA = [jefeFinalId];
-  } else if (estadoFirma2 === 'pendiente') {
-    notificarA = [gerenteFinalId];
-  } else if (estadoFirma3 === 'pendiente') {
-    const destinatariosRH = listaRH.filter(u => u.id !== userId).map(u => u.id);
-    notificarA = destinatariosRH.length > 0 ? destinatariosRH : [rhFinalId].filter(id => id && id !== userId);
-  }
+  if (!depto) throw new Error("No se encontró el departamento del colaborador.");
 
   const hayPendientes = [estadoFirma1, estadoFirma2, estadoFirma3].includes('pendiente');
   const estadoGeneral = hayPendientes ? 'en_firmas' : 'autorizado';
@@ -939,7 +959,8 @@ export const crearNuevaSolicitudPermiso = async ({
 
   let folioTemporal = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
   if (!hayPendientes) {
-    const letraAuto = clasificacionDepto.includes('admin') ? 'A' : (clasificacionDepto.includes('obra') ? 'O' : 'P');
+    const nominaRef = (tipoPersonal || depto.clasificacion || 'produccion').toLowerCase();
+    const letraAuto = nominaRef.includes('admin') ? 'A' : (nominaRef.includes('obra') ? 'O' : 'P');
     const anioAuto = new Date().getFullYear().toString().slice(-2);
     folioTemporal = await generarFolioOficial(letraAuto, anioAuto);
   }
@@ -1098,7 +1119,6 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
   let siguientesEnFirmar = [];
   let etiquetaNotificacion = "Gerencia";
 
-  // Verificar si quien era firma_1_id es un encargado con un jefe_area arriba
   if (permiso.firma_1_id) {
     const { data: firmante1 } = await supabase.from('usuarios').select('id, rol, nombre_completo').eq('id', permiso.firma_1_id).maybeSingle();
     if (firmante1?.rol === 'encargado') {
@@ -1173,7 +1193,6 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
     });
   }
 
-  // AVISO CORTO CASETA LINK RAPIDO (Solo si desde Firma 1 se dictaminó regreso a casa)
   if ((permiso.tipo_permiso || '').toLowerCase() === 'retardo' && /\[LLEGADA EN PUERTA:/i.test(permiso.observaciones || '')) {
     const seRegresa = String(dictamenPago || '').toLowerCase().includes('regresa');
     if (seRegresa) {
@@ -1299,7 +1318,6 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
 
   if (error) throw error;
 };
-
 
 export const depurarPermisosCanceladosRH = async (ids = []) => {
   if (!Array.isArray(ids) || ids.length === 0) return 0;

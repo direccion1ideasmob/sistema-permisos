@@ -1,7 +1,7 @@
 import { supabase } from '../../../core/api/supabaseClient';
 import { subirImagenUsuario } from '../../../core/services/storageService';
 import { resolverSedeId, resolverDepartamentoId } from '../../../core/services/catalogosService';
-import { estandarizar } from '../utils/directorioHelpers';
+import { estandarizar, esRolValidadorSuperior } from '../utils/directorioHelpers';
 
 const limpiarTexto = (txt) => {
   if (!txt) return '';
@@ -10,9 +10,8 @@ const limpiarTexto = (txt) => {
     : txt.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 };
 
-
 // AUXILIAR: Sincronizar vínculos de mando cuando cambia el rol de un colaborador
-const sincronizarVinculosPorRol = async ({ colaboradorId, rolNuevo, departamentoId, areaFinal }) => {
+const sincronizarVinculosPorRol = async ({ colaboradorId, rolNuevo, departamentoId, esTitularDepto = false }) => {
   const rol = (rolNuevo || "empleado").toLowerCase();
 
   // Caso A: Si ahora es empleado o caseta, NO puede tener subordinados ni ser jefe_id de un departamento
@@ -30,23 +29,24 @@ const sincronizarVinculosPorRol = async ({ colaboradorId, rolNuevo, departamento
     ]);
   }
 
-  // Caso B: Si es encargado (Supervisor de Subárea), los empleados base de su misma subárea le reportan a él, y él reporta al jefe_id del depto
-  if (rol === "encargado" && departamentoId && areaFinal) {
-    const { data: depto } = await supabase.from("departamentos").select("jefe_id").eq("id", departamentoId).maybeSingle();
-    if (depto?.jefe_id && depto.jefe_id !== colaboradorId) {
-      await supabase.from("usuarios").update({ reporta_a_id: depto.jefe_id }).eq("id", colaboradorId);
+  // Caso B: Si se marca explícitamente como Jefe Titular del departamento (o es el único jefe_area en ese depto sin jefe_id previo)
+  if (rol === "jefe_area" && departamentoId) {
+    const { data: depto } = await supabase
+      .from("departamentos")
+      .select("id, jefe_id, gerente_id")
+      .eq("id", departamentoId)
+      .maybeSingle();
+
+    if (depto && (esTitularDepto || !depto.jefe_id)) {
+      await supabase.from("departamentos").update({ jefe_id: colaboradorId }).eq("id", departamentoId);
+      if (depto.gerente_id && depto.gerente_id !== colaboradorId) {
+        await supabase.from("usuarios").update({ reporta_a_id: depto.gerente_id }).eq("id", colaboradorId);
+      }
     }
-    await supabase
-      .from("usuarios")
-      .update({ reporta_a_id: colaboradorId })
-      .eq("departamento_id", departamentoId)
-      .ilike("area", areaFinal)
-      .eq("rol", "empleado")
-      .neq("id", colaboradorId);
   }
 };
 
-// 1. CARGAR TODO EL DIRECTORIO Y CATÁLOGOS
+// 1. CARGAR TODO EL DIRECTORIO Y CATÁLOGOS (INCLUYENDO ECUALIZADOR DE DEPARTAMENTOS)
 export const obtenerDatosDirectorio = async () => {
   const [resSedes, resUsuarios, resDeptos] = await Promise.all([
     supabase.from('sedes').select('id, nombre').order('nombre', { ascending: true }),
@@ -56,7 +56,7 @@ export const obtenerDatosDirectorio = async () => {
       .order('nombre_completo', { ascending: true }),
     supabase
       .from('departamentos')
-      .select('id, nombre, clasificacion, jefe_id, gerente_id')
+      .select('id, nombre, clasificacion, jefe_id, gerente_id, rh_id, emp_requiere_jefe, emp_requiere_gerente, jefe_requiere_gerente')
       .order('nombre', { ascending: true })
   ]);
 
@@ -69,8 +69,12 @@ export const obtenerDatosDirectorio = async () => {
       ...d,
       nombre: (d.nombre || '').toUpperCase(),
       clasificacion: (d.clasificacion || 'produccion').toLowerCase().trim(),
-      jefe_id: d.jefe_id,
-      gerente_id: d.gerente_id
+      jefe_id: d.jefe_id || null,
+      gerente_id: d.gerente_id || null,
+      rh_id: d.rh_id || null,
+      emp_requiere_jefe: d.emp_requiere_jefe !== false,
+      emp_requiere_gerente: Boolean(d.emp_requiere_gerente),
+      jefe_requiere_gerente: d.jefe_requiere_gerente !== false
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
@@ -82,8 +86,11 @@ export const obtenerDatosDirectorio = async () => {
         id: deptoEncontrado?.id,
         nombre: deptoEncontrado ? deptoEncontrado.nombre : 'SIN DEPARTAMENTO',
         clasificacion: deptoEncontrado ? deptoEncontrado.clasificacion : 'produccion',
-        jefe_id: deptoEncontrado?.jefe_id,
-        gerente_id: deptoEncontrado?.gerente_id
+        jefe_id: deptoEncontrado?.jefe_id || null,
+        gerente_id: deptoEncontrado?.gerente_id || null,
+        emp_requiere_jefe: deptoEncontrado ? deptoEncontrado.emp_requiere_jefe : true,
+        emp_requiere_gerente: deptoEncontrado ? deptoEncontrado.emp_requiere_gerente : false,
+        jefe_requiere_gerente: deptoEncontrado ? deptoEncontrado.jefe_requiere_gerente : true
       }
     };
   });
@@ -137,7 +144,17 @@ export const registrarNuevoColaborador = async ({
 
   let deptoFinalId = formData.departamento_id;
   if (creandoNuevo.depto && textosNuevos.depto.trim()) {
-    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, formData.tipo_personal, departamentos);
+    deptoFinalId = await resolverDepartamentoId(
+      textosNuevos.depto,
+      'produccion',
+      departamentos,
+      {
+        gerente_id: formData.nuevo_depto_gerente_id || null,
+        emp_requiere_jefe: formData.nuevo_depto_emp_jefe !== undefined ? formData.nuevo_depto_emp_jefe : true,
+        emp_requiere_gerente: formData.nuevo_depto_emp_gerente !== undefined ? formData.nuevo_depto_emp_gerente : false,
+        jefe_requiere_gerente: formData.nuevo_depto_jefe_gerente !== undefined ? formData.nuevo_depto_jefe_gerente : true
+      }
+    );
   }
 
   let areaFinal = formData.area;
@@ -166,6 +183,17 @@ export const registrarNuevoColaborador = async ({
 
   const nuevoUsuarioId = crypto.randomUUID();
 
+  // Si no se especificó reporta_a_id manualmente, heredarlo inteligentemente del departamento
+  let reportaAFinal = formData.reporta_a_id || null;
+  const deptoSeleccionadoObj = departamentos.find(d => d.id === deptoFinalId);
+  if (!reportaAFinal && deptoSeleccionadoObj) {
+    if (formData.rol === 'empleado' && deptoSeleccionadoObj.jefe_id) {
+      reportaAFinal = deptoSeleccionadoObj.jefe_id;
+    } else if (formData.rol === 'jefe_area' && deptoSeleccionadoObj.gerente_id) {
+      reportaAFinal = deptoSeleccionadoObj.gerente_id;
+    }
+  }
+
   const [fotoUrl, firmaUrl] = await Promise.all([
     fotoArchivo ? subirImagenUsuario(fotoArchivo, nuevoUsuarioId, 'perfil') : Promise.resolve(null),
     firmaArchivo ? subirImagenUsuario(firmaArchivo, nuevoUsuarioId, 'firma') : Promise.resolve(null)
@@ -189,7 +217,7 @@ export const registrarNuevoColaborador = async ({
     area: areaFinal.toUpperCase(),
     puesto: puestoFinal ? puestoFinal.toUpperCase() : null,
     rol: formData.rol,
-    reporta_a_id: formData.reporta_a_id || null,
+    reporta_a_id: reportaAFinal,
     usuario_login: loginLimpio,
     pin: formData.pin.trim(),
     foto_url: fotoUrl,
@@ -200,8 +228,15 @@ export const registrarNuevoColaborador = async ({
   if (dbError) throw dbError;
 
   const actualizacionDepto = {};
-  if (['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(formData.rol)) {
-    actualizacionDepto.gerente_id = nuevoUsuarioId;
+  if (esRolValidadorSuperior(formData.rol)) {
+    // Si se crea un departamento nuevo para este Validador Superior o si se marca como cabeza de su departamento
+    if (creandoNuevo.depto || formData.es_titular_depto) {
+      actualizacionDepto.gerente_id = nuevoUsuarioId;
+    }
+  } else if (formData.rol === 'jefe_area') {
+    if (creandoNuevo.depto || formData.es_titular_depto || !deptoSeleccionadoObj?.jefe_id) {
+      actualizacionDepto.jefe_id = nuevoUsuarioId;
+    }
   }
 
   if (Object.keys(actualizacionDepto).length > 0 && deptoFinalId) {
@@ -231,9 +266,9 @@ export const actualizarExpedienteColaborador = async ({
 
   let deptoFinalId = datosEdit.departamento_id || null;
   if (creandoNuevo.depto && textosNuevos.depto?.trim()) {
-    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, datosEdit.tipo_personal, departamentos);
+    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, 'produccion', departamentos);
   } else if (!deptoFinalId && datosEdit.departamento_texto?.trim()) {
-    deptoFinalId = await resolverDepartamentoId(datosEdit.departamento_texto, datosEdit.tipo_personal, departamentos);
+    deptoFinalId = await resolverDepartamentoId(datosEdit.departamento_texto, 'produccion', departamentos);
   }
 
   const nombreDeptoSeleccionado = departamentos.find(d => d.id === deptoFinalId)?.nombre || textosNuevos.depto || 'GENERAL';
@@ -275,11 +310,16 @@ export const actualizarExpedienteColaborador = async ({
   if (pinCambio) {
     await supabase.from('suscripciones_push').delete().eq('usuario_id', colaboradorId);
   }
-  await sincronizarVinculosPorRol({ colaboradorId, rolNuevo: datosEdit.rol, departamentoId: deptoFinalId, areaFinal });
+  await sincronizarVinculosPorRol({
+    colaboradorId,
+    rolNuevo: datosEdit.rol,
+    departamentoId: deptoFinalId,
+    esTitularDepto: Boolean(datosEdit.es_titular_depto)
+  });
 };
 
 // 4. REUBICACIÓN RÁPIDA DE EMPLEADO DESDE EL ÁRBOL (Depto, Área, Puesto, Rol y Superior)
-export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId, area, puesto, rol, reportaAId }) => {
+export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId, area, puesto, rol, reportaAId, esTitularDepto = false }) => {
   const { error } = await supabase
     .from('usuarios')
     .update({
@@ -292,7 +332,12 @@ export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId
     .eq('id', colaboradorId);
 
   if (error) throw error;
-  await sincronizarVinculosPorRol({ colaboradorId, rolNuevo: rol, departamentoId, areaFinal: (area || 'GENERAL').trim().toUpperCase() });
+  await sincronizarVinculosPorRol({
+    colaboradorId,
+    rolNuevo: rol,
+    departamentoId,
+    esTitularDepto
+  });
 };
 
 // 5. BAJA Y REACTIVACIÓN LABORAL
@@ -312,10 +357,16 @@ export const reactivarColaborador = async (id) => {
   if (error) throw error;
 };
 
-// 6. RENOMBRAR DEPARTAMENTO Y SINCRONIZAR ÁREAS DE EMPLEADOS SIMPLES
-export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaClasif, nombreAnterior = '') => {
+// 6. GUARDAR CONFIGURACIÓN COMPLETA DEL ECUALIZADOR DE UN DEPARTAMENTO
+export const actualizarDepartamentoSeguro = async (
+  deptoId,
+  nuevoNombre,
+  nuevaClasif,
+  nombreAnterior = '',
+  ecualizador = null
+) => {
   const nomLimpio = limpiarTexto(nuevoNombre);
-  const clasifLimpia = (nuevaClasif || 'produccion').toLowerCase().trim();
+  if (!nomLimpio) throw new Error("El nombre del departamento no puede estar vacío.");
 
   const { data: duplicado } = await supabase
     .from('departamentos')
@@ -328,12 +379,49 @@ export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaCl
     throw new Error(`Ya existe otro departamento llamado "${nomLimpio}".`);
   }
 
+  // Determinar clasificación coherente con el gerente seleccionado (para mantener compatibilidad visual)
+  let clasifLimpia = (nuevaClasif || 'produccion').toLowerCase().trim();
+  if (ecualizador && ecualizador.gerente_id) {
+    const { data: gerUser } = await supabase.from('usuarios').select('rol').eq('id', ecualizador.gerente_id).maybeSingle();
+    if (gerUser?.rol === 'gerente_admin') clasifLimpia = 'administrativo';
+    else if (gerUser?.rol === 'gerente_produccion') clasifLimpia = 'produccion';
+    else if (gerUser?.rol === 'gerente_rh') clasifLimpia = 'rh';
+  }
+
+  const payloadUpdate = {
+    nombre: nomLimpio,
+    clasificacion: clasifLimpia
+  };
+
+  if (ecualizador) {
+    payloadUpdate.jefe_id = ecualizador.jefe_id || null;
+    payloadUpdate.gerente_id = ecualizador.gerente_id || null;
+    payloadUpdate.emp_requiere_jefe = Boolean(ecualizador.emp_requiere_jefe);
+    payloadUpdate.emp_requiere_gerente = Boolean(ecualizador.emp_requiere_gerente);
+    payloadUpdate.jefe_requiere_gerente = Boolean(ecualizador.jefe_requiere_gerente);
+  }
+
   const { error } = await supabase
     .from('departamentos')
-    .update({ nombre: nomLimpio, clasificacion: clasifLimpia })
+    .update(payloadUpdate)
     .eq('id', deptoId);
 
   if (error) throw error;
+
+  // Si se asignó un Jefe Titular en el Ecualizador, asegurar que tenga rol de mando y que reporte al Gerente del depto
+  if (ecualizador && ecualizador.jefe_id) {
+    const { data: jefeActual } = await supabase.from('usuarios').select('id, rol').eq('id', ecualizador.jefe_id).maybeSingle();
+    const updatesJefe = {};
+    if (jefeActual && ['empleado', 'encargado'].includes(jefeActual.rol)) {
+      updatesJefe.rol = 'jefe_area';
+    }
+    if (ecualizador.gerente_id && ecualizador.gerente_id !== ecualizador.jefe_id) {
+      updatesJefe.reporta_a_id = ecualizador.gerente_id;
+    }
+    if (Object.keys(updatesJefe).length > 0) {
+      await supabase.from('usuarios').update(updatesJefe).eq('id', ecualizador.jefe_id);
+    }
+  }
 
   // Si el departamento tenía empleados cuya área se llamaba igual al departamento anterior, actualizarlos también
   if (nombreAnterior && limpiarTexto(nombreAnterior) !== nomLimpio) {
@@ -343,6 +431,50 @@ export const actualizarDepartamentoSeguro = async (deptoId, nuevoNombre, nuevaCl
       .eq('departamento_id', deptoId)
       .ilike('area', limpiarTexto(nombreAnterior));
   }
+};
+
+// 6.B CREAR NUEVO DEPARTAMENTO DIRECTAMENTE CON SU ECUALIZADOR
+export const crearDepartamentoConEcualizador = async ({
+  nombre,
+  jefe_id = null,
+  gerente_id = null,
+  emp_requiere_jefe = true,
+  emp_requiere_gerente = false,
+  jefe_requiere_gerente = true
+}) => {
+  const nomLimpio = limpiarTexto(nombre);
+  if (!nomLimpio) throw new Error("Ingresa el nombre del nuevo departamento.");
+
+  let clasif = 'produccion';
+  if (gerente_id) {
+    const { data: gerUser } = await supabase.from('usuarios').select('rol').eq('id', gerente_id).maybeSingle();
+    if (gerUser?.rol === 'gerente_admin') clasif = 'administrativo';
+    else if (gerUser?.rol === 'gerente_rh') clasif = 'rh';
+  }
+
+  const nuevoId = await resolverDepartamentoId(nomLimpio, clasif, [], {
+    jefe_id,
+    gerente_id,
+    emp_requiere_jefe,
+    emp_requiere_gerente,
+    jefe_requiere_gerente
+  });
+
+  // Si se designó un Jefe Titular para el nuevo departamento, moverlo a este departamento y asegurar su rol
+  if (jefe_id && nuevoId) {
+    const { data: uJefe } = await supabase.from('usuarios').select('id, rol').eq('id', jefe_id).maybeSingle();
+    const upJefe = {
+      departamento_id: nuevoId,
+      area: nomLimpio,
+      reporta_a_id: (gerente_id && gerente_id !== jefe_id) ? gerente_id : null
+    };
+    if (uJefe && ['empleado', 'encargado'].includes(uJefe.rol)) {
+      upJefe.rol = 'jefe_area';
+    }
+    await supabase.from('usuarios').update(upJefe).eq('id', jefe_id);
+  }
+
+  return nuevoId;
 };
 
 // 7. ELIMINACIÓN FÍSICA DEFINITIVA (LIMPIA BUCKET DE FOTOS + REFERENCIAS + TABLA USUARIOS)

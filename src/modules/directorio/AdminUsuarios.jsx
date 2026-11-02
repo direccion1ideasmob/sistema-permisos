@@ -220,6 +220,7 @@ export default function AdminUsuarios() {
           <ModalColaborador 
             onClose={() => setModalAbierto(false)} 
             onSuccess={() => { setModalAbierto(false); cargarDatos(); }}
+            usuarios={usuarios}
             departamentos={departamentos} 
             areas={areasUnicas} 
             puestos={puestosUnicos} 
