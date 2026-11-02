@@ -33,6 +33,25 @@ export const esRolMando = (rol) => {
   return ROLES_JEFATURA_DEPARTAMENTO.includes(r);
 };
 
+// Formateador para el Organigrama: NOMBRE(S) + APELLIDOS
+export const formatearNombreNaturalMayus = (u) => {
+  if (!u) return '';
+  if (typeof u === 'string') return u.trim().toUpperCase();
+  const nom = (u.nombre || '').trim();
+  const pat = (u.apellido_paterno || '').trim();
+  const mat = (u.apellido_materno || '').trim();
+  if (nom || pat) {
+    return [nom, pat, mat].filter(Boolean).join(' ').toUpperCase();
+  }
+  return (u.nombre_completo || '').trim().toUpperCase();
+};
+
+export const compararPorNombreNatural = (a, b) => {
+  const nomA = formatearNombreNaturalMayus(a);
+  const nomB = formatearNombreNaturalMayus(b);
+  return nomA.localeCompare(nomB, 'es', { sensitivity: 'base' });
+};
+
 export const obtenerBadgeRol = (rol, modoOscuro) => {
   const r = (rol || 'empleado').toLowerCase().trim();
 
@@ -103,6 +122,7 @@ export const obtenerNombreCorto = (u) => {
   return `${partes[0]} ${partes[partes.length - 2]}`.toUpperCase();
 };
 
+// Ruta general del departamento (para cabeceras del árbol y vista previa del departamento)
 export const describirRutaEcualizador = (depto, usuarios = []) => {
   if (!depto) {
     return {
@@ -123,7 +143,7 @@ export const describirRutaEcualizador = (depto, usuarios = []) => {
 
   const pasosEmp = [];
   if (depto.emp_requiere_jefe !== false && (jefeObj || depto.nombre === 'RECURSOS HUMANOS')) {
-    pasosEmp.push(jefeObj ? nomJefe : 'Sub-jefa Área');
+    pasosEmp.push(jefeObj ? nomJefe : 'Jefe Inmediato');
   }
   if (depto.emp_requiere_gerente === true && gerenteObj && !esGerenteMismoRH && (!jefeObj || gerenteObj.id !== jefeObj.id)) {
     pasosEmp.push(nomGerente);
@@ -142,6 +162,87 @@ export const describirRutaEcualizador = (depto, usuarios = []) => {
     jefeObj,
     gerenteObj
   };
+};
+
+// Ruta exacta e individual de un colaborador (respeta si se le cambió el Jefe Inmediato en su tarjeta)
+export const describirRutaColaborador = (colaborador, depto, usuarios = []) => {
+  if (!colaborador) return 'Directo a RH';
+
+  const userId = colaborador.id;
+  const rolSol = (colaborador.rol || 'empleado').toLowerCase().trim();
+  const reportaAId = colaborador.reporta_a_id || null;
+
+  const rhObj = usuarios.find(u => u.rol === 'gerente_rh' && u.activo !== false);
+  const gerenteObj = depto?.gerente_id ? usuarios.find(u => u.id === depto.gerente_id) : null;
+  const esGerenteMismoRH = gerenteObj && (gerenteObj.rol === 'gerente_rh' || (rhObj && gerenteObj.id === rhObj.id));
+
+  // 1. Si el colaborador es un Gerente / Validador Superior
+  const esValidador =
+    esRolValidadorSuperior(rolSol) ||
+    rolSol === 'superadmin' ||
+    (depto?.gerente_id && depto.gerente_id === userId);
+
+  if (esValidador) {
+    return rolSol === 'gerente_rh' ? 'Autorización Directa RH' : 'RH';
+  }
+
+  // 2. Si el colaborador es el Jefe Titular del Departamento (o tiene subordinados a su cargo)
+  const tieneSubordinados = usuarios.some(u => u.activo !== false && u.reporta_a_id === userId && u.id !== userId);
+  const esJefe =
+    (depto?.jefe_id && depto.jefe_id === userId) ||
+    rolSol === 'jefe_area' ||
+    rolSol === 'rh_nominas' ||
+    tieneSubordinados;
+
+  if (esJefe) {
+    const pasosJefe = [];
+    // Si a este jefe se le asignó un superior específico distinto al gerente del depto, mostrarlo
+    if (reportaAId && reportaAId !== userId) {
+      const supJefe = usuarios.find(u => u.id === reportaAId);
+      if (supJefe && supJefe.rol !== 'gerente_rh' && (!rhObj || supJefe.id !== rhObj.id)) {
+        if (depto?.jefe_requiere_gerente !== false) {
+          pasosJefe.push(obtenerNombreCorto(supJefe));
+        }
+      }
+    } else if (depto?.jefe_requiere_gerente !== false && gerenteObj && !esGerenteMismoRH && gerenteObj.id !== userId) {
+      pasosJefe.push(obtenerNombreCorto(gerenteObj));
+    }
+    pasosJefe.push('RH');
+    return pasosJefe.join(' → ');
+  }
+
+  // 3. Es un Empleado / Operador: priorizar SIEMPRE su reporta_a_id individual si lo tiene
+  const pasosEmp = [];
+  const swEmpRequiereJefe = depto ? depto.emp_requiere_jefe !== false : true;
+  const swEmpRequiereGerente = depto ? Boolean(depto.emp_requiere_gerente) : false;
+
+  let jefeEfectivoObj = null;
+  if (reportaAId && reportaAId !== userId) {
+    jefeEfectivoObj = usuarios.find(u => u.id === reportaAId) || null;
+  } else if (swEmpRequiereJefe && depto?.jefe_id && depto.jefe_id !== userId) {
+    jefeEfectivoObj = usuarios.find(u => u.id === depto.jefe_id) || null;
+  }
+
+  if (jefeEfectivoObj) {
+    const esSuJefeDirectoRH = jefeEfectivoObj.rol === 'gerente_rh' || (rhObj && jefeEfectivoObj.id === rhObj.id);
+    const esSuJefeDirectoElGerente = gerenteObj && jefeEfectivoObj.id === gerenteObj.id;
+
+    if (!esSuJefeDirectoRH) {
+      // Si su jefe inmediato individual o de depto está activo
+      if (reportaAId || swEmpRequiereJefe) {
+        pasosEmp.push(obtenerNombreCorto(jefeEfectivoObj));
+      }
+      // Agregar Gerencia en Firma 2 si el switch de empleados->gerente está activo y no es la misma persona
+      if (swEmpRequiereGerente && gerenteObj && !esGerenteMismoRH && !esSuJefeDirectoElGerente) {
+        pasosEmp.push(obtenerNombreCorto(gerenteObj));
+      }
+    }
+  } else if (swEmpRequiereGerente && gerenteObj && !esGerenteMismoRH) {
+    pasosEmp.push(obtenerNombreCorto(gerenteObj));
+  }
+
+  pasosEmp.push('RH');
+  return pasosEmp.join(' → ');
 };
 
 export const obtenerClaveOrdenApellido = (u) => {

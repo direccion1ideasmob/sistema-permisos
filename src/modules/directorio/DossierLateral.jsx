@@ -1,9 +1,13 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle, GitBranch } from 'lucide-react';
-import { estandarizar, describirRutaEcualizador, esRolValidadorSuperior } from './utils/directorioHelpers';
+import {
+  estandarizar,
+  describirRutaColaborador,
+  formatearNombreNaturalMayus,
+  compararPorNombreNatural
+} from './utils/directorioHelpers';
 import { actualizarExpedienteColaborador, eliminarColaboradorDefinitivo } from './services/directorioService';
 import { subirImagenUsuario } from '../../core/services/storageService';
-import { compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 
 export default function DossierLateral({
   colaborador, abierto, onClose, editando, datosEdit, setDatosEdit,
@@ -21,13 +25,14 @@ export default function DossierLateral({
 
   const limpiarTexto = (txt) => txt ? estandarizar(txt.toUpperCase()) : '';
 
-  const deptoActualId = datosEdit?.departamento_id || colaborador?.departamento_id || '';
+  const deptoActualId = (editando ? datosEdit?.departamento_id : colaborador?.departamento_id) || '';
   const deptoActualObj = departamentos.find(d => d.id === deptoActualId);
 
-  const infoRutaEcualizador = useMemo(
-    () => deptoActualObj ? describirRutaEcualizador(deptoActualObj, usuarios) : null,
-    [deptoActualObj, usuarios]
-  );
+  // Calcular la Ruta de Firmas INDIVIDUAL exacta del colaborador (en lectura o en edición en vivo)
+  const rutaFirmasIndividual = useMemo(() => {
+    const sujeto = editando ? { ...colaborador, ...datosEdit } : colaborador;
+    return describirRutaColaborador(sujeto, deptoActualObj, usuarios);
+  }, [editando, colaborador, datosEdit, deptoActualObj, usuarios]);
 
   const personalMismoDepto = useMemo(() => {
     if (!deptoActualId) return [];
@@ -53,7 +58,7 @@ export default function DossierLateral({
     return [...conjunto].filter(Boolean).sort();
   }, [personalMismoDepto, datosEdit?.puesto]);
 
-  // Permitir asignar cualquier mando activo de la empresa (ordenando primero los de su mismo departamento)
+  // Permitir asignar a cualquier mando activo (ordenados por nombre natural, primero los de su departamento)
   const posiblesSuperiores = useMemo(() => {
     if (!colaborador) return [];
     return (usuarios || [])
@@ -62,19 +67,18 @@ export default function DossierLateral({
         const aMismo = a.departamento_id === deptoActualId ? 0 : 1;
         const bMismo = b.departamento_id === deptoActualId ? 0 : 1;
         if (aMismo !== bMismo) return aMismo - bMismo;
-        return compararPorApellidoPaterno(a, b);
+        return compararPorNombreNatural(a, b);
       });
   }, [usuarios, deptoActualId, colaborador]);
 
   if (!colaborador || !abierto) return null;
 
-  const nombreMostrar = (editando ? datosEdit.nombre_completo : colaborador.nombre_completo) || 'Colaborador';
+  const nombreMostrar = (editando ? datosEdit.nombre_completo : formatearNombreNaturalMayus(colaborador)) || 'Colaborador';
   const urlFoto = (editando ? datosEdit.foto_url : colaborador.foto_url) || 
     `https://ui-avatars.com/api/?name=${encodeURIComponent(nombreMostrar)}&background=16a34a&color=fff&bold=true`;
   const urlFirma = editando ? datosEdit.firma_url : colaborador.firma_url;
   const sedeNombre = sedes.find(s => s.id === (editando ? datosEdit.sede_id : colaborador.sede_id))?.nombre || 'Sin Sede';
 
-  // Resolver quién es su jefe inmediato efectivo (reporta_a_id directo o el jefe_id/gerente_id del Ecualizador)
   const superiorEfectivoObj = (() => {
     if (colaborador.reporta_a_id) {
       const sup = usuarios.find(u => u.id === colaborador.reporta_a_id);
@@ -92,7 +96,7 @@ export default function DossierLateral({
   })();
 
   const superiorNombre = superiorEfectivoObj
-    ? superiorEfectivoObj.nombre_completo
+    ? formatearNombreNaturalMayus(superiorEfectivoObj)
     : 'Directo a Recursos Humanos';
 
   const handleNombrePartes = (campo, valor) => {
@@ -247,7 +251,7 @@ export default function DossierLateral({
             <div style={{ position: 'relative', width: editando ? '76px' : '95px', height: editando ? '76px' : '105px', flexShrink: 0 }}>
               <img 
                 src={urlFoto} alt="" 
-                onClick={(e) => { e.stopPropagation(); if (setFotoZoom) setFotoZoom({ url: urlFoto, nombre: colaborador.nombre_completo, puesto: colaborador.puesto }); }}
+                onClick={(e) => { e.stopPropagation(); if (setFotoZoom) setFotoZoom({ url: urlFoto, nombre: formatearNombreNaturalMayus(colaborador), puesto: colaborador.puesto }); }}
                 style={{ width: '100%', height: '100%', borderRadius: '18px', objectFit: 'cover', border: `1.5px solid ${c.border}`, cursor: 'pointer' }} 
               />
               {editando && (
@@ -279,7 +283,7 @@ export default function DossierLateral({
               ) : (
                 <>
                   <div style={{ fontSize: '17px', fontWeight: '900', color: c.text, lineHeight: '1.2', textTransform: 'uppercase', marginBottom: '4px', textAlign: 'right' }}>
-                    {colaborador.nombre_completo}
+                    {formatearNombreNaturalMayus(colaborador)}
                   </div>
                   <div style={{ fontSize: '13px', color: c.accent, fontWeight: '800', textTransform: 'uppercase', textAlign: 'right' }}>
                     {colaborador.puesto || 'SIN PUESTO'}
@@ -290,7 +294,7 @@ export default function DossierLateral({
               {!editando && colaborador.firma_url && (
                 <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
                   <div style={{ background: '#ffffff', padding: '4px 8px', borderRadius: '8px', border: `1.5px solid ${c.border}` }}>
-                    <img src={colaborador.firma_url} alt="Firma" onClick={() => setFotoZoom && setFotoZoom({ url: colaborador.firma_url, nombre: `Firma de ${colaborador.nombre_completo}` })} style={{ maxHeight: '50px', maxWidth: '150px', objectFit: 'contain', cursor: 'pointer' }} />
+                    <img src={colaborador.firma_url} alt="Firma" onClick={() => setFotoZoom && setFotoZoom({ url: colaborador.firma_url, nombre: `Firma de ${formatearNombreNaturalMayus(colaborador)}` })} style={{ maxHeight: '50px', maxWidth: '150px', objectFit: 'contain', cursor: 'pointer' }} />
                   </div>
                 </div>
               )}
@@ -315,7 +319,7 @@ export default function DossierLateral({
             </div>
           )}
 
-          {/* BLOQUE 1: ESTRUCTURA, PUESTO Y ECUALIZADOR */}
+          {/* BLOQUE 1: ESTRUCTURA, PUESTO Y RUTA DE FIRMAS */}
           <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', border: `1.5px solid ${c.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1.5px solid ${c.borderDivider}` }}>
               <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Briefcase size={14} /></div>
@@ -441,21 +445,31 @@ export default function DossierLateral({
                   )}
                 </div>
 
-                {/* 5. SUPERIOR EN EL ORGANIGRAMA */}
+                {/* 5. JEFE INMEDIATO INDIVIDUAL */}
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="touch-field-label">Jefe Directo / Reporta a</label>
+                  <label className="touch-field-label">Jefe Inmediato (A quién reporta esta persona)</label>
                   <select 
                     className="touch-field-input" 
                     value={datosEdit.reporta_a_id || ''} 
                     onChange={e => setDatosEdit({ ...datosEdit, reporta_a_id: e.target.value })}
                   >
-                    <option value="">Automático según el Ecualizador de su Departamento</option>
+                    <option value="">Usar el Jefe del Departamento automáticamente</option>
                     {posiblesSuperiores.map(sup => (
                       <option key={sup.id} value={sup.id}>
-                        {sup.nombre_completo} — ({sup.area || sup.puesto})
+                        {formatearNombreNaturalMayus(sup)} — ({sup.area || sup.puesto})
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* VISTA PREVIA EN TIEMPO REAL DE LA RUTA DE FIRMAS RESULTANTE */}
+                <div style={{ gridColumn: '1 / -1', padding: '10px 12px', borderRadius: '10px', background: c.accentSoft, border: `1px solid ${c.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11.5px', fontWeight: '800', color: c.text, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <GitBranch size={13} color={c.accent} /> Ruta de Firmas resultante:
+                  </span>
+                  <strong style={{ fontSize: '12px', fontWeight: '900', color: c.accent }}>
+                    {rutaFirmasIndividual}
+                  </strong>
                 </div>
 
                 <div><label className="touch-field-label">Fecha de Nacimiento</label><input type="date" className="touch-field-input" value={datosEdit.fecha_nacimiento || ''} onChange={e => setDatosEdit({ ...datosEdit, fecha_nacimiento: e.target.value })} /></div>
@@ -467,14 +481,12 @@ export default function DossierLateral({
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Departamento</span><strong style={{ color: c.text }}>{deptoActualObj?.nombre || colaborador.departamentos?.nombre || 'No asignado'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Subdepto / Área</span><strong style={{ color: c.text }}>{colaborador.area || 'General'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Jefe Inmediato</span><strong style={{ color: c.text }}>{superiorNombre}</strong></div>
-                {infoRutaEcualizador && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}>
-                    <span style={{ color: c.textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}><GitBranch size={12} color={c.accent} /> Ruta de Firmas</span>
-                    <strong style={{ color: c.accent }}>
-                      {(esJefeTitularActual || colaborador.rol === 'jefe_area') ? infoRutaEcualizador.rutaJefe : infoRutaEcualizador.rutaEmpleados}
-                    </strong>
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}>
+                  <span style={{ color: c.textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}><GitBranch size={12} color={c.accent} /> Ruta de Firmas</span>
+                  <strong style={{ color: c.accent }}>
+                    {rutaFirmasIndividual}
+                  </strong>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Tipo de Nómina</span><strong style={{ color: c.accent, textTransform: 'uppercase' }}>{colaborador.tipo_personal}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Fecha Nacimiento</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_nacimiento || 'No registrada'}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Fecha Ingreso</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_ingreso || 'No registrada'}</span></div>
@@ -517,7 +529,7 @@ export default function DossierLateral({
                       checked={datosEdit.es_titular_depto !== undefined ? Boolean(datosEdit.es_titular_depto) : esJefeTitularActual}
                       onChange={e => setDatosEdit({ ...datosEdit, es_titular_depto: e.target.checked })}
                     />
-                    <span>Establecer como Jefe Titular del departamento en el Ecualizador</span>
+                    <span>Nombrar Jefe Titular de todo el departamento</span>
                   </label>
                 )}
               </div>
