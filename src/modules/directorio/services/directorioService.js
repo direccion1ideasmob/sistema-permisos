@@ -1,7 +1,7 @@
 import { supabase } from '../../../core/api/supabaseClient';
 import { subirImagenUsuario } from '../../../core/services/storageService';
 import { resolverSedeId, resolverDepartamentoId } from '../../../core/services/catalogosService';
-import { estandarizar, esRolValidadorSuperior } from '../utils/directorioHelpers';
+import { estandarizar } from '../utils/directorioHelpers';
 
 const limpiarTexto = (txt) => {
   if (!txt) return '';
@@ -10,43 +10,7 @@ const limpiarTexto = (txt) => {
     : txt.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 };
 
-// AUXILIAR: Sincronizar vínculos de mando cuando cambia el rol de un colaborador
-const sincronizarVinculosPorRol = async ({ colaboradorId, rolNuevo, departamentoId, esTitularDepto = false }) => {
-  const rol = (rolNuevo || "empleado").toLowerCase();
-
-  // Caso A: Si ahora es empleado o caseta, NO puede tener subordinados ni ser jefe_id de un departamento
-  if (rol === "empleado" || rol === "caseta") {
-    let nuevoJefeParaSubordinados = null;
-    if (departamentoId) {
-      const { data: depto } = await supabase.from("departamentos").select("jefe_id").eq("id", departamentoId).maybeSingle();
-      if (depto?.jefe_id && depto.jefe_id !== colaboradorId) {
-        nuevoJefeParaSubordinados = depto.jefe_id;
-      }
-    }
-    await Promise.all([
-      supabase.from("usuarios").update({ reporta_a_id: nuevoJefeParaSubordinados }).eq("reporta_a_id", colaboradorId),
-      supabase.from("departamentos").update({ jefe_id: null }).eq("jefe_id", colaboradorId)
-    ]);
-  }
-
-  // Caso B: Si se marca explícitamente como Jefe Titular del departamento (o es el único jefe_area en ese depto sin jefe_id previo)
-  if (rol === "jefe_area" && departamentoId) {
-    const { data: depto } = await supabase
-      .from("departamentos")
-      .select("id, jefe_id, gerente_id")
-      .eq("id", departamentoId)
-      .maybeSingle();
-
-    if (depto && (esTitularDepto || !depto.jefe_id)) {
-      await supabase.from("departamentos").update({ jefe_id: colaboradorId }).eq("id", departamentoId);
-      if (depto.gerente_id && depto.gerente_id !== colaboradorId) {
-        await supabase.from("usuarios").update({ reporta_a_id: depto.gerente_id }).eq("id", colaboradorId);
-      }
-    }
-  }
-};
-
-// 1. CARGAR TODO EL DIRECTORIO Y CATÁLOGOS (INCLUYENDO ECUALIZADOR DE DEPARTAMENTOS)
+// 1. CARGAR TODO EL DIRECTORIO Y CATÁLOGOS
 export const obtenerDatosDirectorio = async () => {
   const [resSedes, resUsuarios, resDeptos] = await Promise.all([
     supabase.from('sedes').select('id, nombre').order('nombre', { ascending: true }),
@@ -107,7 +71,7 @@ export const obtenerDatosDirectorio = async () => {
   };
 };
 
-// 2. REGISTRAR NUEVO COLABORADOR COMPLETO
+// 2. REGISTRAR NUEVO COLABORADOR
 export const registrarNuevoColaborador = async ({
   formData, creandoNuevo, textosNuevos, sedes, departamentos, areas, puestos, fotoArchivo, firmaArchivo
 }) => {
@@ -144,17 +108,7 @@ export const registrarNuevoColaborador = async ({
 
   let deptoFinalId = formData.departamento_id;
   if (creandoNuevo.depto && textosNuevos.depto.trim()) {
-    deptoFinalId = await resolverDepartamentoId(
-      textosNuevos.depto,
-      'produccion',
-      departamentos,
-      {
-        gerente_id: formData.nuevo_depto_gerente_id || null,
-        emp_requiere_jefe: formData.nuevo_depto_emp_jefe !== undefined ? formData.nuevo_depto_emp_jefe : true,
-        emp_requiere_gerente: formData.nuevo_depto_emp_gerente !== undefined ? formData.nuevo_depto_emp_gerente : false,
-        jefe_requiere_gerente: formData.nuevo_depto_jefe_gerente !== undefined ? formData.nuevo_depto_jefe_gerente : true
-      }
-    );
+    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, 'produccion', departamentos);
   }
 
   let areaFinal = formData.area;
@@ -183,13 +137,12 @@ export const registrarNuevoColaborador = async ({
 
   const nuevoUsuarioId = crypto.randomUUID();
 
-  // Si no se especificó reporta_a_id manualmente, heredarlo inteligentemente del departamento
   let reportaAFinal = formData.reporta_a_id || null;
   const deptoSeleccionadoObj = departamentos.find(d => d.id === deptoFinalId);
   if (!reportaAFinal && deptoSeleccionadoObj) {
-    if (formData.rol === 'empleado' && deptoSeleccionadoObj.jefe_id) {
+    if (deptoSeleccionadoObj.jefe_id) {
       reportaAFinal = deptoSeleccionadoObj.jefe_id;
-    } else if (formData.rol === 'jefe_area' && deptoSeleccionadoObj.gerente_id) {
+    } else if (deptoSeleccionadoObj.gerente_id) {
       reportaAFinal = deptoSeleccionadoObj.gerente_id;
     }
   }
@@ -216,7 +169,7 @@ export const registrarNuevoColaborador = async ({
     departamento_id: deptoFinalId,
     area: areaFinal.toUpperCase(),
     puesto: puestoFinal ? puestoFinal.toUpperCase() : null,
-    rol: formData.rol,
+    rol: formData.rol || 'empleado',
     reporta_a_id: reportaAFinal,
     usuario_login: loginLimpio,
     pin: formData.pin.trim(),
@@ -226,27 +179,10 @@ export const registrarNuevoColaborador = async ({
   }]);
 
   if (dbError) throw dbError;
-
-  const actualizacionDepto = {};
-  if (esRolValidadorSuperior(formData.rol)) {
-    // Si se crea un departamento nuevo para este Validador Superior o si se marca como cabeza de su departamento
-    if (creandoNuevo.depto || formData.es_titular_depto) {
-      actualizacionDepto.gerente_id = nuevoUsuarioId;
-    }
-  } else if (formData.rol === 'jefe_area') {
-    if (creandoNuevo.depto || formData.es_titular_depto || !deptoSeleccionadoObj?.jefe_id) {
-      actualizacionDepto.jefe_id = nuevoUsuarioId;
-    }
-  }
-
-  if (Object.keys(actualizacionDepto).length > 0 && deptoFinalId) {
-    await supabase.from('departamentos').update(actualizacionDepto).eq('id', deptoFinalId);
-  }
-
   return nuevoUsuarioId;
 };
 
-// 3. ACTUALIZAR EXPEDIENTE DESDE DOSSIER
+// 3. ACTUALIZAR EXPEDIENTE DESDE DOSSIER (DATOS LABORALES Y PERSONALES)
 export const actualizarExpedienteColaborador = async ({
   colaboradorId, datosEdit, creandoNuevo = {}, textosNuevos = {}, sedes = [], departamentos = []
 }) => {
@@ -267,14 +203,11 @@ export const actualizarExpedienteColaborador = async ({
   let deptoFinalId = datosEdit.departamento_id || null;
   if (creandoNuevo.depto && textosNuevos.depto?.trim()) {
     deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, 'produccion', departamentos);
-  } else if (!deptoFinalId && datosEdit.departamento_texto?.trim()) {
-    deptoFinalId = await resolverDepartamentoId(datosEdit.departamento_texto, 'produccion', departamentos);
   }
 
   const nombreDeptoSeleccionado = departamentos.find(d => d.id === deptoFinalId)?.nombre || textosNuevos.depto || 'GENERAL';
   const areaFinal = (datosEdit.area || nombreDeptoSeleccionado).trim().toUpperCase();
 
-  // Verificar si el PIN cambió para limpiar suscripciones Push de dispositivos viejos
   const { data: usuarioPrevio } = await supabase.from('usuarios').select('pin').eq('id', colaboradorId).maybeSingle();
   const pinCambio = usuarioPrevio && datosEdit.pin?.trim() && String(usuarioPrevio.pin).trim() !== String(datosEdit.pin).trim();
 
@@ -310,16 +243,10 @@ export const actualizarExpedienteColaborador = async ({
   if (pinCambio) {
     await supabase.from('suscripciones_push').delete().eq('usuario_id', colaboradorId);
   }
-  await sincronizarVinculosPorRol({
-    colaboradorId,
-    rolNuevo: datosEdit.rol,
-    departamentoId: deptoFinalId,
-    esTitularDepto: Boolean(datosEdit.es_titular_depto)
-  });
 };
 
-// 4. REUBICACIÓN RÁPIDA DE EMPLEADO DESDE EL ÁRBOL (Depto, Área, Puesto, Rol y Superior)
-export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId, area, puesto, rol, reportaAId, esTitularDepto = false }) => {
+// 4. REUBICAR UN EMPLEADO EN EL ORGANIGRAMA
+export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId, area, puesto, rol, reportaAId }) => {
   const { error } = await supabase
     .from('usuarios')
     .update({
@@ -332,12 +259,6 @@ export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId
     .eq('id', colaboradorId);
 
   if (error) throw error;
-  await sincronizarVinculosPorRol({
-    colaboradorId,
-    rolNuevo: rol,
-    departamentoId,
-    esTitularDepto
-  });
 };
 
 // 5. BAJA Y REACTIVACIÓN LABORAL
@@ -357,13 +278,13 @@ export const reactivarColaborador = async (id) => {
   if (error) throw error;
 };
 
-// 6. GUARDAR CONFIGURACIÓN COMPLETA DEL ECUALIZADOR DE UN DEPARTAMENTO
+// 6. GUARDAR CONFIGURACIÓN DE UN DEPARTAMENTO (NUNCA CAMBIA EL DEPARTAMENTO PERSONAL DEL GERENTE O JEFE)
 export const actualizarDepartamentoSeguro = async (
   deptoId,
   nuevoNombre,
   nuevaClasif,
   nombreAnterior = '',
-  ecualizador = null
+  configFirmas = null
 ) => {
   const nomLimpio = limpiarTexto(nuevoNombre);
   if (!nomLimpio) throw new Error("El nombre del departamento no puede estar vacío.");
@@ -379,10 +300,9 @@ export const actualizarDepartamentoSeguro = async (
     throw new Error(`Ya existe otro departamento llamado "${nomLimpio}".`);
   }
 
-  // Determinar clasificación coherente con el gerente seleccionado (para mantener compatibilidad visual)
   let clasifLimpia = (nuevaClasif || 'produccion').toLowerCase().trim();
-  if (ecualizador && ecualizador.gerente_id) {
-    const { data: gerUser } = await supabase.from('usuarios').select('rol').eq('id', ecualizador.gerente_id).maybeSingle();
+  if (configFirmas && configFirmas.gerente_id) {
+    const { data: gerUser } = await supabase.from('usuarios').select('rol').eq('id', configFirmas.gerente_id).maybeSingle();
     if (gerUser?.rol === 'gerente_admin') clasifLimpia = 'administrativo';
     else if (gerUser?.rol === 'gerente_produccion') clasifLimpia = 'produccion';
     else if (gerUser?.rol === 'gerente_rh') clasifLimpia = 'rh';
@@ -393,12 +313,12 @@ export const actualizarDepartamentoSeguro = async (
     clasificacion: clasifLimpia
   };
 
-  if (ecualizador) {
-    payloadUpdate.jefe_id = ecualizador.jefe_id || null;
-    payloadUpdate.gerente_id = ecualizador.gerente_id || null;
-    payloadUpdate.emp_requiere_jefe = Boolean(ecualizador.emp_requiere_jefe);
-    payloadUpdate.emp_requiere_gerente = Boolean(ecualizador.emp_requiere_gerente);
-    payloadUpdate.jefe_requiere_gerente = Boolean(ecualizador.jefe_requiere_gerente);
+  if (configFirmas) {
+    payloadUpdate.jefe_id = configFirmas.jefe_id || null;
+    payloadUpdate.gerente_id = configFirmas.gerente_id || null;
+    payloadUpdate.emp_requiere_jefe = Boolean(configFirmas.emp_requiere_jefe);
+    payloadUpdate.emp_requiere_gerente = Boolean(configFirmas.emp_requiere_gerente);
+    payloadUpdate.jefe_requiere_gerente = Boolean(configFirmas.jefe_requiere_gerente);
   }
 
   const { error } = await supabase
@@ -408,22 +328,15 @@ export const actualizarDepartamentoSeguro = async (
 
   if (error) throw error;
 
-  // Si se asignó un Jefe Titular en el Ecualizador, asegurar que tenga rol de mando y que reporte al Gerente del depto
-  if (ecualizador && ecualizador.jefe_id) {
-    const { data: jefeActual } = await supabase.from('usuarios').select('id, rol').eq('id', ecualizador.jefe_id).maybeSingle();
-    const updatesJefe = {};
-    if (jefeActual && ['empleado', 'encargado'].includes(jefeActual.rol)) {
-      updatesJefe.rol = 'jefe_area';
-    }
-    if (ecualizador.gerente_id && ecualizador.gerente_id !== ecualizador.jefe_id) {
-      updatesJefe.reporta_a_id = ecualizador.gerente_id;
-    }
-    if (Object.keys(updatesJefe).length > 0) {
-      await supabase.from('usuarios').update(updatesJefe).eq('id', ecualizador.jefe_id);
+  // Si se designó un Jefe de Área (Firma 1), aseguramos que tenga permiso de firmar (jefe_area) SIN MOVERLO DE SU DEPARTAMENTO
+  if (configFirmas && configFirmas.jefe_id) {
+    const { data: jefeActual } = await supabase.from('usuarios').select('id, rol').eq('id', configFirmas.jefe_id).maybeSingle();
+    if (jefeActual && jefeActual.rol === 'empleado') {
+      await supabase.from('usuarios').update({ rol: 'jefe_area' }).eq('id', configFirmas.jefe_id);
     }
   }
 
-  // Si el departamento tenía empleados cuya área se llamaba igual al departamento anterior, actualizarlos también
+  // Si se renombró el departamento, actualizar el texto de área de quienes tenían el nombre anterior
   if (nombreAnterior && limpiarTexto(nombreAnterior) !== nomLimpio) {
     await supabase
       .from('usuarios')
@@ -433,7 +346,7 @@ export const actualizarDepartamentoSeguro = async (
   }
 };
 
-// 6.B CREAR NUEVO DEPARTAMENTO DIRECTAMENTE CON SU ECUALIZADOR
+// 6.B CREAR NUEVO DEPARTAMENTO (SIN MOVER DE DEPARTAMENTO AL JEFE NI AL GERENTE)
 export const crearDepartamentoConEcualizador = async ({
   nombre,
   jefe_id = null,
@@ -460,32 +373,24 @@ export const crearDepartamentoConEcualizador = async ({
     jefe_requiere_gerente
   });
 
-  // Si se designó un Jefe Titular para el nuevo departamento, moverlo a este departamento y asegurar su rol
-  if (jefe_id && nuevoId) {
+  // Solo asegurar que quien pusiste como Jefe tenga rol para poder firmar, pero JAMÁS cambiar su departamento_id
+  if (jefe_id) {
     const { data: uJefe } = await supabase.from('usuarios').select('id, rol').eq('id', jefe_id).maybeSingle();
-    const upJefe = {
-      departamento_id: nuevoId,
-      area: nomLimpio,
-      reporta_a_id: (gerente_id && gerente_id !== jefe_id) ? gerente_id : null
-    };
-    if (uJefe && ['empleado', 'encargado'].includes(uJefe.rol)) {
-      upJefe.rol = 'jefe_area';
+    if (uJefe && uJefe.rol === 'empleado') {
+      await supabase.from('usuarios').update({ rol: 'jefe_area' }).eq('id', jefe_id);
     }
-    await supabase.from('usuarios').update(upJefe).eq('id', jefe_id);
   }
 
   return nuevoId;
 };
 
-// 7. ELIMINACIÓN FÍSICA DEFINITIVA (LIMPIA BUCKET DE FOTOS + REFERENCIAS + TABLA USUARIOS)
+// 7. ELIMINACIÓN FÍSICA DEFINITIVA
 export const eliminarColaboradorDefinitivo = async (usuarioId) => {
   if (!usuarioId) throw new Error("ID de usuario inválido.");
 
-  // A) Borrar foto de perfil y firma digitalizada del Bucket para liberar espacio
   const archivos = [`perfil_${usuarioId}.jpg`, `firma_${usuarioId}.png`];
   await supabase.storage.from('fotos_usuarios').remove(archivos);
 
-  // B) Desvincular si era jefe, gerente o RH en la tabla departamentos (evita error Foreign Key)
   await Promise.all([
     supabase.from('departamentos').update({ jefe_id: null }).eq('jefe_id', usuarioId),
     supabase.from('departamentos').update({ gerente_id: null }).eq('gerente_id', usuarioId),
@@ -493,7 +398,6 @@ export const eliminarColaboradorDefinitivo = async (usuarioId) => {
     supabase.from('usuarios').update({ reporta_a_id: null }).eq('reporta_a_id', usuarioId)
   ]);
 
-  // C) Limpiar suscripciones push y permisos asociados a este usuario
   await Promise.all([
     supabase.from('suscripciones_push').delete().eq('usuario_id', usuarioId),
     supabase.from('permisos').delete().eq('usuario_id', usuarioId),
@@ -502,7 +406,6 @@ export const eliminarColaboradorDefinitivo = async (usuarioId) => {
     supabase.from('permisos').update({ firma_3_id: null }).eq('firma_3_id', usuarioId)
   ]);
 
-  // D) Eliminar definitivamente el registro de la tabla usuarios
   const { error } = await supabase.from('usuarios').delete().eq('id', usuarioId);
   if (error) throw error;
 };

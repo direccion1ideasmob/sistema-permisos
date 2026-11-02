@@ -2,14 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronDown, ChevronRight, Edit2, Lock, Unlock, X, Save,
   Crown, ShieldCheck, User, CornerDownRight, Briefcase,
-  ChevronsDown, ChevronsUp, Sliders, Plus, GitBranch
+  ChevronsDown, ChevronsUp, Plus
 } from 'lucide-react';
 import {
   obtenerBadgeRol,
   estandarizar,
   esRolValidadorSuperior,
-  describirRutaEcualizador,
-  describirRutaColaborador,
   obtenerNombreCorto,
   formatearNombreNaturalMayus,
   compararPorNombreNatural
@@ -156,54 +154,55 @@ export default function VistaArbol({
     }
   };
 
-  const abrirEcualizadorDepto = (depto, e) => {
+  // En Firma 2, si el departamento tiene emp_requiere_gerente = true mostramos el gerente_id; si es false mostramos '' (No requiere)
+  const abrirModalDepto = (depto, e) => {
     e.stopPropagation();
+    const firma2Activa = depto.emp_requiere_gerente && depto.gerente_id ? depto.gerente_id : '';
     setModalDepto({
       modo: 'editar',
       id: depto.id,
       nombreAnterior: depto.nombre,
       nombre: depto.nombre,
       clasificacion: depto.clasificacion || 'produccion',
-      gerente_id: depto.gerente_id || '',
       jefe_id: depto.jefe_id || '',
-      emp_requiere_jefe: Boolean(depto.jefe_id) || depto.nombre === 'RECURSOS HUMANOS',
-      emp_requiere_gerente: Boolean(depto.emp_requiere_gerente),
-      jefe_requiere_gerente: Boolean(depto.gerente_id)
+      firma_2_gerente_id: firma2Activa,
+      gerente_rama_original: depto.gerente_id || ''
     });
   };
 
   const abrirNuevoDepartamento = () => {
-    const primerGerente = usuarios.find(u => u.rol === 'gerente_produccion' && u.activo) || usuarios.find(u => esRolValidadorSuperior(u.rol) && u.activo);
+    const primerGerente = usuarios.find(u => u.rol === 'gerente_produccion' && u.activo) || '';
     setModalDepto({
       modo: 'crear',
       id: null,
       nombreAnterior: '',
       nombre: '',
       clasificacion: 'produccion',
-      gerente_id: primerGerente?.id || '',
       jefe_id: '',
-      emp_requiere_jefe: false,
-      emp_requiere_gerente: true,
-      jefe_requiere_gerente: true
+      firma_2_gerente_id: primerGerente?.id || '',
+      gerente_rama_original: primerGerente?.id || ''
     });
   };
 
-  const guardarEcualizadorDepto = async (e) => {
+  const guardarModalDepto = async (e) => {
     e.preventDefault();
     if (!modalDepto?.nombre?.trim()) return alert("Ingresa un nombre para el departamento.");
     setGuardando(true);
     try {
       const tieneJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre.trim().toUpperCase() === 'RECURSOS HUMANOS';
-      const tieneGerente = Boolean(modalDepto.gerente_id);
+      const tieneFirma2 = Boolean(modalDepto.firma_2_gerente_id);
+
+      // Si eligió un Gerente en Firma 2, ese es su gerente_id; si eligió "No requiere", conservamos su gerente de rama (ej. Pedro en Ingeniería) pero con emp_requiere_gerente = false
+      const gerenteRamaFinal = modalDepto.firma_2_gerente_id || modalDepto.gerente_rama_original || null;
 
       if (modalDepto.modo === 'crear') {
         await crearDepartamentoConEcualizador({
           nombre: modalDepto.nombre,
           jefe_id: modalDepto.jefe_id || null,
-          gerente_id: modalDepto.gerente_id || null,
+          gerente_id: gerenteRamaFinal,
           emp_requiere_jefe: tieneJefe,
-          emp_requiere_gerente: tieneGerente ? Boolean(modalDepto.emp_requiere_gerente) : false,
-          jefe_requiere_gerente: tieneGerente
+          emp_requiere_gerente: tieneFirma2,
+          jefe_requiere_gerente: Boolean(gerenteRamaFinal)
         });
       } else {
         await actualizarDepartamentoSeguro(
@@ -213,10 +212,10 @@ export default function VistaArbol({
           modalDepto.nombreAnterior,
           {
             jefe_id: modalDepto.jefe_id || null,
-            gerente_id: modalDepto.gerente_id || null,
+            gerente_id: gerenteRamaFinal,
             emp_requiere_jefe: tieneJefe,
-            emp_requiere_gerente: tieneGerente ? Boolean(modalDepto.emp_requiere_gerente) : false,
-            jefe_requiere_gerente: tieneGerente
+            emp_requiere_gerente: tieneFirma2,
+            jefe_requiere_gerente: Boolean(gerenteRamaFinal)
           }
         );
       }
@@ -231,7 +230,6 @@ export default function VistaArbol({
 
   const abrirEdicionUsuarioArbol = (u, e) => {
     e.stopPropagation();
-    const deptoUser = departamentos.find(d => d.id === u.departamento_id);
     setUserEditando({
       id: u.id,
       nombre_completo: formatearNombreNaturalMayus(u),
@@ -239,8 +237,7 @@ export default function VistaArbol({
       area: u.area || '',
       puesto: u.puesto || '',
       rol: u.rol || 'empleado',
-      reporta_a_id: u.reporta_a_id || '',
-      es_titular_depto: Boolean(deptoUser && deptoUser.jefe_id === u.id)
+      reporta_a_id: u.reporta_a_id || ''
     });
   };
 
@@ -255,13 +252,12 @@ export default function VistaArbol({
         area: userEditando.area,
         puesto: userEditando.puesto,
         rol: userEditando.rol,
-        reportaAId: userEditando.reporta_a_id || null,
-        esTitularDepto: Boolean(userEditando.es_titular_depto)
+        reportaAId: userEditando.reporta_a_id || null
       });
       setUserEditando(null);
       if (recargarDatos) await recargarDatos();
     } catch (err) {
-      alert("Error al reubicar colaborador: " + err.message);
+      alert("Error al guardar: " + err.message);
     } finally {
       setGuardando(false);
     }
@@ -312,27 +308,6 @@ export default function VistaArbol({
         return compararPorNombreNatural(a, b);
       });
   }, [usuarios, modalDepto]);
-
-  const vistaPreviaEcualizador = useMemo(() => {
-    if (!modalDepto) return null;
-    const tieneJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre.trim().toUpperCase() === 'RECURSOS HUMANOS';
-    const tieneGerente = Boolean(modalDepto.gerente_id);
-    return describirRutaEcualizador(
-      {
-        ...modalDepto,
-        emp_requiere_jefe: tieneJefe,
-        emp_requiere_gerente: tieneGerente ? Boolean(modalDepto.emp_requiere_gerente) : false,
-        jefe_requiere_gerente: tieneGerente
-      },
-      usuarios
-    );
-  }, [modalDepto, usuarios]);
-
-  const rutaEnVivoUserEditando = useMemo(() => {
-    if (!userEditando) return '';
-    const dObj = departamentos.find(d => d.id === userEditando.departamento_id);
-    return describirRutaColaborador(userEditando, dObj, usuarios);
-  }, [userEditando, departamentos, usuarios]);
 
   return (
     <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden', boxSizing: 'border-box', fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' }}>
@@ -443,7 +418,7 @@ export default function VistaArbol({
         }
       `}</style>
 
-      {/* MICRO-BARRA SUPERIOR */}
+      {/* BARRA SUPERIOR */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
         {seguridadDesbloqueada && (
           <button
@@ -509,7 +484,7 @@ export default function VistaArbol({
           }}
         >
           {seguridadDesbloqueada ? <Unlock size={13} /> : <Lock size={13} />}
-          {!esMobile && <span>{seguridadDesbloqueada ? 'Edición Activa' : 'Editar Organigrama'}</span>}
+          {!esMobile && <span>{seguridadDesbloqueada ? 'Edición Activa' : 'Editar'}</span>}
         </button>
       </div>
 
@@ -531,7 +506,7 @@ export default function VistaArbol({
           const totalPersonasDivision = usuarios.filter(u => u.activo && (idsGerentesDivision.has(u.id) || idsDeptosSec.has(u.departamento_id))).length;
           const titularTexto = gerentesDivision.length > 0
             ? gerentesDivision.map(g => formatearNombreNaturalMayus(g)).join(' / ')
-            : 'Reporte directo a Recursos Humanos';
+            : '';
 
           return (
             <div key={sec.key} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', overflow: 'hidden' }}>
@@ -592,7 +567,6 @@ export default function VistaArbol({
                     {deptosSec.map(depto => {
                       const abierto = Boolean(deptosAbiertosLocal[depto.id]);
                       const nombreDeptoNorm = normalizar(depto.nombre);
-                      const infoRuta = describirRutaEcualizador(depto, usuarios);
 
                       const personalDepto = (usuarios || [])
                         .filter(u => u.departamento_id === depto.id && u.activo === true && !idsGerentesDivision.has(u.id))
@@ -630,32 +604,25 @@ export default function VistaArbol({
                         <div key={depto.id} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '8px', position: 'relative', boxSizing: 'border-box', width: '100%' }}>
                           <div
                             onClick={() => toggleDeptoLocal(depto.id)}
-                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: esMobile ? '11px 13px' : '12px 16px', cursor: 'pointer', borderRadius: abierto ? '8px 8px 0 0' : '8px', borderBottom: abierto ? `1px solid ${c.border}` : 'none', gap: '8px', flexWrap: 'wrap' }}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: esMobile ? '11px 13px' : '12px 16px', cursor: 'pointer', borderRadius: abierto ? '8px 8px 0 0' : '8px', borderBottom: abierto ? `1px solid ${c.border}` : 'none', gap: '8px' }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0, flex: 1 }}>
                               <div style={{ color: c.subText, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 {abierto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                                <span style={{ fontSize: esMobile ? '13px' : '14px', fontWeight: '800', color: c.text, letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {depto.nombre}
-                                </span>
-                                <span style={{ fontSize: '10.5px', color: c.subText, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                                  <GitBranch size={10} color={c.accent} />
-                                  <span>Firmas: <strong>{infoRuta.rutaEmpleados}</strong></span>
-                                </span>
-                              </div>
+                              <span style={{ fontSize: esMobile ? '13px' : '14px', fontWeight: '800', color: c.text, letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {depto.nombre}
+                              </span>
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                               {seguridadDesbloqueada && (
                                 <button
-                                  onClick={(e) => abrirEcualizadorDepto(depto, e)}
+                                  onClick={(e) => abrirModalDepto(depto, e)}
                                   title="Editar Departamento"
-                                  style={{ background: c.accentSoft, border: `1px solid ${c.accent}`, borderRadius: '6px', color: c.accent, cursor: 'pointer', padding: '4px 8px', fontSize: '10.5px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                  style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.subText, cursor: 'pointer', padding: '4px 7px', display: 'flex', alignItems: 'center' }}
                                 >
-                                  <Edit2 size={11} />
-                                  {!esMobile && <span>Editar Depto</span>}
+                                  <Edit2 size={12} />
                                 </button>
                               )}
                               <span style={{ fontSize: '11px', color: c.subText, fontWeight: '700', padding: '2px 7px', borderRadius: '5px', background: modoOscuro ? '#222' : '#f1f5f9' }}>
@@ -798,139 +765,94 @@ export default function VistaArbol({
       </div>
 
       {/* =====================================================================
-          MODAL LIMPIO Y DIRECTO DE DEPARTAMENTO (SIN DIAGRAMA REDUNDANTE)
+          MODAL SIMPLE DE DEPARTAMENTO (SOLO NOMBRE, FIRMA 1 Y FIRMA 2)
          ===================================================================== */}
-      {modalDepto && (() => {
-        const gerenteSelObj = modalDepto.gerente_id ? usuarios.find(u => u.id === modalDepto.gerente_id) : null;
-        const nombreGerente = gerenteSelObj ? obtenerNombreCorto(gerenteSelObj) : 'Gerencia';
-        const mostrarOpcionGerencia = Boolean(modalDepto.gerente_id) && Boolean(modalDepto.jefe_id) && gerenteSelObj?.rol !== 'gerente_rh';
+      {modalDepto && (
+        <div onClick={() => setModalDepto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2600, padding: '16px' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 50px rgba(0,0,0,0.55)', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
+              <div style={{ fontSize: '15px', fontWeight: '900', color: c.text }}>
+                {modalDepto.modo === 'crear' ? 'Nuevo Departamento' : modalDepto.nombre}
+              </div>
+              <button onClick={() => setModalDepto(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
+            </div>
 
-        return (
-          <div onClick={() => setModalDepto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2600, padding: '16px' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '20px', width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 50px rgba(0,0,0,0.55)', boxSizing: 'border-box' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
-                <div>
-                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>
-                    {modalDepto.modo === 'crear' ? 'Nuevo Departamento' : 'Configurar Departamento'}
-                  </div>
-                  <div style={{ fontSize: '15px', fontWeight: '900', color: c.text }}>
-                    {modalDepto.nombre || 'SIN NOMBRE'}
-                  </div>
-                </div>
-                <button onClick={() => setModalDepto(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
+            <form onSubmit={guardarModalDepto} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                  Nombre del Departamento
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={modalDepto.nombre}
+                  onChange={e => setModalDepto({ ...modalDepto, nombre: e.target.value.toUpperCase() })}
+                  placeholder="Ej. ARMADO MADERA, COMPRAS..."
+                  style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '13px', fontWeight: '800', outline: 'none', boxSizing: 'border-box' }}
+                />
               </div>
 
-              <form onSubmit={guardarEcualizadorDepto} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                    1. Nombre del Departamento
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={modalDepto.nombre}
-                    onChange={e => setModalDepto({ ...modalDepto, nombre: e.target.value.toUpperCase() })}
-                    placeholder="Ej. ARMADO MADERA, COMPRAS..."
-                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '13px', fontWeight: '800', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                  Firma 1 (Jefe Inmediato)
+                </label>
+                <select
+                  value={modalDepto.jefe_id || ''}
+                  onChange={e => setModalDepto({ ...modalDepto, jefe_id: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
+                >
+                  <option value="">NO REQUIERE (Pasa directo a Firma 2 / RH)</option>
+                  {candidatosJefeDepto.map(j => (
+                    <option key={j.id} value={j.id}>
+                      {formatearNombreNaturalMayus(j)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                    2. Jefe del Departamento (Firma 1)
-                  </label>
-                  <select
-                    value={modalDepto.jefe_id || ''}
-                    onChange={e => {
-                      const nuevoJefe = e.target.value;
-                      setModalDepto({
-                        ...modalDepto,
-                        jefe_id: nuevoJefe,
-                        emp_requiere_jefe: Boolean(nuevoJefe),
-                        emp_requiere_gerente: nuevoJefe ? modalDepto.emp_requiere_gerente : true
-                      });
-                    }}
-                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
-                  >
-                    <option value="">Sin Jefe de Área (Pasan directo a Gerencia)</option>
-                    {candidatosJefeDepto.map(j => (
-                      <option key={j.id} value={j.id}>
-                        {formatearNombreNaturalMayus(j)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                  Firma 2 (Gerente)
+                </label>
+                <select
+                  value={modalDepto.firma_2_gerente_id || ''}
+                  onChange={e => setModalDepto({ ...modalDepto, firma_2_gerente_id: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
+                >
+                  <option value="">NO REQUIERE (Pasa directo a RH)</option>
+                  {candidatosGerenteDivision.map(g => (
+                    <option key={g.id} value={g.id}>
+                      {formatearNombreNaturalMayus(g)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                    3. Gerencia / División (Firma 2)
-                  </label>
-                  <select
-                    value={modalDepto.gerente_id || ''}
-                    onChange={e => setModalDepto({ ...modalDepto, gerente_id: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
-                  >
-                    <option value="">Directo a Recursos Humanos (Sin Gerencia)</option>
-                    {candidatosGerenteDivision.map(g => (
-                      <option key={g.id} value={g.id}>
-                        {formatearNombreNaturalMayus(g)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* UNA SOLA CASILLA SIMPLE SOLO CUANDO HAY JEFE Y GERENTE */}
-                {mostrarOpcionGerencia && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', background: modoOscuro ? '#161616' : '#f8fafc', border: `1px solid ${c.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: c.text }}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(modalDepto.emp_requiere_gerente)}
-                      onChange={e => setModalDepto({ ...modalDepto, emp_requiere_gerente: e.target.checked })}
-                      style={{ width: '16px', height: '16px', accentColor: c.accent, cursor: 'pointer' }}
-                    />
-                    <span>Incluir también la firma de <strong>{nombreGerente}</strong> en los permisos de los empleados</span>
-                  </label>
-                )}
-
-                {/* RESUMEN FINAL LIMPIO */}
-                {vistaPreviaEcualizador && (
-                  <div style={{ padding: '10px 12px', borderRadius: '8px', background: c.accentSoft, border: `1px solid ${c.accent}`, fontSize: '12px', color: c.text, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div>• <strong>Ruta Personal:</strong> <span style={{ color: c.accent, fontWeight: '800' }}>{vistaPreviaEcualizador.rutaEmpleados}</span></div>
-                    {modalDepto.jefe_id && (
-                      <div>• <strong>Ruta del Jefe:</strong> <span style={{ color: c.accent, fontWeight: '800' }}>{vistaPreviaEcualizador.rutaJefe}</span></div>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <button type="button" onClick={() => setModalDepto(null)} style={{ flex: 1, padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '7px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                <button type="button" onClick={() => setModalDepto(null)} style={{ flex: 1, padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '7px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
-      {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL DESDE EL ÁRBOL */}
+      {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL */}
       {userEditando && (
         <div onClick={() => setUserEditando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '16px' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '20px', width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
-              <div>
-                <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>Ubicación Individual</div>
-                <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{userEditando.nombre_completo}</div>
-              </div>
+              <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{userEditando.nombre_completo}</div>
               <button onClick={() => setUserEditando(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
             </div>
 
             <form onSubmit={guardarReubicacionUsuario} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>1. Departamento</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Departamento</label>
                 <select
                   value={userEditando.departamento_id}
                   onChange={e => {
@@ -950,12 +872,12 @@ export default function VistaArbol({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>2. Subdepartamento / Área</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Subárea (Opcional)</label>
                 <input
                   list="areas-coherentes-arbol"
                   value={userEditando.area}
                   onChange={e => setUserEditando({ ...userEditando, area: e.target.value.toUpperCase() })}
-                  placeholder="Ej. ARMADO MADERA, NOMINAS..."
+                  placeholder="Ej. HERRAJES, NOMINAS..."
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 />
                 <datalist id="areas-coherentes-arbol">
@@ -964,7 +886,7 @@ export default function VistaArbol({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>3. Puesto</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Puesto</label>
                 <input
                   list="puestos-coherentes-arbol"
                   value={userEditando.puesto}
@@ -978,21 +900,21 @@ export default function VistaArbol({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>4. Jefe Inmediato:</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Jefe Inmediato (Firma 1)</label>
                 <select
                   value={userEditando.reporta_a_id || ''}
                   onChange={e => setUserEditando({ ...userEditando, reporta_a_id: e.target.value })}
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
-                  <option value="">Automático (El Jefe del Departamento)</option>
+                  <option value="">El Jefe del Departamento</option>
                   {posiblesJefesParaUsuario.map(j => (
-                    <option key={j.id} value={j.id}>{formatearNombreNaturalMayus(j)} ({j.area || j.puesto})</option>
+                    <option key={j.id} value={j.id}>{formatearNombreNaturalMayus(j)}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>5. Nivel en el Sistema</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>Rol en el Sistema</label>
                 <select
                   value={userEditando.rol}
                   onChange={e => setUserEditando({ ...userEditando, rol: e.target.value })}
@@ -1000,7 +922,6 @@ export default function VistaArbol({
                 >
                   <option value="empleado">EMPLEADO / OPERADOR</option>
                   <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR</option>
-                  <option value="gerente_division">GERENTE DE DIVISIÓN / VALIDADOR</option>
                   <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
                   <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
                   <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
@@ -1008,22 +929,6 @@ export default function VistaArbol({
                   <option value="caseta">CASETA / VIGILANCIA</option>
                   <option value="superadmin">SUPER ADMINISTRADOR</option>
                 </select>
-              </div>
-
-              {userEditando.rol === 'jefe_area' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: '700', color: c.text, cursor: 'pointer', padding: '8px 10px', borderRadius: '6px', background: c.accentSoft, border: `1px solid ${c.accent}` }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(userEditando.es_titular_depto)}
-                    onChange={e => setUserEditando({ ...userEditando, es_titular_depto: e.target.checked })}
-                  />
-                  <span>Es el Jefe Titular de todo el departamento</span>
-                </label>
-              )}
-
-              <div style={{ padding: '9px 12px', borderRadius: '8px', background: c.accentSoft, border: `1px solid ${c.accent}`, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                <span style={{ color: c.text, fontWeight: '700' }}>• Ruta Personal:</span>
-                <strong style={{ color: c.accent }}>{rutaEnVivoUserEditando}</strong>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
@@ -1176,7 +1081,7 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
         <button
           onClick={(e) => onEditarUsuario(u, e)}
           style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.text, cursor: 'pointer', padding: '5px 7px', fontSize: '10.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
-          title="Reacomodar en el organigrama"
+          title="Editar ubicación"
         >
           <Edit2 size={12} />
         </button>
