@@ -74,7 +74,6 @@ export default function DossierLateral({
   const rolActual = (editando ? datosEdit.rol : colaborador.rol) || 'empleado';
   const esJefeDeArea = rolActual === 'jefe_area' || (deptoActualObj && deptoActualObj.jefe_id === colaborador.id);
 
-  // Resolver quién es su jefe inmediato actual para mostrarlo en lectura
   const superiorEfectivoObj = (() => {
     if (colaborador.reporta_a_id) {
       return usuarios.find(u => u.id === colaborador.reporta_a_id) || null;
@@ -478,9 +477,8 @@ export default function DossierLateral({
 
             {editando ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-                <div><label className="touch-field-label">Celular</label><input className="touch-field-input" value={datosEdit.celular || ''} onChange={e => setDatosEdit({ ...datosEdit, celular: e.target.value })} /></div>
-                <div><label className="touch-field-label">Teléfono Fijo</label><input className="touch-field-input" value={datosEdit.telefono || ''} onChange={e => setDatosEdit({ ...datosEdit, telefono: e.target.value })} /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label className="touch-field-label">Correo Institucional</label><input type="email" className="touch-field-input" value={datosEdit.correo || ''} onChange={e => setDatosEdit({ ...datosEdit, correo: e.target.value })} /></div>
+                <div><label className="touch-field-label">Celular</label><input className="touch-field-input" placeholder="10 dígitos" value={datosEdit.celular || ''} onChange={e => setDatosEdit({ ...datosEdit, celular: e.target.value })} /></div>
+                <div><label className="touch-field-label">Correo Institucional</label><input type="email" className="touch-field-input" placeholder="usuario@gcdi.com.mx" value={datosEdit.correo || ''} onChange={e => setDatosEdit({ ...datosEdit, correo: e.target.value })} /></div>
                 <div><label className="touch-field-label">Usuario ERP</label><input className="touch-field-input" value={datosEdit.usuario_login || ''} onChange={e => setDatosEdit({ ...datosEdit, usuario_login: e.target.value })} /></div>
                 <div><label className="touch-field-label">PIN</label><input className="touch-field-input mono-id" placeholder="****" value={datosEdit.pin || ''} onChange={e => setDatosEdit({ ...datosEdit, pin: e.target.value })} /></div>
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -511,7 +509,6 @@ export default function DossierLateral({
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Teléfono Fijo</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.telefono || 'No registrado'}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Correo</span><strong style={{ color: c.text }}>{colaborador.correo || 'No registrado'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Usuario ERP</span><strong style={{ color: c.accent }}>@{colaborador.usuario_login || 'Sin usuario'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Rol en Sistema</span><strong style={{ color: c.text, textTransform: 'uppercase' }}>{colaborador.rol?.replace(/_/g, ' ')}</strong></div>

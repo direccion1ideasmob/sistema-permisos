@@ -499,14 +499,15 @@ export default function VistaArbol({
           const gerentesDivision = sec.gerentesDivision || [];
           const idsGerentesDivision = new Set(gerentesDivision.map(g => g.id));
 
+          // Mostrar en el organigrama ÚNICAMENTE los departamentos que ya tienen personal activo asignado
           const deptosSec = (sec.departamentos || []).filter(d => {
             const activosSinGerenteDiv = usuarios.filter(u => u.departamento_id === d.id && u.activo === true && !idsGerentesDivision.has(u.id));
-            return seguridadDesbloqueada || activosSinGerenteDiv.length > 0;
+            return activosSinGerenteDiv.length > 0;
           });
 
           if (deptosSec.length === 0 && gerentesDivision.length === 0) return null;
 
-          const idsDeptosSec = new Set((sec.departamentos || []).map(d => d.id));
+          const idsDeptosSec = new Set(deptosSec.map(d => d.id));
           const totalPersonasDivision = usuarios.filter(u => u.activo && (idsGerentesDivision.has(u.id) || idsDeptosSec.has(u.departamento_id))).length;
           const titularTexto = gerentesDivision.length > 0
             ? gerentesDivision.map(g => formatearNombreNaturalMayus(g)).join(' / ')

@@ -10,7 +10,7 @@ export default function ModalColaborador({
   const [formData, setFormData] = useState({
     numero_empleado: '', nombre: '', apellido_paterno: '', apellido_materno: '',
     nombre_completo: '', fecha_nacimiento: '', fecha_ingreso: '', celular: '',
-    telefono: '', correo: '', tipo_personal: 'produccion', sede_id: '', departamento_id: '',
+    correo: '', tipo_personal: 'produccion', sede_id: '', departamento_id: '',
     area: '', puesto: '', rol: 'empleado', reporta_a_id: '',
     usuario_login: '', pin: ''
   });
@@ -66,8 +66,8 @@ export default function ModalColaborador({
       .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9.]/g, "");
 
     nuevoEstado.usuario_login = usuarioBase;
-    if (!formData.correo || formData.correo.endsWith('@mobiliarium.com')) {
-      nuevoEstado.correo = usuarioBase ? `${usuarioBase}@mobiliarium.com` : '';
+    if (!formData.correo || formData.correo.endsWith('@gcdi.com.mx') || formData.correo.endsWith('@mobiliarium.com')) {
+      nuevoEstado.correo = usuarioBase ? `${usuarioBase}@gcdi.com.mx` : '';
     }
 
     setFormData(nuevoEstado);
@@ -373,7 +373,7 @@ export default function ModalColaborador({
                     <option value="superadmin">SUPER ADMINISTRADOR</option>
                   </select>
                 </div>
-                <div className="input-group"><label className="clean-label">Correo *</label><input type="email" required className="clean-input no-upper" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value.toLowerCase()})} /></div>
+                <div className="input-group"><label className="clean-label">Correo *</label><input type="email" required className="clean-input no-upper" placeholder="nombre.apellido@gcdi.com.mx" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value.toLowerCase()})} /></div>
               </div>
 
               <div className="form-grid cols-2" style={{ marginTop: '12px' }}>
