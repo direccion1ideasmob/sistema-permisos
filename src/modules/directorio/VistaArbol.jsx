@@ -154,10 +154,8 @@ export default function VistaArbol({
     }
   };
 
-  // En Firma 2, si el departamento tiene emp_requiere_gerente = true mostramos el gerente_id; si es false mostramos '' (No requiere)
   const abrirModalDepto = (depto, e) => {
     e.stopPropagation();
-    const firma2Activa = depto.emp_requiere_gerente && depto.gerente_id ? depto.gerente_id : '';
     setModalDepto({
       modo: 'editar',
       id: depto.id,
@@ -165,8 +163,8 @@ export default function VistaArbol({
       nombre: depto.nombre,
       clasificacion: depto.clasificacion || 'produccion',
       jefe_id: depto.jefe_id || '',
-      firma_2_gerente_id: firma2Activa,
-      gerente_rama_original: depto.gerente_id || ''
+      gerente_id: depto.gerente_id || '',
+      emp_requiere_gerente: Boolean(depto.emp_requiere_gerente)
     });
   };
 
@@ -179,8 +177,8 @@ export default function VistaArbol({
       nombre: '',
       clasificacion: 'produccion',
       jefe_id: '',
-      firma_2_gerente_id: primerGerente?.id || '',
-      gerente_rama_original: primerGerente?.id || ''
+      gerente_id: primerGerente?.id || '',
+      emp_requiere_gerente: true
     });
   };
 
@@ -190,19 +188,18 @@ export default function VistaArbol({
     setGuardando(true);
     try {
       const tieneJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre.trim().toUpperCase() === 'RECURSOS HUMANOS';
-      const tieneFirma2 = Boolean(modalDepto.firma_2_gerente_id);
-
-      // Si eligió un Gerente en Firma 2, ese es su gerente_id; si eligió "No requiere", conservamos su gerente de rama (ej. Pedro en Ingeniería) pero con emp_requiere_gerente = false
-      const gerenteRamaFinal = modalDepto.firma_2_gerente_id || modalDepto.gerente_rama_original || null;
+      const tieneGerente = Boolean(modalDepto.gerente_id);
+      // Si NO hay Jefe de departamento asignado (como en Presupuestos o Planeación), los empleados pasan directo con el Gerente
+      const empleadosPasanPorGerente = tieneGerente ? (!modalDepto.jefe_id ? true : Boolean(modalDepto.emp_requiere_gerente)) : false;
 
       if (modalDepto.modo === 'crear') {
         await crearDepartamentoConEcualizador({
           nombre: modalDepto.nombre,
           jefe_id: modalDepto.jefe_id || null,
-          gerente_id: gerenteRamaFinal,
+          gerente_id: modalDepto.gerente_id || null,
           emp_requiere_jefe: tieneJefe,
-          emp_requiere_gerente: tieneFirma2,
-          jefe_requiere_gerente: Boolean(gerenteRamaFinal)
+          emp_requiere_gerente: empleadosPasanPorGerente,
+          jefe_requiere_gerente: tieneGerente
         });
       } else {
         await actualizarDepartamentoSeguro(
@@ -212,10 +209,10 @@ export default function VistaArbol({
           modalDepto.nombreAnterior,
           {
             jefe_id: modalDepto.jefe_id || null,
-            gerente_id: gerenteRamaFinal,
+            gerente_id: modalDepto.gerente_id || null,
             emp_requiere_jefe: tieneJefe,
-            emp_requiere_gerente: tieneFirma2,
-            jefe_requiere_gerente: Boolean(gerenteRamaFinal)
+            emp_requiere_gerente: empleadosPasanPorGerente,
+            jefe_requiere_gerente: tieneGerente
           }
         );
       }
@@ -765,81 +762,98 @@ export default function VistaArbol({
       </div>
 
       {/* =====================================================================
-          MODAL SIMPLE DE DEPARTAMENTO (SOLO NOMBRE, FIRMA 1 Y FIRMA 2)
+          MODAL DE DEPARTAMENTO (CLARO Y EXPLÍCITO)
          ===================================================================== */}
-      {modalDepto && (
-        <div onClick={() => setModalDepto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2600, padding: '16px' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 50px rgba(0,0,0,0.55)', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
-              <div style={{ fontSize: '15px', fontWeight: '900', color: c.text }}>
-                {modalDepto.modo === 'crear' ? 'Nuevo Departamento' : modalDepto.nombre}
+      {modalDepto && (() => {
+        const gerenteObj = modalDepto.gerente_id ? usuarios.find(u => u.id === modalDepto.gerente_id) : null;
+        const mostrarCheckboxEmpleados = Boolean(modalDepto.jefe_id) && Boolean(modalDepto.gerente_id) && gerenteObj?.rol !== 'gerente_rh';
+
+        return (
+          <div onClick={() => setModalDepto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2600, padding: '16px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 50px rgba(0,0,0,0.55)', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
+                <div style={{ fontSize: '15px', fontWeight: '900', color: c.text }}>
+                  {modalDepto.modo === 'crear' ? 'Nuevo Departamento' : modalDepto.nombre}
+                </div>
+                <button onClick={() => setModalDepto(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
               </div>
-              <button onClick={() => setModalDepto(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
+
+              <form onSubmit={guardarModalDepto} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                    Nombre del Departamento
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={modalDepto.nombre}
+                    onChange={e => setModalDepto({ ...modalDepto, nombre: e.target.value.toUpperCase() })}
+                    placeholder="Ej. ARMADO MADERA, COMPRAS..."
+                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '13px', fontWeight: '800', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                    Firma 1 (Jefe del Departamento)
+                  </label>
+                  <select
+                    value={modalDepto.jefe_id || ''}
+                    onChange={e => setModalDepto({ ...modalDepto, jefe_id: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
+                  >
+                    <option value="">SIN JEFE INTERMEDIO (Pasan directo al Gerente)</option>
+                    {candidatosJefeDepto.map(j => (
+                      <option key={j.id} value={j.id}>
+                        {formatearNombreNaturalMayus(j)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                    Firma 2 (Gerente / Jefe del Jefe)
+                  </label>
+                  <select
+                    value={modalDepto.gerente_id || ''}
+                    onChange={e => setModalDepto({ ...modalDepto, gerente_id: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
+                  >
+                    <option value="">SIN GERENTE (Directo a RH)</option>
+                    {candidatosGerenteDivision.map(g => (
+                      <option key={g.id} value={g.id}>
+                        {formatearNombreNaturalMayus(g)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {mostrarCheckboxEmpleados && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '10px 12px', borderRadius: '8px', background: modoOscuro ? '#161616' : '#f8fafc', border: `1px solid ${c.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: c.text }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(modalDepto.emp_requiere_gerente)}
+                      onChange={e => setModalDepto({ ...modalDepto, emp_requiere_gerente: e.target.checked })}
+                      style={{ width: '16px', height: '16px', accentColor: c.accent, cursor: 'pointer', flexShrink: 0 }}
+                    />
+                    <span>Los empleados bajo su mando también requieren firma del Gerente</span>
+                  </label>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                  <button type="button" onClick={() => setModalDepto(null)} style={{ flex: 1, padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '7px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={guardarModalDepto} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                  Nombre del Departamento
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={modalDepto.nombre}
-                  onChange={e => setModalDepto({ ...modalDepto, nombre: e.target.value.toUpperCase() })}
-                  placeholder="Ej. ARMADO MADERA, COMPRAS..."
-                  style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '13px', fontWeight: '800', outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                  Firma 1 (Jefe Inmediato)
-                </label>
-                <select
-                  value={modalDepto.jefe_id || ''}
-                  onChange={e => setModalDepto({ ...modalDepto, jefe_id: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
-                >
-                  <option value="">NO REQUIERE (Pasa directo a Firma 2 / RH)</option>
-                  {candidatosJefeDepto.map(j => (
-                    <option key={j.id} value={j.id}>
-                      {formatearNombreNaturalMayus(j)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                  Firma 2 (Gerente)
-                </label>
-                <select
-                  value={modalDepto.firma_2_gerente_id || ''}
-                  onChange={e => setModalDepto({ ...modalDepto, firma_2_gerente_id: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
-                >
-                  <option value="">NO REQUIERE (Pasa directo a RH)</option>
-                  {candidatosGerenteDivision.map(g => (
-                    <option key={g.id} value={g.id}>
-                      {formatearNombreNaturalMayus(g)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                <button type="button" onClick={() => setModalDepto(null)} style={{ flex: 1, padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-                  Cancelar
-                </button>
-                <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '7px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL */}
       {userEditando && (
