@@ -53,14 +53,21 @@ export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, d
     jefeFinalId = null;
     gerenteFinalId = null;
   } else if (esSolicitanteJefe) {
-    // 2. Si pide un Jefe de Área (ej. Suheilli, Juan Antonio, René, Rubén):
-    // Si en la Tabla General de Firmas el departamento dice que el Jefe SÍ requiere firma del Gerente (jefe_requiere_gerente !== false),
-    // pasa al Gerente del departamento (ej. Pedro o Reynaldo). Si dice NO, pasa directo a RH.
+    // 2. Si pide un Jefe de Área (ej. Rubén Beltrán, Suheilli, Juan Antonio):
     jefeFinalId = null;
-    if (depto?.jefe_requiere_gerente !== false && depto?.gerente_id && depto.gerente_id !== userId && depto.gerente_id !== rhFinalId) {
-      gerenteFinalId = depto.gerente_id;
+    if (depto?.jefe_requiere_gerente !== false) {
+      // Primero: Si en su tarjeta individual tiene asignado un Jefe específico (ej. Rubén -> Pedro Simón), respetarlo:
+      if (reportaAId && reportaAId !== userId && reportaAId !== rhFinalId) {
+        const { data: supPersonalizado } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
+        if (supPersonalizado && supPersonalizado.activo !== false && supPersonalizado.rol !== 'gerente_rh') {
+          gerenteFinalId = supPersonalizado.id;
+        }
+      }
+      // Segundo: Si no tiene excepción individual, usar el Gerente del departamento en la Tabla:
+      if (!gerenteFinalId && depto?.gerente_id && depto.gerente_id !== userId && depto.gerente_id !== rhFinalId) {
+        gerenteFinalId = depto.gerente_id;
+      }
     }
-  
   } else {
     // 3. Si pide un Empleado:
     // Firma 1: Su Jefe Inmediato individual (reporta_a_id) o el Jefe del Departamento (depto.jefe_id)
