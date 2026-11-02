@@ -139,11 +139,9 @@ export const registrarNuevoColaborador = async ({
 
   let reportaAFinal = formData.reporta_a_id || null;
   const deptoSeleccionadoObj = departamentos.find(d => d.id === deptoFinalId);
-  if (!reportaAFinal && deptoSeleccionadoObj) {
+  if (!reportaAFinal && deptoSeleccionadoObj && formData.rol === 'empleado') {
     if (deptoSeleccionadoObj.jefe_id) {
       reportaAFinal = deptoSeleccionadoObj.jefe_id;
-    } else if (deptoSeleccionadoObj.gerente_id) {
-      reportaAFinal = deptoSeleccionadoObj.gerente_id;
     }
   }
 
@@ -162,7 +160,6 @@ export const registrarNuevoColaborador = async ({
     fecha_nacimiento: formData.fecha_nacimiento || null,
     fecha_ingreso: formData.fecha_ingreso || null,
     celular: formData.celular || null,
-    telefono: formData.telefono || null,
     correo: correoLimpio,
     tipo_personal: formData.tipo_personal,
     sede_id: sedeFinalId,
@@ -182,7 +179,7 @@ export const registrarNuevoColaborador = async ({
   return nuevoUsuarioId;
 };
 
-// 3. ACTUALIZAR EXPEDIENTE DESDE DOSSIER (DATOS LABORALES Y PERSONALES)
+// 3. ACTUALIZAR EXPEDIENTE DESDE DOSSIER
 export const actualizarExpedienteColaborador = async ({
   colaboradorId, datosEdit, creandoNuevo = {}, textosNuevos = {}, sedes = [], departamentos = []
 }) => {
@@ -228,7 +225,6 @@ export const actualizarExpedienteColaborador = async ({
       rol: datosEdit.rol || 'empleado',
       reporta_a_id: datosEdit.reporta_a_id || null,
       celular: datosEdit.celular ? datosEdit.celular.trim() : null,
-      telefono: datosEdit.telefono ? datosEdit.telefono.trim() : null,
       correo: datosEdit.correo.trim().toLowerCase(),
       usuario_login: datosEdit.usuario_login?.trim() ? datosEdit.usuario_login.trim().toLowerCase() : null,
       pin: datosEdit.pin?.trim() ? datosEdit.pin.trim() : null,
@@ -278,7 +274,7 @@ export const reactivarColaborador = async (id) => {
   if (error) throw error;
 };
 
-// 6. GUARDAR CONFIGURACIÓN DE UN DEPARTAMENTO (NUNCA CAMBIA EL DEPARTAMENTO PERSONAL DEL GERENTE O JEFE)
+// 6. GUARDAR CONFIGURACIÓN DE UN DEPARTAMENTO Y SINCRONIZAR A SU PLANTILLA
 export const actualizarDepartamentoSeguro = async (
   deptoId,
   nuevoNombre,
@@ -328,15 +324,28 @@ export const actualizarDepartamentoSeguro = async (
 
   if (error) throw error;
 
-  // Si se designó un Jefe de Área (Firma 1), aseguramos que tenga permiso de firmar (jefe_area) SIN MOVERLO DE SU DEPARTAMENTO
   if (configFirmas && configFirmas.jefe_id) {
     const { data: jefeActual } = await supabase.from('usuarios').select('id, rol').eq('id', configFirmas.jefe_id).maybeSingle();
     if (jefeActual && jefeActual.rol === 'empleado') {
       await supabase.from('usuarios').update({ rol: 'jefe_area' }).eq('id', configFirmas.jefe_id);
     }
+    // Sincronizar a los empleados operativos de este departamento (excepto RH que tiene subáreas propias)
+    if (nomLimpio !== 'RECURSOS HUMANOS') {
+      await supabase
+        .from('usuarios')
+        .update({ reporta_a_id: configFirmas.jefe_id })
+        .eq('departamento_id', deptoId)
+        .eq('rol', 'empleado')
+        .neq('id', configFirmas.jefe_id);
+    }
+  } else if (configFirmas && !configFirmas.jefe_id && nomLimpio !== 'RECURSOS HUMANOS') {
+    await supabase
+      .from('usuarios')
+      .update({ reporta_a_id: null })
+      .eq('departamento_id', deptoId)
+      .eq('rol', 'empleado');
   }
 
-  // Si se renombró el departamento, actualizar el texto de área de quienes tenían el nombre anterior
   if (nombreAnterior && limpiarTexto(nombreAnterior) !== nomLimpio) {
     await supabase
       .from('usuarios')
@@ -346,7 +355,7 @@ export const actualizarDepartamentoSeguro = async (
   }
 };
 
-// 6.B CREAR NUEVO DEPARTAMENTO (SIN MOVER DE DEPARTAMENTO AL JEFE NI AL GERENTE)
+// 6.B CREAR NUEVO DEPARTAMENTO
 export const crearDepartamentoConEcualizador = async ({
   nombre,
   jefe_id = null,
@@ -373,7 +382,6 @@ export const crearDepartamentoConEcualizador = async ({
     jefe_requiere_gerente
   });
 
-  // Solo asegurar que quien pusiste como Jefe tenga rol para poder firmar, pero JAMÁS cambiar su departamento_id
   if (jefe_id) {
     const { data: uJefe } = await supabase.from('usuarios').select('id, rol').eq('id', jefe_id).maybeSingle();
     if (uJefe && uJefe.rol === 'empleado') {
@@ -382,6 +390,25 @@ export const crearDepartamentoConEcualizador = async ({
   }
 
   return nuevoId;
+};
+
+// 6.C SWITCH RÁPIDO EN VIVO PARA UN DEPARTAMENTO (UN SOLO CLIC EN LA BARRA)
+export const alternarSwitchFirmaDepartamento = async (deptoId, campo, nuevoValor) => {
+  const { error } = await supabase
+    .from('departamentos')
+    .update({ [campo]: Boolean(nuevoValor) })
+    .eq('id', deptoId);
+  if (error) throw error;
+};
+
+// 6.D SWITCH MAESTRO POR DIVISIÓN (PRENDER O APAGAR FIRMA DE GERENCIA EN TODOS LOS DEPTOS DE ESA RAMA)
+export const alternarFirmaGerenciaMasivoDivision = async (idsDepartamentos = [], nuevoValor) => {
+  if (!idsDepartamentos.length) return;
+  const { error } = await supabase
+    .from('departamentos')
+    .update({ emp_requiere_gerente: Boolean(nuevoValor) })
+    .in('id', idsDepartamentos);
+  if (error) throw error;
 };
 
 // 7. ELIMINACIÓN FÍSICA DEFINITIVA

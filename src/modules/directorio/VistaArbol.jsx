@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  ChevronDown, ChevronRight, Edit2, Lock, Unlock, X, Save,
+  ChevronDown, ChevronRight, Lock, Unlock, X, Save,
   Crown, ShieldCheck, User, CornerDownRight, Briefcase,
-  ChevronsDown, ChevronsUp, Plus
+  ChevronsDown, ChevronsUp, Plus, Settings, UserCog, ArrowRight, CheckCircle2, Ban
 } from 'lucide-react';
 import {
   obtenerBadgeRol,
@@ -10,12 +10,15 @@ import {
   esRolValidadorSuperior,
   obtenerNombreCorto,
   formatearNombreNaturalMayus,
-  compararPorNombreNatural
+  compararPorNombreNatural,
+  describirRutaEcualizador
 } from './utils/directorioHelpers';
 import {
   actualizarDepartamentoSeguro,
   crearDepartamentoConEcualizador,
-  reubicarColaboradorEnArbol
+  reubicarColaboradorEnArbol,
+  alternarSwitchFirmaDepartamento,
+  alternarFirmaGerenciaMasivoDivision
 } from './services/directorioService';
 import { obtenerTemaGlobal } from '../../core/theme/temaGlobal';
 import ModalSeguridadPin from './ModalSeguridadPin';
@@ -42,6 +45,7 @@ export default function VistaArbol({
 
   const [modalDepto, setModalDepto] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [procesandoSwitchId, setProcesandoSwitchId] = useState(null);
 
   const [userEditando, setUserEditando] = useState(null);
 
@@ -154,9 +158,40 @@ export default function VistaArbol({
     }
   };
 
+  // Switch rápido de 1 clic en la barra del departamento
+  const handleToggleSwitchDepto = async (e, depto, campo) => {
+    e.stopPropagation();
+    if (!seguridadDesbloqueada) return;
+    const valorActual = campo === 'emp_requiere_jefe' ? depto.emp_requiere_jefe !== false : Boolean(depto.emp_requiere_gerente);
+    setProcesandoSwitchId(`${depto.id}_${campo}`);
+    try {
+      await alternarSwitchFirmaDepartamento(depto.id, campo, !valorActual);
+      if (recargarDatos) await recargarDatos();
+    } catch (err) {
+      alert("Error al cambiar switch: " + err.message);
+    } finally {
+      setProcesandoSwitchId(null);
+    }
+  };
+
+  // Switch Maestro por División (Todos los departamentos de Reynaldo o Pedro de un solo golpe)
+  const handleToggleMasivoDivision = async (e, deptosSec, activar) => {
+    e.stopPropagation();
+    if (!seguridadDesbloqueada || !deptosSec.length) return;
+    const ids = deptosSec.map(d => d.id);
+    setProcesandoSwitchId(`masivo_${ids[0]}`);
+    try {
+      await alternarFirmaGerenciaMasivoDivision(ids, activar);
+      if (recargarDatos) await recargarDatos();
+    } catch (err) {
+      alert("Error al aplicar cambio masivo: " + err.message);
+    } finally {
+      setProcesandoSwitchId(null);
+    }
+  };
+
   const abrirModalDepto = (depto, e) => {
     e.stopPropagation();
-    const firma2Activa = depto.emp_requiere_gerente && depto.gerente_id ? depto.gerente_id : '';
     setModalDepto({
       modo: 'editar',
       id: depto.id,
@@ -164,8 +199,8 @@ export default function VistaArbol({
       nombre: depto.nombre,
       clasificacion: depto.clasificacion || 'produccion',
       jefe_id: depto.jefe_id || '',
-      firma_2_gerente_id: firma2Activa,
-      gerente_rama_original: depto.gerente_id || ''
+      gerente_id: depto.gerente_id || '',
+      emp_requiere_gerente: Boolean(depto.emp_requiere_gerente)
     });
   };
 
@@ -178,8 +213,8 @@ export default function VistaArbol({
       nombre: '',
       clasificacion: 'produccion',
       jefe_id: '',
-      firma_2_gerente_id: primerGerente?.id || '',
-      gerente_rama_original: primerGerente?.id || ''
+      gerente_id: primerGerente?.id || '',
+      emp_requiere_gerente: true
     });
   };
 
@@ -189,16 +224,16 @@ export default function VistaArbol({
     setGuardando(true);
     try {
       const tieneJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre.trim().toUpperCase() === 'RECURSOS HUMANOS';
-      const tieneFirma2 = Boolean(modalDepto.firma_2_gerente_id);
-      const gerenteRamaFinal = modalDepto.firma_2_gerente_id || modalDepto.gerente_rama_original || null;
+      const tieneGerente = Boolean(modalDepto.gerente_id);
+      const firma2Activa = tieneGerente ? (!modalDepto.jefe_id ? true : Boolean(modalDepto.emp_requiere_gerente)) : false;
 
       if (modalDepto.modo === 'crear') {
         await crearDepartamentoConEcualizador({
           nombre: modalDepto.nombre,
           jefe_id: modalDepto.jefe_id || null,
-          gerente_id: gerenteRamaFinal,
+          gerente_id: modalDepto.gerente_id || null,
           emp_requiere_jefe: tieneJefe,
-          emp_requiere_gerente: tieneFirma2,
+          emp_requiere_gerente: firma2Activa,
           jefe_requiere_gerente: true
         });
       } else {
@@ -209,9 +244,9 @@ export default function VistaArbol({
           modalDepto.nombreAnterior,
           {
             jefe_id: modalDepto.jefe_id || null,
-            gerente_id: gerenteRamaFinal,
+            gerente_id: modalDepto.gerente_id || null,
             emp_requiere_jefe: tieneJefe,
-            emp_requiere_gerente: tieneFirma2,
+            emp_requiere_gerente: firma2Activa,
             jefe_requiere_gerente: true
           }
         );
@@ -398,6 +433,22 @@ export default function VistaArbol({
           background: ${c.lineStrong};
         }
 
+        .switch-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 10.5px;
+          font-weight: 800;
+          cursor: pointer;
+          user-select: none;
+          transition: all 0.15s ease;
+        }
+        .switch-pill:hover {
+          transform: translateY(-1px);
+        }
+
         @media (max-width: 640px) {
           .industrial-grid {
             grid-template-columns: 1fr;
@@ -498,8 +549,9 @@ export default function VistaArbol({
           const divAbierta = Boolean(divisionesAbiertas[sec.key]);
           const gerentesDivision = sec.gerentesDivision || [];
           const idsGerentesDivision = new Set(gerentesDivision.map(g => g.id));
+          const gerenteRamaObj = gerentesDivision[0] || null;
+          const esDivisionRH = gerenteRamaObj?.rol === 'gerente_rh';
 
-          // Mostrar en el organigrama ÚNICAMENTE los departamentos que ya tienen personal activo asignado
           const deptosSec = (sec.departamentos || []).filter(d => {
             const activosSinGerenteDiv = usuarios.filter(u => u.departamento_id === d.id && u.activo === true && !idsGerentesDivision.has(u.id));
             return activosSinGerenteDiv.length > 0;
@@ -513,6 +565,9 @@ export default function VistaArbol({
             ? gerentesDivision.map(g => formatearNombreNaturalMayus(g)).join(' / ')
             : '';
 
+          // Estado del Switch Maestro de esta división
+          const todosPidenGerente = deptosSec.length > 0 && deptosSec.every(d => Boolean(d.emp_requiere_gerente));
+
           return (
             <div key={sec.key} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', overflow: 'hidden' }}>
               <div
@@ -525,7 +580,8 @@ export default function VistaArbol({
                   cursor: 'pointer',
                   background: divAbierta ? (modoOscuro ? '#1a1a1a' : '#f8fafc') : c.surfaceCard,
                   borderBottom: divAbierta ? `1px solid ${c.border}` : 'none',
-                  gap: '12px'
+                  gap: '12px',
+                  flexWrap: 'wrap'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
@@ -545,9 +601,36 @@ export default function VistaArbol({
                   </div>
                 </div>
 
-                <span style={{ fontSize: '12px', fontWeight: '700', color: c.subText, padding: '2px 8px', borderRadius: '6px', background: modoOscuro ? '#222' : '#f1f5f9', flexShrink: 0 }}>
-                  {totalPersonasDivision}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* SWITCH MAESTRO DE LA DIVISIÓN (SOLO EN MODO EDICIÓN Y SI NO ES RH) */}
+                  {seguridadDesbloqueada && gerenteRamaObj && !esDivisionRH && deptosSec.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleMasivoDivision(e, deptosSec, !todosPidenGerente)}
+                      title="Activar o desactivar la firma de este Gerente para los empleados de TODOS los departamentos de esta división"
+                      style={{
+                        background: todosPidenGerente ? c.accentSoft : 'transparent',
+                        border: `1px solid ${todosPidenGerente ? c.accent : c.border}`,
+                        color: todosPidenGerente ? c.accent : c.subText,
+                        padding: '4px 9px',
+                        borderRadius: '6px',
+                        fontSize: '10.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      {todosPidenGerente ? <CheckCircle2 size={12} /> : <Ban size={12} />}
+                      <span>Firma {obtenerNombreCorto(gerenteRamaObj)} en todos: {todosPidenGerente ? 'SÍ' : 'NO'}</span>
+                    </button>
+                  )}
+
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: c.subText, padding: '2px 8px', borderRadius: '6px', background: modoOscuro ? '#222' : '#f1f5f9' }}>
+                    {totalPersonasDivision}
+                  </span>
+                </div>
               </div>
 
               {divAbierta && (
@@ -572,6 +655,14 @@ export default function VistaArbol({
                     {deptosSec.map(depto => {
                       const abierto = Boolean(deptosAbiertosLocal[depto.id]);
                       const nombreDeptoNorm = normalizar(depto.nombre);
+                      const infoRuta = describirRutaEcualizador(depto, usuarios);
+
+                      const jefeDeptoObj = depto.jefe_id ? usuarios.find(u => u.id === depto.jefe_id) : null;
+                      const gerenteDeptoObj = depto.gerente_id ? usuarios.find(u => u.id === depto.gerente_id) : gerenteRamaObj;
+                      const esGerenteRH = gerenteDeptoObj?.rol === 'gerente_rh';
+
+                      const swJefeActivo = depto.emp_requiere_jefe !== false && (Boolean(jefeDeptoObj) || depto.nombre === 'RECURSOS HUMANOS');
+                      const swGerenteActivo = Boolean(depto.emp_requiere_gerente) && Boolean(gerenteDeptoObj) && !esGerenteRH;
 
                       const personalDepto = (usuarios || [])
                         .filter(u => u.departamento_id === depto.id && u.activo === true && !idsGerentesDivision.has(u.id))
@@ -609,25 +700,86 @@ export default function VistaArbol({
                         <div key={depto.id} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '8px', position: 'relative', boxSizing: 'border-box', width: '100%' }}>
                           <div
                             onClick={() => toggleDeptoLocal(depto.id)}
-                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: esMobile ? '11px 13px' : '12px 16px', cursor: 'pointer', borderRadius: abierto ? '8px 8px 0 0' : '8px', borderBottom: abierto ? `1px solid ${c.border}` : 'none', gap: '8px' }}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: esMobile ? '11px 13px' : '12px 16px', cursor: 'pointer', borderRadius: abierto ? '8px 8px 0 0' : '8px', borderBottom: abierto ? `1px solid ${c.border}` : 'none', gap: '10px', flexWrap: 'wrap' }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0, flex: 1 }}>
                               <div style={{ color: c.subText, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 {abierto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                               </div>
-                              <span style={{ fontSize: esMobile ? '13px' : '14px', fontWeight: '800', color: c.text, letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {depto.nombre}
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+                                <span style={{ fontSize: esMobile ? '13px' : '14px', fontWeight: '800', color: c.text, letterSpacing: '0.03em' }}>
+                                  {depto.nombre}
+                                </span>
+
+                                {/* MODO LECTURA: TEXTO LIMPIO DE LA CADENA */}
+                                {!seguridadDesbloqueada && (
+                                  <span style={{ fontSize: '11px', color: c.subText, fontWeight: '600' }}>
+                                    {infoRuta.rutaEmpleados}
+                                  </span>
+                                )}
+
+                                {/* MODO EDICIÓN: PÍLDORAS INTERACTIVAS DE 1 CLIC (JEFE -> GERENTE -> RH) */}
+                                {seguridadDesbloqueada && (
+                                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                    {(jefeDeptoObj || depto.nombre === 'RECURSOS HUMANOS') && (
+                                      <>
+                                        <span
+                                          className="switch-pill"
+                                          onClick={(e) => handleToggleSwitchDepto(e, depto, 'emp_requiere_jefe')}
+                                          title="Toca para encender u omitir la Firma 1 (Jefe)"
+                                          style={{
+                                            background: swJefeActivo ? c.accentSoft : 'transparent',
+                                            border: swJefeActivo ? `1px solid ${c.accent}` : `1px dashed ${c.border}`,
+                                            color: swJefeActivo ? c.accent : c.subText,
+                                            textDecoration: swJefeActivo ? 'none' : 'line-through',
+                                            opacity: procesandoSwitchId === `${depto.id}_emp_requiere_jefe` ? 0.5 : 1
+                                          }}
+                                        >
+                                          {swJefeActivo ? <CheckCircle2 size={11} /> : <Ban size={11} />}
+                                          <span>Jefe: {jefeDeptoObj ? obtenerNombreCorto(jefeDeptoObj) : 'Subárea'}</span>
+                                        </span>
+                                        <ArrowRight size={11} color={c.subText} />
+                                      </>
+                                    )}
+
+                                    {gerenteDeptoObj && !esGerenteRH && (
+                                      <>
+                                        <span
+                                          className="switch-pill"
+                                          onClick={(e) => handleToggleSwitchDepto(e, depto, 'emp_requiere_gerente')}
+                                          title="Toca para encender u omitir la Firma 2 (Gerente)"
+                                          style={{
+                                            background: swGerenteActivo ? c.accentSoft : 'transparent',
+                                            border: swGerenteActivo ? `1px solid ${c.accent}` : `1px dashed ${c.border}`,
+                                            color: swGerenteActivo ? c.accent : c.subText,
+                                            textDecoration: swGerenteActivo ? 'none' : 'line-through',
+                                            opacity: procesandoSwitchId === `${depto.id}_emp_requiere_gerente` ? 0.5 : 1
+                                          }}
+                                        >
+                                          {swGerenteActivo ? <CheckCircle2 size={11} /> : <Ban size={11} />}
+                                          <span>Gerente: {obtenerNombreCorto(gerenteDeptoObj)}</span>
+                                        </span>
+                                        <ArrowRight size={11} color={c.subText} />
+                                      </>
+                                    )}
+
+                                    <span style={{ fontSize: '10.5px', fontWeight: '800', color: c.text, padding: '2px 6px', borderRadius: '5px', background: modoOscuro ? '#222' : '#f1f5f9' }}>
+                                      RH
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                               {seguridadDesbloqueada && (
                                 <button
                                   onClick={(e) => abrirModalDepto(depto, e)}
-                                  title="Editar Departamento"
-                                  style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.subText, cursor: 'pointer', padding: '4px 7px', display: 'flex', alignItems: 'center' }}
+                                  title="Cambiar nombre o titulares del departamento"
+                                  style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '6px', color: c.text, cursor: 'pointer', padding: '5px 9px', fontSize: '10.5px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}
                                 >
-                                  <Edit2 size={12} />
+                                  <Settings size={12} color={c.accent} />
+                                  <span>Área</span>
                                 </button>
                               )}
                               <span style={{ fontSize: '11px', color: c.subText, fontWeight: '700', padding: '2px 7px', borderRadius: '5px', background: modoOscuro ? '#222' : '#f1f5f9' }}>
@@ -770,7 +922,7 @@ export default function VistaArbol({
       </div>
 
       {/* =====================================================================
-          MODAL SIMPLE DE DEPARTAMENTO (SOLO NOMBRE, FIRMA 1 Y FIRMA 2)
+          MODAL DE DEPARTAMENTO (CAMBIAR NOMBRE O TITULARES)
          ===================================================================== */}
       {modalDepto && (
         <div onClick={() => setModalDepto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2600, padding: '16px' }}>
@@ -799,14 +951,14 @@ export default function VistaArbol({
 
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                  Firma 1 (Jefe Inmediato)
+                  Jefe del Departamento (Firma 1)
                 </label>
                 <select
                   value={modalDepto.jefe_id || ''}
                   onChange={e => setModalDepto({ ...modalDepto, jefe_id: e.target.value })}
                   style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
                 >
-                  <option value="">NO REQUIERE (Pasa directo a Firma 2 / RH)</option>
+                  <option value="">SIN JEFE INTERMEDIO</option>
                   {candidatosJefeDepto.map(j => (
                     <option key={j.id} value={j.id}>
                       {formatearNombreNaturalMayus(j)}
@@ -817,14 +969,14 @@ export default function VistaArbol({
 
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                  Firma 2 (Gerente)
+                  División / Gerente (Firma 2)
                 </label>
                 <select
-                  value={modalDepto.firma_2_gerente_id || ''}
-                  onChange={e => setModalDepto({ ...modalDepto, firma_2_gerente_id: e.target.value })}
+                  value={modalDepto.gerente_id || ''}
+                  onChange={e => setModalDepto({ ...modalDepto, gerente_id: e.target.value })}
                   style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
                 >
-                  <option value="">NO REQUIERE (Pasa directo a RH)</option>
+                  <option value="">DIRECTO A RH</option>
                   {candidatosGerenteDivision.map(g => (
                     <option key={g.id} value={g.id}>
                       {formatearNombreNaturalMayus(g)}
@@ -846,7 +998,7 @@ export default function VistaArbol({
         </div>
       )}
 
-   {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL */}
+      {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL */}
       {userEditando && (() => {
         const esCabezaDivision = ['gerente_produccion', 'gerente_admin', 'gerente_rh'].includes(userEditando.rol);
         return (
@@ -1103,10 +1255,11 @@ function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloque
       {seguridadDesbloqueada && (
         <button
           onClick={(e) => onEditarUsuario(u, e)}
-          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '5px', color: c.text, cursor: 'pointer', padding: '5px 7px', fontSize: '10.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
-          title="Editar ubicación"
+          style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: '6px', color: c.subText, cursor: 'pointer', padding: '5px 8px', fontSize: '10.5px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
+          title="Reubicar o cambiar mando de esta persona"
         >
-          <Edit2 size={12} />
+          <UserCog size={12} />
+          {!esMobile && <span>Mover</span>}
         </button>
       )}
     </div>
