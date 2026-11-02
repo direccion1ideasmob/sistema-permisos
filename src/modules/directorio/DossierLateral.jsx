@@ -1,8 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle, GitBranch } from 'lucide-react';
+import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle } from 'lucide-react';
 import {
   estandarizar,
-  describirRutaColaborador,
   formatearNombreNaturalMayus,
   compararPorNombreNatural
 } from './utils/directorioHelpers';
@@ -28,12 +27,6 @@ export default function DossierLateral({
   const deptoActualId = (editando ? datosEdit?.departamento_id : colaborador?.departamento_id) || '';
   const deptoActualObj = departamentos.find(d => d.id === deptoActualId);
 
-  // Calcular la Ruta de Firmas INDIVIDUAL exacta del colaborador (en lectura o en edición en vivo)
-  const rutaFirmasIndividual = useMemo(() => {
-    const sujeto = editando ? { ...colaborador, ...datosEdit } : colaborador;
-    return describirRutaColaborador(sujeto, deptoActualObj, usuarios);
-  }, [editando, colaborador, datosEdit, deptoActualObj, usuarios]);
-
   const personalMismoDepto = useMemo(() => {
     if (!deptoActualId) return [];
     return usuarios.filter(u => u.departamento_id === deptoActualId && u.activo !== false);
@@ -58,7 +51,6 @@ export default function DossierLateral({
     return [...conjunto].filter(Boolean).sort();
   }, [personalMismoDepto, datosEdit?.puesto]);
 
-  // Permitir asignar a cualquier mando activo (ordenados por nombre natural, primero los de su departamento)
   const posiblesSuperiores = useMemo(() => {
     if (!colaborador) return [];
     return (usuarios || [])
@@ -79,18 +71,16 @@ export default function DossierLateral({
   const urlFirma = editando ? datosEdit.firma_url : colaborador.firma_url;
   const sedeNombre = sedes.find(s => s.id === (editando ? datosEdit.sede_id : colaborador.sede_id))?.nombre || 'Sin Sede';
 
+  const rolActual = (editando ? datosEdit.rol : colaborador.rol) || 'empleado';
+  const esJefeDeArea = rolActual === 'jefe_area' || (deptoActualObj && deptoActualObj.jefe_id === colaborador.id);
+
+  // Resolver quién es su jefe inmediato actual para mostrarlo en lectura
   const superiorEfectivoObj = (() => {
     if (colaborador.reporta_a_id) {
-      const sup = usuarios.find(u => u.id === colaborador.reporta_a_id);
-      if (sup) return sup;
+      return usuarios.find(u => u.id === colaborador.reporta_a_id) || null;
     }
-    if (deptoActualObj) {
-      if (deptoActualObj.jefe_id && deptoActualObj.jefe_id !== colaborador.id) {
-        return usuarios.find(u => u.id === deptoActualObj.jefe_id) || null;
-      }
-      if (deptoActualObj.gerente_id && deptoActualObj.gerente_id !== colaborador.id) {
-        return usuarios.find(u => u.id === deptoActualObj.gerente_id) || null;
-      }
+    if (!esJefeDeArea && deptoActualObj?.jefe_id && deptoActualObj.jefe_id !== colaborador.id) {
+      return usuarios.find(u => u.id === deptoActualObj.jefe_id) || null;
     }
     return null;
   })();
@@ -120,7 +110,7 @@ export default function DossierLateral({
 
     return (
       <div style={{ marginTop: '6px', background: c.bg, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span style={{ fontSize: '9.5px', color: c.textMuted, paddingLeft: '4px', fontWeight: '700' }}>Existentes en la empresa (Toca para usar):</span>
+        <span style={{ fontSize: '9.5px', color: c.textMuted, paddingLeft: '4px', fontWeight: '700' }}>Existentes (Toca para usar):</span>
         {coincidencias.slice(0, 4).map((item, idx) => {
           const etiqueta = typeof item === 'string' ? item : item.nombre;
           return (
@@ -227,15 +217,13 @@ export default function DossierLateral({
     }
   };
 
-  const esJefeTitularActual = Boolean(deptoActualObj && deptoActualObj.jefe_id === colaborador.id);
-
   return (
     <div className="dossier-overlay" onClick={onClose}>
       <aside className="dossier-drawer" onClick={e => e.stopPropagation()}>
         <div style={{ padding: '16px 20px', borderBottom: `1.5px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: c.surfaceCard, flexShrink: 0 }}>
           <div>
             <div style={{ fontSize: '11.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {editando ? 'MODO EDICIÓN HABILITADO' : 'EXPEDIENTE CORPORATIVO'}
+              {editando ? 'EDITAR COLABORADOR' : 'EXPEDIENTE CORPORATIVO'}
             </div>
             <div style={{ fontSize: '11px', color: c.textMuted, marginTop: '2px', display: 'flex', gap: '6px' }}>
               <span>#{colaborador.numero_empleado}</span><span>•</span><span>{sedeNombre}</span>
@@ -319,11 +307,11 @@ export default function DossierLateral({
             </div>
           )}
 
-          {/* BLOQUE 1: ESTRUCTURA, PUESTO Y RUTA DE FIRMAS */}
+          {/* BLOQUE 1: DATOS LABORALES */}
           <div style={{ background: c.surfaceCard, borderRadius: '16px', padding: '20px', border: `1.5px solid ${c.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: `1.5px solid ${c.borderDivider}` }}>
               <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Briefcase size={14} /></div>
-              <span style={{ fontSize: '12px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>Estructura, Puesto y Cadena de Mando</span>
+              <span style={{ fontSize: '12px', fontWeight: '800', color: c.text, textTransform: 'uppercase' }}>Ubicación y Puesto</span>
             </div>
 
             {editando ? (
@@ -343,12 +331,12 @@ export default function DossierLateral({
 
                 {/* 1. SEDE */}
                 <div>
-                  <label className="touch-field-label">Sede / Región</label>
+                  <label className="touch-field-label">Sede</label>
                   {!creandoNuevo.sede ? (
                     <select className="touch-field-input" value={datosEdit.sede_id || ''} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, sede: true }) : setDatosEdit({ ...datosEdit, sede_id: e.target.value })}>
                       <option value="">Sin Sede</option>
                       {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                      <option value="NEW">+ Crear Nueva Sede...</option>
+                      <option value="NEW">+ Nueva Sede...</option>
                     </select>
                   ) : (
                     <div>
@@ -384,7 +372,7 @@ export default function DossierLateral({
                     >
                       <option value="">Sin Depto</option>
                       {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                      <option value="NEW">+ Crear Nuevo Depto...</option>
+                      <option value="NEW">+ Nuevo Depto...</option>
                     </select>
                   ) : (
                     <div>
@@ -397,23 +385,23 @@ export default function DossierLateral({
                   )}
                 </div>
 
-                {/* 3. SUBDEPARTAMENTO / ÁREA */}
+                {/* 3. SUBÁREA */}
                 <div>
-                  <label className="touch-field-label">Subdepto / Área</label>
+                  <label className="touch-field-label">Subárea (Opcional)</label>
                   {!creandoNuevo.area ? (
                     <select 
                       className="touch-field-input" 
                       value={datosEdit.area || ''} 
                       onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, area: true }) : setDatosEdit({ ...datosEdit, area: e.target.value })}
                     >
-                      <option value="">Seleccionar Subdepto / Área</option>
+                      <option value="">General del Departamento</option>
                       {subdeptosDelDepto.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                      <option value="NEW">+ Crear Nuevo Subdepto...</option>
+                      <option value="NEW">+ Nueva Subárea...</option>
                     </select>
                   ) : (
                     <div>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                        <input type="text" autoFocus className="touch-field-input" placeholder="Nuevo subdepto..." value={textosNuevos.area} onChange={e => setTextosNuevos({ ...textosNuevos, area: e.target.value.toUpperCase() })} />
+                        <input type="text" autoFocus className="touch-field-input" placeholder="Nueva subárea..." value={textosNuevos.area} onChange={e => setTextosNuevos({ ...textosNuevos, area: e.target.value.toUpperCase() })} />
                         <button type="button" onClick={() => { setCreandoNuevo({ ...creandoNuevo, area: false }); setTextosNuevos({ ...textosNuevos, area: '' }); }} style={{ padding: '0 8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}><X size={14} /></button>
                       </div>
                       {renderSugerencias(textosNuevos.area, areas, 'area')}
@@ -421,18 +409,18 @@ export default function DossierLateral({
                   )}
                 </div>
 
-                {/* 4. PUESTO REAL */}
+                {/* 4. PUESTO */}
                 <div>
-                  <label className="touch-field-label">Puesto Real (Texto libre)</label>
+                  <label className="touch-field-label">Puesto</label>
                   {!creandoNuevo.puesto ? (
                     <select 
                       className="touch-field-input" 
                       value={datosEdit.puesto || ''} 
                       onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, puesto: true }) : setDatosEdit({ ...datosEdit, puesto: e.target.value })}
                     >
-                      <option value="">Sin Puesto Asignado</option>
+                      <option value="">Sin Puesto</option>
                       {puestosDelDepto.map(p => <option key={p} value={p}>{p}</option>)}
-                      <option value="NEW">+ Crear Nuevo Puesto...</option>
+                      <option value="NEW">+ Nuevo Puesto...</option>
                     </select>
                   ) : (
                     <div>
@@ -445,31 +433,25 @@ export default function DossierLateral({
                   )}
                 </div>
 
-                {/* 5. JEFE INMEDIATO INDIVIDUAL */}
+                {/* 5. JEFE INMEDIATO DIRECTO */}
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="touch-field-label">Jefe Inmediato (A quién reporta esta persona)</label>
+                  <label className="touch-field-label">
+                    {esJefeDeArea ? 'Quién autoriza a este Jefe (Su Jefe Inmediato)' : 'Jefe Inmediato (Firma 1)'}
+                  </label>
                   <select 
                     className="touch-field-input" 
                     value={datosEdit.reporta_a_id || ''} 
                     onChange={e => setDatosEdit({ ...datosEdit, reporta_a_id: e.target.value })}
                   >
-                    <option value="">Usar el Jefe del Departamento automáticamente</option>
+                    <option value="">
+                      {esJefeDeArea ? 'NO REQUIERE (Pasa directo a RH)' : 'El Jefe del Departamento'}
+                    </option>
                     {posiblesSuperiores.map(sup => (
                       <option key={sup.id} value={sup.id}>
-                        {formatearNombreNaturalMayus(sup)} — ({sup.area || sup.puesto})
+                        {formatearNombreNaturalMayus(sup)}
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* VISTA PREVIA EN TIEMPO REAL DE LA RUTA DE FIRMAS RESULTANTE */}
-                <div style={{ gridColumn: '1 / -1', padding: '10px 12px', borderRadius: '10px', background: c.accentSoft, border: `1px solid ${c.accent}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '11.5px', fontWeight: '800', color: c.text, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <GitBranch size={13} color={c.accent} /> Ruta de Firmas resultante:
-                  </span>
-                  <strong style={{ fontSize: '12px', fontWeight: '900', color: c.accent }}>
-                    {rutaFirmasIndividual}
-                  </strong>
                 </div>
 
                 <div><label className="touch-field-label">Fecha de Nacimiento</label><input type="date" className="touch-field-input" value={datosEdit.fecha_nacimiento || ''} onChange={e => setDatosEdit({ ...datosEdit, fecha_nacimiento: e.target.value })} /></div>
@@ -477,16 +459,10 @@ export default function DossierLateral({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '13px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Sede Fija</span><strong style={{ color: c.text }}>{sedeNombre}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Sede</span><strong style={{ color: c.text }}>{sedeNombre}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Departamento</span><strong style={{ color: c.text }}>{deptoActualObj?.nombre || colaborador.departamentos?.nombre || 'No asignado'}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Subdepto / Área</span><strong style={{ color: c.text }}>{colaborador.area || 'General'}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Subárea</span><strong style={{ color: c.text }}>{colaborador.area || 'General'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Jefe Inmediato</span><strong style={{ color: c.text }}>{superiorNombre}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}>
-                  <span style={{ color: c.textMuted, display: 'flex', alignItems: 'center', gap: '4px' }}><GitBranch size={12} color={c.accent} /> Ruta de Firmas</span>
-                  <strong style={{ color: c.accent }}>
-                    {rutaFirmasIndividual}
-                  </strong>
-                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Tipo de Nómina</span><strong style={{ color: c.accent, textTransform: 'uppercase' }}>{colaborador.tipo_personal}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Fecha Nacimiento</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_nacimiento || 'No registrada'}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Fecha Ingreso</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.fecha_ingreso || 'No registrada'}</span></div>
@@ -508,30 +484,18 @@ export default function DossierLateral({
                 <div><label className="touch-field-label">Usuario ERP</label><input className="touch-field-input" value={datosEdit.usuario_login || ''} onChange={e => setDatosEdit({ ...datosEdit, usuario_login: e.target.value })} /></div>
                 <div><label className="touch-field-label">PIN</label><input className="touch-field-input mono-id" placeholder="****" value={datosEdit.pin || ''} onChange={e => setDatosEdit({ ...datosEdit, pin: e.target.value })} /></div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="touch-field-label">Nivel de Autoridad en el Sistema</label>
+                  <label className="touch-field-label">Rol en el Sistema</label>
                   <select className="touch-field-input" value={datosEdit.rol || 'empleado'} onChange={e => setDatosEdit({ ...datosEdit, rol: e.target.value })}>
-                    <option value="empleado">EMPLEADO / OPERADOR (Solo solicita permisos)</option>
-                    <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR (Autoriza Firma 1)</option>
-                    <option value="gerente_division">VALIDADOR SUPERIOR / NUEVA GERENCIA (Autoriza Firma 2)</option>
-                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (Planta)</option>
-                    <option value="gerente_admin">GERENTE ADMINISTRATIVO (Oficina)</option>
-                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS (Firma 3 Final)</option>
-                    <option value="rh_nominas">TITULAR RH / NÓMINAS (Dictamina nómina)</option>
+                    <option value="empleado">EMPLEADO / OPERADOR</option>
+                    <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR</option>
+                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
+                    <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
+                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                    <option value="rh_nominas">TITULAR RH / NÓMINAS</option>
                     <option value="caseta">CASETA / VIGILANCIA</option>
                     <option value="superadmin">SUPER ADMINISTRADOR</option>
                   </select>
                 </div>
-
-                {datosEdit.rol === 'jefe_area' && (
-                  <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', borderRadius: '8px', background: c.accentSoft, border: `1px solid ${c.accent}`, fontSize: '12px', fontWeight: '700', color: c.text, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={datosEdit.es_titular_depto !== undefined ? Boolean(datosEdit.es_titular_depto) : esJefeTitularActual}
-                      onChange={e => setDatosEdit({ ...datosEdit, es_titular_depto: e.target.checked })}
-                    />
-                    <span>Nombrar Jefe Titular de todo el departamento</span>
-                  </label>
-                )}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', fontSize: '13px' }}>
@@ -550,7 +514,7 @@ export default function DossierLateral({
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Teléfono Fijo</span><span style={{ fontWeight: '500', color: c.text }}>{colaborador.telefono || 'No registrado'}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Correo</span><strong style={{ color: c.text }}>{colaborador.correo || 'No registrado'}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1.5px solid ${c.borderDivider}` }}><span style={{ color: c.textMuted }}>Usuario ERP</span><strong style={{ color: c.accent }}>@{colaborador.usuario_login || 'Sin usuario'}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Nivel en Sistema</span><strong style={{ color: c.text, textTransform: 'uppercase' }}>{colaborador.rol?.replace(/_/g, ' ')}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}><span style={{ color: c.textMuted }}>Rol en Sistema</span><strong style={{ color: c.text, textTransform: 'uppercase' }}>{colaborador.rol?.replace(/_/g, ' ')}</strong></div>
               </div>
             )}
           </div>
@@ -582,7 +546,7 @@ export default function DossierLateral({
         {editando && (
           <div style={{ padding: '16px 20px', borderTop: `1.5px solid ${c.border}`, background: c.surfaceCard, display: 'flex', justifyContent: 'flex-end', gap: '10px', flexShrink: 0 }}>
             <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: '8px', border: `1.5px solid ${c.border}`, background: 'transparent', color: c.textMuted, fontSize: '12.5px', fontWeight: '600', cursor: 'pointer' }}>Cancelar</button>
-            <button onClick={handleGuardarExpediente} disabled={guardando} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: c.accent, color: '#fff', fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button onClick={handleGuardarExpediente} disabled={guardando} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: c.accent, color: '#fff', fontSize: '12.5px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
               <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar Cambios'}
             </button>
           </div>

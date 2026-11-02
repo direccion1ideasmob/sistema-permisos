@@ -1,9 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { X, Camera, Image, Eye, UserPlus, Shield, Briefcase, PenTool, CheckCircle, GitBranch } from 'lucide-react';
-import { estandarizar, esRolValidadorSuperior, describirRutaEcualizador } from './utils/directorioHelpers';
+import { X, Camera, Image, Eye, UserPlus, Shield, Briefcase, PenTool, CheckCircle } from 'lucide-react';
+import { estandarizar, formatearNombreNaturalMayus, compararPorNombreNatural } from './utils/directorioHelpers';
 import { registrarNuevoColaborador } from './services/directorioService';
 import { obtenerTemaGlobal } from '../../core/theme/temaGlobal';
-import { compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 
 export default function ModalColaborador({ 
   onClose, onSuccess, usuarios = [], departamentos = [], areas = [], puestos = [], sedes = [], modoOscuro 
@@ -12,8 +11,7 @@ export default function ModalColaborador({
     numero_empleado: '', nombre: '', apellido_paterno: '', apellido_materno: '',
     nombre_completo: '', fecha_nacimiento: '', fecha_ingreso: '', celular: '',
     telefono: '', correo: '', tipo_personal: 'produccion', sede_id: '', departamento_id: '',
-    area: '', puesto: '', rol: 'empleado', reporta_a_id: '', es_titular_depto: false,
-    nuevo_depto_gerente_id: '', nuevo_depto_emp_jefe: true, nuevo_depto_emp_gerente: false, nuevo_depto_jefe_gerente: true,
+    area: '', puesto: '', rol: 'empleado', reporta_a_id: '',
     usuario_login: '', pin: ''
   });
 
@@ -41,16 +39,6 @@ export default function ModalColaborador({
     accentGlow: 'rgba(22, 163, 74, 0.15)',
   };
 
-  const deptoSeleccionadoObj = useMemo(
-    () => departamentos.find(d => d.id === formData.departamento_id) || null,
-    [departamentos, formData.departamento_id]
-  );
-
-  const infoRutaDepto = useMemo(
-    () => deptoSeleccionadoObj ? describirRutaEcualizador(deptoSeleccionadoObj, usuarios) : null,
-    [deptoSeleccionadoObj, usuarios]
-  );
-
   const posiblesJefesDirectos = useMemo(() => {
     return (usuarios || [])
       .filter(u => u.activo !== false && !['empleado', 'caseta'].includes(u.rol))
@@ -58,20 +46,9 @@ export default function ModalColaborador({
         const aMismo = formData.departamento_id && a.departamento_id === formData.departamento_id ? 0 : 1;
         const bMismo = formData.departamento_id && b.departamento_id === formData.departamento_id ? 0 : 1;
         if (aMismo !== bMismo) return aMismo - bMismo;
-        return compararPorApellidoPaterno(a, b);
+        return compararPorNombreNatural(a, b);
       });
   }, [usuarios, formData.departamento_id]);
-
-  const validadoresSuperioresDisponibles = useMemo(() => {
-    return (usuarios || [])
-      .filter(u => u.activo !== false && !['empleado', 'caseta'].includes(u.rol))
-      .sort((a, b) => {
-        const aVal = esRolValidadorSuperior(a.rol) ? 0 : 1;
-        const bVal = esRolValidadorSuperior(b.rol) ? 0 : 1;
-        if (aVal !== bVal) return aVal - bVal;
-        return compararPorApellidoPaterno(a, b);
-      });
-  }, [usuarios]);
 
   const handlePartesNombreChange = (campo, valor) => {
     const valUpper = valor.toUpperCase();
@@ -144,7 +121,7 @@ export default function ModalColaborador({
     return (
       <div style={{ marginTop: '6px', background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '8px', padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <span style={{ fontSize: '10px', color: c.label, paddingLeft: '6px', fontWeight: '700', textTransform: 'uppercase' }}>
-          Coincidencias encontradas (Clic para usar existente):
+          Existentes (Toca para usar):
         </span>
         {coincidencias.slice(0, 4).map((item, i) => (
           <div 
@@ -164,35 +141,36 @@ export default function ModalColaborador({
     );
   };
 
+  const esJefeSeleccionado = formData.rol === 'jefe_area';
+
   return (
     <>
       <style>{`
         .modal-overlay { position: fixed; inset: 0; background: ${c.overlay}; backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-        .modal-box { background: ${c.bg}; border: 1px solid ${c.border}; border-radius: 20px; width: 100%; max-width: 760px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5); overflow: hidden; font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
-        .modal-header { padding: 20px 28px; background: ${c.surfaceCard}; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid ${c.border}; }
-        .modal-footer { padding: 16px 28px; background: ${c.surfaceCard}; border-top: 1px solid ${c.border}; display: flex; justify-content: flex-end; gap: 12px; }
-        .modal-body { padding: 24px 28px; overflow-y: auto; background: ${c.bg}; display: flex; flex-direction: column; gap: 32px; }
-        .modal-title { font-size: 19px; font-weight: 800; color: ${c.text}; margin: 0; letter-spacing: -0.02em; }
-        .modal-desc { font-size: 13px; color: ${c.label}; margin: 4px 0 0 0; font-weight: 500; }
-        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid ${c.border}; }
+        .modal-box { background: ${c.bg}; border: 1px solid ${c.border}; border-radius: 20px; width: 100%; max-width: 720px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5); overflow: hidden; font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif; }
+        .modal-header { padding: 18px 24px; background: ${c.surfaceCard}; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${c.border}; }
+        .modal-footer { padding: 16px 24px; background: ${c.surfaceCard}; border-top: 1px solid ${c.border}; display: flex; justify-content: flex-end; gap: 12px; }
+        .modal-body { padding: 22px 24px; overflow-y: auto; background: ${c.bg}; display: flex; flex-direction: column; gap: 26px; }
+        .modal-title { font-size: 18px; font-weight: 800; color: ${c.text}; margin: 0; }
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid ${c.border}; }
         .section-title { font-size: 12px; font-weight: 800; color: ${c.text}; text-transform: uppercase; letter-spacing: 0.04em; }
-        .form-grid { display: grid; grid-template-columns: 1fr; gap: 14px 18px; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px 16px; }
         @media (min-width: 600px) {
           .form-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
           .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
           .form-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
         }
-        .input-group { display: flex; flex-direction: column; gap: 6px; }
-        .clean-label { font-size: 11px; font-weight: 700; color: ${c.label}; text-transform: uppercase; letter-spacing: 0.02em; }
-        .clean-input { width: 100%; padding: 11px 13px; border-radius: 8px; border: 1px solid ${c.inputBorder}; background: ${c.inputBg}; color: ${c.text}; font-size: 13px; font-weight: 500; outline: none; box-sizing: border-box; text-transform: uppercase; font-family: inherit; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .clean-label { font-size: 11px; font-weight: 700; color: ${c.label}; text-transform: uppercase; }
+        .clean-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid ${c.inputBorder}; background: ${c.inputBg}; color: ${c.text}; font-size: 13px; font-weight: 500; outline: none; box-sizing: border-box; text-transform: uppercase; font-family: inherit; }
         .clean-input.no-upper { text-transform: none; }
         .clean-input:focus { border-color: ${c.accent}; box-shadow: 0 0 0 3px ${c.accentGlow}; }
         .inline-create-box { display: flex; gap: 8px; align-items: center; }
-        .btn-cancel-inline { padding: 11px; border-radius: 8px; background: transparent; color: ${c.label}; border: 1px solid ${c.border}; cursor: pointer; display: flex; align-items: center; }
+        .btn-cancel-inline { padding: 10px; border-radius: 8px; background: transparent; color: ${c.label}; border: 1px solid ${c.border}; cursor: 'pointer'; display: flex; align-items: center; }
         .btn-secondary { padding: 10px 16px; border-radius: 8px; border: 1px solid ${c.border}; background: transparent; color: ${c.text}; font-size: 12.5px; font-weight: 700; cursor: pointer; }
         .btn-primary { padding: 10px 20px; border-radius: 8px; border: none; background: ${c.accent}; color: #fff; font-size: 12.5px; font-weight: 800; cursor: pointer; }
-        .avatar-squircle { width: 80px; height: 80px; border-radius: 18px; overflow: hidden; border: 1px solid ${c.border}; position: relative; cursor: pointer; background: ${c.inputBg}; }
-        .firma-box { width: 190px; height: 80px; border-radius: 12px; border: 1.5px dashed ${c.border}; background: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+        .avatar-squircle { width: 76px; height: 76px; border-radius: 18px; overflow: hidden; border: 1px solid ${c.border}; position: relative; cursor: pointer; background: ${c.inputBg}; }
+        .firma-box { width: 180px; height: 76px; border-radius: 12px; border: 1.5px dashed ${c.border}; background: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
       `}</style>
 
       <input ref={camaraInputRef} type="file" accept="image/*" capture="environment" onChange={handleSeleccionarFoto} style={{ display: 'none' }} />
@@ -202,10 +180,7 @@ export default function ModalColaborador({
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-box" onClick={e => e.stopPropagation()}>
           <div className="modal-header">
-            <div>
-              <h2 className="modal-title">Nuevo Colaborador</h2>
-              <p className="modal-desc">Completa los datos para registrar un elemento en el directorio corporativo.</p>
-            </div>
+            <h2 className="modal-title">Nuevo Colaborador</h2>
             <button onClick={onClose} style={{ background: c.inputBg, border: `1px solid ${c.border}`, borderRadius: '50%', color: c.label, cursor: 'pointer', padding: '6px', display: 'flex' }}><X size={18} /></button>
           </div>
 
@@ -219,8 +194,8 @@ export default function ModalColaborador({
               <div className="firma-box" onClick={() => firmaInputRef.current?.click()}>
                 {firmaPreview ? <img src={firmaPreview} alt="Firma" style={{ width: '90%', height: '90%', objectFit: 'contain' }} /> : (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                    <PenTool color="#737373" size={20} />
-                    <span style={{ fontSize: '10.5px', fontWeight: '800', color: "#737373", textTransform: 'uppercase' }}>Subir Firma</span>
+                    <PenTool color="#737373" size={18} />
+                    <span style={{ fontSize: '10px', fontWeight: '800', color: "#737373", textTransform: 'uppercase' }}>Subir Firma</span>
                   </div>
                 )}
               </div>
@@ -228,8 +203,8 @@ export default function ModalColaborador({
 
             <div>
               <div className="section-header">
-                <div style={{ background: c.accentSoft, padding: '7px', borderRadius: '8px', color: c.accent, display: 'flex' }}><UserPlus size={15} /></div>
-                <span className="section-title">Información Personal</span>
+                <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}><UserPlus size={14} /></div>
+                <span className="section-title">Datos Personales</span>
               </div>
 
               <div className="form-grid cols-3">
@@ -238,7 +213,7 @@ export default function ModalColaborador({
                 <div className="input-group"><label className="clean-label">Apellido Materno</label><input type="text" className="clean-input" placeholder="Ej. López" value={formData.apellido_materno} onChange={e => handlePartesNombreChange('apellido_materno', e.target.value)} /></div>
               </div>
 
-              <div className="form-grid cols-4" style={{ marginTop: '14px' }}>
+              <div className="form-grid cols-4" style={{ marginTop: '12px' }}>
                 <div className="input-group"><label className="clean-label">Núm. Empleado *</label><input type="text" required className="clean-input" placeholder="Ej. 540" value={formData.numero_empleado} onChange={e => setFormData({...formData, numero_empleado: e.target.value.toUpperCase()})} /></div>
                 <div className="input-group"><label className="clean-label">Fecha Nacimiento</label><input type="date" className="clean-input" value={formData.fecha_nacimiento} onChange={e => setFormData({...formData, fecha_nacimiento: e.target.value})} /></div>
                 <div className="input-group"><label className="clean-label">Fecha Ingreso</label><input type="date" className="clean-input" value={formData.fecha_ingreso} onChange={e => setFormData({...formData, fecha_ingreso: e.target.value})} /></div>
@@ -248,18 +223,18 @@ export default function ModalColaborador({
 
             <div>
               <div className="section-header">
-                <div style={{ background: c.accentSoft, padding: '7px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Briefcase size={15} /></div>
-                <span className="section-title">Ubicación, Puesto y Cadena de Mando</span>
+                <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Briefcase size={14} /></div>
+                <span className="section-title">Ubicación y Puesto</span>
               </div>
               
               <div className="form-grid cols-2">
                 <div className="input-group">
-                  <label className="clean-label">Sede / Región *</label>
+                  <label className="clean-label">Sede *</label>
                   {!creandoNuevo.sede ? (
                     <select required className="clean-input" value={formData.sede_id} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, sede: true}) : setFormData({...formData, sede_id: e.target.value})}>
                       <option value="">Seleccionar sede</option>
                       {sedes?.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                      <option value="NEW">+ Crear o Buscar Sede...</option>
+                      <option value="NEW">+ Nueva Sede...</option>
                     </select>
                   ) : (
                     <div>
@@ -273,7 +248,7 @@ export default function ModalColaborador({
                 </div>
 
                 <div className="input-group">
-                  <label className="clean-label">Tipo de Nómina (Independiente de jerarquía) *</label>
+                  <label className="clean-label">Tipo de Nómina *</label>
                   <select className="clean-input" value={formData.tipo_personal} onChange={e => setFormData({...formData, tipo_personal: e.target.value})}>
                     <option value="produccion">PRODUCCIÓN (Folio P)</option>
                     <option value="administrativo">ADMINISTRATIVO (Folio A)</option>
@@ -282,7 +257,7 @@ export default function ModalColaborador({
                 </div>
               </div>
 
-              <div className="form-grid cols-2" style={{ marginTop: '14px' }}>
+              <div className="form-grid cols-2" style={{ marginTop: '12px' }}>
                 <div className="input-group">
                   <label className="clean-label">Departamento *</label>
                   {!creandoNuevo.depto ? (
@@ -305,46 +280,31 @@ export default function ModalColaborador({
                     >
                       <option value="">Seleccionar departamento</option>
                       {departamentos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                      <option value="NEW">+ Crear Nuevo Departamento...</option>
+                      <option value="NEW">+ Nuevo Departamento...</option>
                     </select>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div>
                       <div className="inline-create-box">
-                        <input autoFocus type="text" className="clean-input" placeholder="Ej. COMPRAS, EMBARQUES..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value.toUpperCase()})} />
+                        <input autoFocus type="text" className="clean-input" placeholder="Nombre del departamento..." value={textosNuevos.depto} onChange={e => setTextosNuevos({...textosNuevos, depto: e.target.value.toUpperCase()})} />
                         <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
                       </div>
                       {buscarSugerencias(textosNuevos.depto, departamentos, 'depto')}
-                      <div style={{ padding: '10px', borderRadius: '8px', background: c.surfaceCard, border: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>
-                          ¿De qué Gerencia / Validador colgará este nuevo departamento?
-                        </span>
-                        <select
-                          className="clean-input"
-                          value={formData.nuevo_depto_gerente_id}
-                          onChange={e => setFormData({ ...formData, nuevo_depto_gerente_id: e.target.value })}
-                        >
-                          <option value="">Autónomo / Directo a Recursos Humanos</option>
-                          {validadoresSuperioresDisponibles.map(g => (
-                            <option key={g.id} value={g.id}>{g.nombre_completo} ({g.puesto || g.rol.replace(/_/g, ' ')})</option>
-                          ))}
-                        </select>
-                      </div>
                     </div>
                   )}
                 </div>
 
                 <div className="input-group">
-                  <label className="clean-label">Subdepto / Área (Opcional)</label>
+                  <label className="clean-label">Subárea (Opcional)</label>
                   {!creandoNuevo.area ? (
                     <select className="clean-input" value={formData.area} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, area: true}) : setFormData({...formData, area: e.target.value})}>
-                      <option value="">Mismo que el Departamento (General)</option>
+                      <option value="">General del Departamento</option>
                       {areas.map(a => <option key={a} value={a}>{a}</option>)}
-                      <option value="NEW">+ Crear Nueva Área...</option>
+                      <option value="NEW">+ Nueva Subárea...</option>
                     </select>
                   ) : (
                     <div>
                       <div className="inline-create-box">
-                        <input autoFocus type="text" className="clean-input" placeholder="Nombre del área..." value={textosNuevos.area} onChange={e => setTextosNuevos({...textosNuevos, area: e.target.value.toUpperCase()})} />
+                        <input autoFocus type="text" className="clean-input" placeholder="Nombre de la subárea..." value={textosNuevos.area} onChange={e => setTextosNuevos({...textosNuevos, area: e.target.value.toUpperCase()})} />
                         <button type="button" onClick={() => { setCreandoNuevo({...creandoNuevo, area: false}); setTextosNuevos({...textosNuevos, area: ''}) }} className="btn-cancel-inline"><X size={16} /></button>
                       </div>
                       {buscarSugerencias(textosNuevos.area, areas, 'area')}
@@ -353,14 +313,14 @@ export default function ModalColaborador({
                 </div>
               </div>
 
-              <div className="form-grid cols-2" style={{ marginTop: '14px' }}>
+              <div className="form-grid cols-2" style={{ marginTop: '12px' }}>
                 <div className="input-group">
-                  <label className="clean-label">Puesto Específico (Texto libre)</label>
+                  <label className="clean-label">Puesto</label>
                   {!creandoNuevo.puesto ? (
                     <select className="clean-input" value={formData.puesto} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, puesto: true}) : setFormData({...formData, puesto: e.target.value})}>
-                      <option value="">SIN PUESTO ESPECIFICADO</option>
+                      <option value="">Sin Puesto</option>
                       {puestos.map(p => <option key={p} value={p}>{p}</option>)}
-                      <option value="NEW">+ Crear Nuevo Puesto...</option>
+                      <option value="NEW">+ Nuevo Puesto...</option>
                     </select>
                   ) : (
                     <div>
@@ -374,72 +334,51 @@ export default function ModalColaborador({
                 </div>
 
                 <div className="input-group">
-                  <label className="clean-label">Jefe Directo / Reporta a</label>
+                  <label className="clean-label">
+                    {esJefeSeleccionado ? 'Quién autoriza a este Jefe (Su Jefe Inmediato)' : 'Jefe Inmediato (Firma 1)'}
+                  </label>
                   <select
                     className="clean-input"
                     value={formData.reporta_a_id}
                     onChange={e => setFormData({ ...formData, reporta_a_id: e.target.value })}
                   >
-                    <option value="">Automático según el Ecualizador del Departamento</option>
+                    <option value="">
+                      {esJefeSeleccionado ? 'NO REQUIERE (Pasa directo a RH)' : 'El Jefe del Departamento'}
+                    </option>
                     {posiblesJefesDirectos.map(j => (
-                      <option key={j.id} value={j.id}>{j.nombre_completo} — ({j.area || j.puesto})</option>
+                      <option key={j.id} value={j.id}>{formatearNombreNaturalMayus(j)}</option>
                     ))}
                   </select>
                 </div>
               </div>
-
-              {infoRutaDepto && !creandoNuevo.depto && (
-                <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: c.accentSoft, border: `1px solid ${c.accent}`, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: c.text }}>
-                  <GitBranch size={15} color={c.accent} style={{ flexShrink: 0 }} />
-                  <div>
-                    <strong>Ruta activa del departamento {deptoSeleccionadoObj.nombre}:</strong> Empleados ({infoRutaDepto.rutaEmpleados}) • Jefatura ({infoRutaDepto.rutaJefe})
-                  </div>
-                </div>
-              )}
             </div>
 
             <div>
               <div className="section-header">
-                <div style={{ background: c.accentSoft, padding: '7px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Shield size={15} /></div>
-                <span className="section-title">Nivel de Autoridad y Accesos ERP</span>
+                <div style={{ background: c.accentSoft, padding: '6px', borderRadius: '8px', color: c.accent, display: 'flex' }}><Shield size={14} /></div>
+                <span className="section-title">Accesos al Sistema</span>
               </div>
               
               <div className="form-grid cols-2">
                 <div className="input-group">
-                  <label className="clean-label">Rol / Nivel de Autorización *</label>
+                  <label className="clean-label">Rol en el Sistema *</label>
                   <select required className="clean-input" value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})}>
-                    <option value="empleado">EMPLEADO / OPERADOR (Solo solicita permisos)</option>
-                    <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR (Autoriza Firma 1)</option>
-                    <option value="gerente_division">VALIDADOR SUPERIOR / NUEVA GERENCIA (Autoriza Firma 2)</option>
-                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN (Planta)</option>
-                    <option value="gerente_admin">GERENTE ADMINISTRATIVO (Oficina)</option>
-                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS (Firma 3 Final)</option>
-                    <option value="rh_nominas">TITULAR RH / NÓMINAS (Dictamina nómina)</option>
+                    <option value="empleado">EMPLEADO / OPERADOR</option>
+                    <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR</option>
+                    <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
+                    <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
+                    <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                    <option value="rh_nominas">TITULAR RH / NÓMINAS</option>
                     <option value="caseta">CASETA / VIGILANCIA</option>
                     <option value="superadmin">SUPER ADMINISTRADOR</option>
                   </select>
                 </div>
-                <div className="input-group"><label className="clean-label">Correo Institucional *</label><input type="email" required className="clean-input no-upper" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value.toLowerCase()})} /></div>
+                <div className="input-group"><label className="clean-label">Correo *</label><input type="email" required className="clean-input no-upper" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value.toLowerCase()})} /></div>
               </div>
 
-              {(formData.rol === 'jefe_area' || esRolValidadorSuperior(formData.rol)) && (
-                <label style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', background: c.surfaceCard, border: `1px solid ${c.accent}`, cursor: 'pointer', fontSize: '12.5px', fontWeight: '700', color: c.text }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(formData.es_titular_depto)}
-                    onChange={e => setFormData({ ...formData, es_titular_depto: e.target.checked })}
-                  />
-                  <span>
-                    {esRolValidadorSuperior(formData.rol)
-                      ? 'Asignar como Validador Superior / Cabeza de este Departamento en el Ecualizador'
-                      : 'Asignar como Jefe Titular de este Departamento en el Ecualizador (Firma 1)'}
-                  </span>
-                </label>
-              )}
-
-              <div className="form-grid cols-2" style={{ marginTop: '14px' }}>
+              <div className="form-grid cols-2" style={{ marginTop: '12px' }}>
                 <div className="input-group"><label className="clean-label">Usuario Login *</label><input type="text" required className="clean-input no-upper" value={formData.usuario_login} onChange={e => setFormData({...formData, usuario_login: e.target.value.toLowerCase().replace(/\s+/g, '')})} /></div>
-                <div className="input-group"><label className="clean-label">PIN de Seguridad (Mín 6) *</label><input type="text" minLength={6} maxLength={10} required className="clean-input no-upper" placeholder="Ej. 123456" value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value})} /></div>
+                <div className="input-group"><label className="clean-label">PIN (Mín 6 dígitos) *</label><input type="text" minLength={6} maxLength={10} required className="clean-input no-upper" placeholder="Ej. 123456" value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value})} /></div>
               </div>
             </div>
           </div>
