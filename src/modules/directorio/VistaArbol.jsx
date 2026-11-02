@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronDown, ChevronRight, Edit2, Lock, Unlock, X, Save,
   Crown, ShieldCheck, User, CornerDownRight, Briefcase,
-  ChevronsDown, ChevronsUp, Sliders, Plus, GitBranch, ArrowRight, CheckCircle2, Ban
+  ChevronsDown, ChevronsUp, Sliders, Plus, GitBranch
 } from 'lucide-react';
 import {
   obtenerBadgeRol,
@@ -58,9 +58,6 @@ export default function VistaArbol({
     popoverBorder: tema.border,
   };
 
-  // =========================================================================
-  // CONSTRUCCIÓN DINÁMICA DE RAMAS DEL ORGANIGRAMA (ORDENADO POR NOMBRE)
-  // =========================================================================
   const ramasOrganigrama = useMemo(() => {
     const usuariosActivos = (usuarios || []).filter(u => u.activo !== false);
 
@@ -169,9 +166,9 @@ export default function VistaArbol({
       clasificacion: depto.clasificacion || 'produccion',
       gerente_id: depto.gerente_id || '',
       jefe_id: depto.jefe_id || '',
-      emp_requiere_jefe: depto.emp_requiere_jefe !== false,
+      emp_requiere_jefe: Boolean(depto.jefe_id) || depto.nombre === 'RECURSOS HUMANOS',
       emp_requiere_gerente: Boolean(depto.emp_requiere_gerente),
-      jefe_requiere_gerente: depto.jefe_requiere_gerente !== false
+      jefe_requiere_gerente: Boolean(depto.gerente_id)
     });
   };
 
@@ -185,7 +182,7 @@ export default function VistaArbol({
       clasificacion: 'produccion',
       gerente_id: primerGerente?.id || '',
       jefe_id: '',
-      emp_requiere_jefe: true,
+      emp_requiere_jefe: false,
       emp_requiere_gerente: true,
       jefe_requiere_gerente: true
     });
@@ -196,14 +193,17 @@ export default function VistaArbol({
     if (!modalDepto?.nombre?.trim()) return alert("Ingresa un nombre para el departamento.");
     setGuardando(true);
     try {
+      const tieneJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre.trim().toUpperCase() === 'RECURSOS HUMANOS';
+      const tieneGerente = Boolean(modalDepto.gerente_id);
+
       if (modalDepto.modo === 'crear') {
         await crearDepartamentoConEcualizador({
           nombre: modalDepto.nombre,
           jefe_id: modalDepto.jefe_id || null,
           gerente_id: modalDepto.gerente_id || null,
-          emp_requiere_jefe: modalDepto.emp_requiere_jefe,
-          emp_requiere_gerente: modalDepto.emp_requiere_gerente,
-          jefe_requiere_gerente: modalDepto.jefe_requiere_gerente
+          emp_requiere_jefe: tieneJefe,
+          emp_requiere_gerente: tieneGerente ? Boolean(modalDepto.emp_requiere_gerente) : false,
+          jefe_requiere_gerente: tieneGerente
         });
       } else {
         await actualizarDepartamentoSeguro(
@@ -214,16 +214,16 @@ export default function VistaArbol({
           {
             jefe_id: modalDepto.jefe_id || null,
             gerente_id: modalDepto.gerente_id || null,
-            emp_requiere_jefe: modalDepto.emp_requiere_jefe,
-            emp_requiere_gerente: modalDepto.emp_requiere_gerente,
-            jefe_requiere_gerente: modalDepto.jefe_requiere_gerente
+            emp_requiere_jefe: tieneJefe,
+            emp_requiere_gerente: tieneGerente ? Boolean(modalDepto.emp_requiere_gerente) : false,
+            jefe_requiere_gerente: tieneGerente
           }
         );
       }
       setModalDepto(null);
       if (recargarDatos) await recargarDatos();
     } catch (err) {
-      alert("Error al guardar configuración del departamento: " + err.message);
+      alert("Error al guardar departamento: " + err.message);
     } finally {
       setGuardando(false);
     }
@@ -315,10 +315,19 @@ export default function VistaArbol({
 
   const vistaPreviaEcualizador = useMemo(() => {
     if (!modalDepto) return null;
-    return describirRutaEcualizador(modalDepto, usuarios);
+    const tieneJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre.trim().toUpperCase() === 'RECURSOS HUMANOS';
+    const tieneGerente = Boolean(modalDepto.gerente_id);
+    return describirRutaEcualizador(
+      {
+        ...modalDepto,
+        emp_requiere_jefe: tieneJefe,
+        emp_requiere_gerente: tieneGerente ? Boolean(modalDepto.emp_requiere_gerente) : false,
+        jefe_requiere_gerente: tieneGerente
+      },
+      usuarios
+    );
   }, [modalDepto, usuarios]);
 
-  // Ruta en vivo para el modal individual de reubicación de colaborador
   const rutaEnVivoUserEditando = useMemo(() => {
     if (!userEditando) return '';
     const dObj = departamentos.find(d => d.id === userEditando.departamento_id);
@@ -410,27 +419,6 @@ export default function VistaArbol({
           background: ${c.lineStrong};
         }
 
-        .flow-step-card {
-          flex: 1;
-          min-width: 95px;
-          padding: 9px 8px;
-          border-radius: 9px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 3px;
-          text-align: center;
-          transition: all 0.15s ease;
-          user-select: none;
-        }
-        .flow-step-card.clickable {
-          cursor: pointer;
-        }
-        .flow-step-card.clickable:hover {
-          transform: translateY(-1px);
-        }
-
         @media (max-width: 640px) {
           .industrial-grid {
             grid-template-columns: 1fr;
@@ -503,7 +491,7 @@ export default function VistaArbol({
 
         <button
           onClick={() => seguridadDesbloqueada ? setSeguridadDesbloqueada(false) : setModalPinAbierto(true)}
-          title={seguridadDesbloqueada ? 'Bloquear edición de estructura y ecualizador' : 'Desbloquear Ecualizador y Estructura (PIN)'}
+          title={seguridadDesbloqueada ? 'Bloquear edición' : 'Desbloquear edición (PIN)'}
           style={{
             background: seguridadDesbloqueada ? c.accentSoft : 'transparent',
             border: `1px solid ${seguridadDesbloqueada ? c.accent : c.border}`,
@@ -521,11 +509,11 @@ export default function VistaArbol({
           }}
         >
           {seguridadDesbloqueada ? <Unlock size={13} /> : <Lock size={13} />}
-          {!esMobile && <span>{seguridadDesbloqueada ? 'Ecualizador Activo' : 'Configurar Mandos'}</span>}
+          {!esMobile && <span>{seguridadDesbloqueada ? 'Edición Activa' : 'Editar Organigrama'}</span>}
         </button>
       </div>
 
-      {/* NIVEL 1: DIVISIONES LIDERADAS POR GERENCIA / VALIDADORES SUPERIORES */}
+      {/* NIVEL 1: DIVISIONES */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {ramasOrganigrama.map(sec => {
           const divAbierta = Boolean(divisionesAbiertas[sec.key]);
@@ -547,7 +535,6 @@ export default function VistaArbol({
 
           return (
             <div key={sec.key} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', overflow: 'hidden' }}>
-              {/* CABECERA DE LA DIVISIÓN */}
               <div
                 onClick={() => toggleDivision(sec.key)}
                 style={{
@@ -583,7 +570,6 @@ export default function VistaArbol({
                 </span>
               </div>
 
-              {/* CONTENIDO EXPANDIBLE DE LA DIVISIÓN */}
               {divAbierta && (
                 <div style={{ padding: esMobile ? '8px' : '18px', background: c.panelBg, boxSizing: 'border-box' }}>
                   {gerentesDivision.length > 0 && (
@@ -608,7 +594,6 @@ export default function VistaArbol({
                       const nombreDeptoNorm = normalizar(depto.nombre);
                       const infoRuta = describirRutaEcualizador(depto, usuarios);
 
-                      // Ordenar por NOMBRE NATURAL dentro del organigrama
                       const personalDepto = (usuarios || [])
                         .filter(u => u.departamento_id === depto.id && u.activo === true && !idsGerentesDivision.has(u.id))
                         .sort((a, b) => compararPorNombreNatural(a, b));
@@ -643,7 +628,6 @@ export default function VistaArbol({
 
                       return (
                         <div key={depto.id} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '8px', position: 'relative', boxSizing: 'border-box', width: '100%' }}>
-                          {/* CABECERA DEL DEPARTAMENTO */}
                           <div
                             onClick={() => toggleDeptoLocal(depto.id)}
                             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: esMobile ? '11px 13px' : '12px 16px', cursor: 'pointer', borderRadius: abierto ? '8px 8px 0 0' : '8px', borderBottom: abierto ? `1px solid ${c.border}` : 'none', gap: '8px', flexWrap: 'wrap' }}
@@ -658,13 +642,7 @@ export default function VistaArbol({
                                 </span>
                                 <span style={{ fontSize: '10.5px', color: c.subText, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                                   <GitBranch size={10} color={c.accent} />
-                                  <span>Personal: <strong>{infoRuta.rutaEmpleados}</strong></span>
-                                  {depto.jefe_id && (
-                                    <>
-                                      <span>•</span>
-                                      <span>Jefe: <strong>{infoRuta.rutaJefe}</strong></span>
-                                    </>
-                                  )}
+                                  <span>Firmas: <strong>{infoRuta.rutaEmpleados}</strong></span>
                                 </span>
                               </div>
                             </div>
@@ -673,11 +651,11 @@ export default function VistaArbol({
                               {seguridadDesbloqueada && (
                                 <button
                                   onClick={(e) => abrirEcualizadorDepto(depto, e)}
-                                  title="Configurar Flujo de Firmas del Departamento"
+                                  title="Editar Departamento"
                                   style={{ background: c.accentSoft, border: `1px solid ${c.accent}`, borderRadius: '6px', color: c.accent, cursor: 'pointer', padding: '4px 8px', fontSize: '10.5px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px' }}
                                 >
-                                  <Sliders size={11} />
-                                  {!esMobile && <span>Flujo de Firmas</span>}
+                                  <Edit2 size={11} />
+                                  {!esMobile && <span>Editar Depto</span>}
                                 </button>
                               )}
                               <span style={{ fontSize: '11px', color: c.subText, fontWeight: '700', padding: '2px 7px', borderRadius: '5px', background: modoOscuro ? '#222' : '#f1f5f9' }}>
@@ -686,7 +664,6 @@ export default function VistaArbol({
                             </div>
                           </div>
 
-                          {/* CONTENIDO DEL DEPARTAMENTO */}
                           {abierto && (
                             <div style={{ padding: esMobile ? '8px' : '14px', boxSizing: 'border-box', width: '100%' }}>
                               {cabezaDepto.length > 0 && (
@@ -697,7 +674,6 @@ export default function VistaArbol({
                                 </div>
                               )}
 
-                              {/* NIVEL 3: SUBÁREAS O EQUIPO DEL DEPARTAMENTO */}
                               {clavesSubdeptos.length > 0 && (
                                 <div className="industrial-grid">
                                   {clavesSubdeptos.map(clave => {
@@ -822,37 +798,29 @@ export default function VistaArbol({
       </div>
 
       {/* =====================================================================
-          MODAL CON DIAGRAMA DE FLUJO INTERACTIVO (SIN PREGUNTAS CONFUSAS)
+          MODAL LIMPIO Y DIRECTO DE DEPARTAMENTO (SIN DIAGRAMA REDUNDANTE)
          ===================================================================== */}
       {modalDepto && (() => {
-        const jefeSelObj = modalDepto.jefe_id ? usuarios.find(u => u.id === modalDepto.jefe_id) : null;
         const gerenteSelObj = modalDepto.gerente_id ? usuarios.find(u => u.id === modalDepto.gerente_id) : null;
-        const nombreCortoJefe = jefeSelObj ? obtenerNombreCorto(jefeSelObj) : 'SIN JEFE ASIGNADO';
-        const nombreCortoGerente = gerenteSelObj ? obtenerNombreCorto(gerenteSelObj) : 'SIN GERENCIA';
-
-        const puedeActivarJefe = Boolean(modalDepto.jefe_id) || modalDepto.nombre === 'RECURSOS HUMANOS';
-        const puedeActivarGerente = Boolean(modalDepto.gerente_id) && gerenteSelObj?.rol !== 'gerente_rh';
-
-        const empJefeActivo = puedeActivarJefe && Boolean(modalDepto.emp_requiere_jefe);
-        const empGerenteActivo = puedeActivarGerente && Boolean(modalDepto.emp_requiere_gerente);
-        const jefeGerenteActivo = puedeActivarGerente && Boolean(modalDepto.jefe_requiere_gerente);
+        const nombreGerente = gerenteSelObj ? obtenerNombreCorto(gerenteSelObj) : 'Gerencia';
+        const mostrarOpcionGerencia = Boolean(modalDepto.gerente_id) && Boolean(modalDepto.jefe_id) && gerenteSelObj?.rol !== 'gerente_rh';
 
         return (
           <div onClick={() => setModalDepto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2600, padding: '16px' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '20px', width: '100%', maxWidth: '500px', maxHeight: '92vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 50px rgba(0,0,0,0.55)', boxSizing: 'border-box' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '14px', padding: '20px', width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 50px rgba(0,0,0,0.55)', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
                 <div>
-                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Sliders size={12} /> Configuración de Mandos y Firmas
+                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>
+                    {modalDepto.modo === 'crear' ? 'Nuevo Departamento' : 'Configurar Departamento'}
                   </div>
-                  <div style={{ fontSize: '15px', fontWeight: '900', color: c.text, marginTop: '2px' }}>
-                    {modalDepto.modo === 'crear' ? 'NUEVO DEPARTAMENTO' : modalDepto.nombre}
+                  <div style={{ fontSize: '15px', fontWeight: '900', color: c.text }}>
+                    {modalDepto.nombre || 'SIN NOMBRE'}
                   </div>
                 </div>
                 <button onClick={() => setModalDepto(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
               </div>
 
-              <form onSubmit={guardarEcualizadorDepto} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <form onSubmit={guardarEcualizadorDepto} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
                     1. Nombre del Departamento
@@ -862,198 +830,84 @@ export default function VistaArbol({
                     required
                     value={modalDepto.nombre}
                     onChange={e => setModalDepto({ ...modalDepto, nombre: e.target.value.toUpperCase() })}
-                    placeholder="Ej. ARMADO MADERA, COMPRAS, EMBARQUES..."
+                    placeholder="Ej. ARMADO MADERA, COMPRAS..."
                     style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '13px', fontWeight: '800', outline: 'none', boxSizing: 'border-box' }}
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: esMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                      2. Jefe del Departamento (Firma 1)
-                    </label>
-                    <select
-                      value={modalDepto.jefe_id || ''}
-                      onChange={e => {
-                        const nuevoJefe = e.target.value;
-                        setModalDepto({
-                          ...modalDepto,
-                          jefe_id: nuevoJefe,
-                          emp_requiere_jefe: nuevoJefe ? true : false
-                        });
-                      }}
-                      style={{ width: '100%', padding: '9px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12px', fontWeight: '700', boxSizing: 'border-box' }}
-                    >
-                      <option value="">Sin Jefe único</option>
-                      {candidatosJefeDepto.map(j => (
-                        <option key={j.id} value={j.id}>
-                          {formatearNombreNaturalMayus(j)} ({j.puesto || j.area || 'COLAB'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
-                      3. Gerencia / División (Firma 2)
-                    </label>
-                    <select
-                      value={modalDepto.gerente_id || ''}
-                      onChange={e => setModalDepto({ ...modalDepto, gerente_id: e.target.value })}
-                      style={{ width: '100%', padding: '9px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12px', fontWeight: '700', boxSizing: 'border-box' }}
-                    >
-                      <option value="">Directo a RH (Sin Gerencia)</option>
-                      {candidatosGerenteDivision.map(g => (
-                        <option key={g.id} value={g.id}>
-                          {formatearNombreNaturalMayus(g)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                    2. Jefe del Departamento (Firma 1)
+                  </label>
+                  <select
+                    value={modalDepto.jefe_id || ''}
+                    onChange={e => {
+                      const nuevoJefe = e.target.value;
+                      setModalDepto({
+                        ...modalDepto,
+                        jefe_id: nuevoJefe,
+                        emp_requiere_jefe: Boolean(nuevoJefe),
+                        emp_requiere_gerente: nuevoJefe ? modalDepto.emp_requiere_gerente : true
+                      });
+                    }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
+                  >
+                    <option value="">Sin Jefe de Área (Pasan directo a Gerencia)</option>
+                    {candidatosJefeDepto.map(j => (
+                      <option key={j.id} value={j.id}>
+                        {formatearNombreNaturalMayus(j)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* DIAGRAMA DE FLUJO INTERACTIVO (TOCA CADA NODO PARA ENCENDER O SALTAR) */}
-                <div style={{ padding: '14px', borderRadius: '12px', background: modoOscuro ? '#141414' : '#f8fafc', border: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: '900', color: c.accent, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                      4. Diagrama de Flujo de Firmas
-                    </span>
-                    <span style={{ fontSize: '10.5px', color: c.subText, fontWeight: '600' }}>
-                      👆 Toca una casilla para activarla o saltarla
-                    </span>
-                  </div>
-
-                  {/* CARRIL A: FLUJO CUANDO UN EMPLEADO PIDE PERMISO */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '800', color: c.text }}>
-                      A) Cuando un EMPLEADO del departamento solicita permiso:
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      {/* Nodo 1: Jefe de Área (Clickeable) */}
-                      <div
-                        className={`flow-step-card ${puedeActivarJefe ? 'clickable' : ''}`}
-                        onClick={() => {
-                          if (!puedeActivarJefe) return;
-                          setModalDepto({ ...modalDepto, emp_requiere_jefe: !modalDepto.emp_requiere_jefe });
-                        }}
-                        style={{
-                          background: empJefeActivo ? c.accentSoft : 'transparent',
-                          border: empJefeActivo ? `1.5px solid ${c.accent}` : `1.5px dashed ${c.border}`,
-                          opacity: empJefeActivo ? 1 : 0.55
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9.5px', fontWeight: '900', color: empJefeActivo ? c.accent : c.subText }}>
-                          {empJefeActivo ? <CheckCircle2 size={11} /> : <Ban size={11} />}
-                          <span>{empJefeActivo ? '1. FIRMA JEFE' : 'SE OMITE JEFE'}</span>
-                        </div>
-                        <div style={{ fontSize: '11px', fontWeight: '800', color: c.text }}>
-                          {modalDepto.nombre === 'RECURSOS HUMANOS' && !jefeSelObj ? 'JEFA INMEDIATA' : nombreCortoJefe}
-                        </div>
-                      </div>
-
-                      <ArrowRight size={14} color={c.subText} style={{ flexShrink: 0 }} />
-
-                      {/* Nodo 2: Gerencia (Clickeable) */}
-                      <div
-                        className={`flow-step-card ${puedeActivarGerente ? 'clickable' : ''}`}
-                        onClick={() => {
-                          if (!puedeActivarGerente) return;
-                          setModalDepto({ ...modalDepto, emp_requiere_gerente: !modalDepto.emp_requiere_gerente });
-                        }}
-                        style={{
-                          background: empGerenteActivo ? c.accentSoft : 'transparent',
-                          border: empGerenteActivo ? `1.5px solid ${c.accent}` : `1.5px dashed ${c.border}`,
-                          opacity: empGerenteActivo ? 1 : 0.55
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9.5px', fontWeight: '900', color: empGerenteActivo ? c.accent : c.subText }}>
-                          {empGerenteActivo ? <CheckCircle2 size={11} /> : <Ban size={11} />}
-                          <span>{empGerenteActivo ? '2. FIRMA GERENTE' : 'SE OMITE GERENTE'}</span>
-                        </div>
-                        <div style={{ fontSize: '11px', fontWeight: '800', color: c.text }}>
-                          {nombreCortoGerente}
-                        </div>
-                      </div>
-
-                      <ArrowRight size={14} color={c.subText} style={{ flexShrink: 0 }} />
-
-                      {/* Nodo 3: RH (Siempre Fijo) */}
-                      <div
-                        className="flow-step-card"
-                        style={{
-                          flex: '0 0 80px',
-                          background: modoOscuro ? '#1f2937' : '#f1f5f9',
-                          border: `1.5px solid ${c.border}`
-                        }}
-                      >
-                        <div style={{ fontSize: '9.5px', fontWeight: '900', color: c.subText }}>CIERRE</div>
-                        <div style={{ fontSize: '11px', fontWeight: '900', color: c.text }}>RH</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CARRIL B: FLUJO CUANDO EL PROPIO JEFE PIDE PERMISO */}
-                  {puedeActivarJefe && podeMostrarCarrilJefe(puedeActivarGerente) && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '10px', borderTop: `1px solid ${c.border}` }}>
-                      <div style={{ fontSize: '11px', fontWeight: '800', color: c.text }}>
-                        B) Cuando el propio JEFE ({nombreCortoJefe}) solicita permiso:
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <div
-                          className={`flow-step-card ${puedeActivarGerente ? 'clickable' : ''}`}
-                          onClick={() => {
-                            if (!puedeActivarGerente) return;
-                            setModalDepto({ ...modalDepto, jefe_requiere_gerente: !modalDepto.jefe_requiere_gerente });
-                          }}
-                          style={{
-                            background: jefeGerenteActivo ? c.accentSoft : 'transparent',
-                            border: jefeGerenteActivo ? `1.5px solid ${c.accent}` : `1.5px dashed ${c.border}`,
-                            opacity: jefeGerenteActivo ? 1 : 0.55
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9.5px', fontWeight: '900', color: jefeGerenteActivo ? c.accent : c.subText }}>
-                            {jefeGerenteActivo ? <CheckCircle2 size={11} /> : <Ban size={11} />}
-                            <span>{jefeGerenteActivo ? '1. FIRMA GERENTE' : 'SE OMITE GERENTE'}</span>
-                          </div>
-                          <div style={{ fontSize: '11px', fontWeight: '800', color: c.text }}>
-                            {nombreCortoGerente}
-                          </div>
-                        </div>
-
-                        <ArrowRight size={14} color={c.subText} style={{ flexShrink: 0 }} />
-
-                        <div
-                          className="flow-step-card"
-                          style={{
-                            flex: '0 0 80px',
-                            background: modoOscuro ? '#1f2937' : '#f1f5f9',
-                            border: `1.5px solid ${c.border}`
-                          }}
-                        >
-                          <div style={{ fontSize: '9.5px', fontWeight: '900', color: c.subText }}>CIERRE</div>
-                          <div style={{ fontSize: '11px', fontWeight: '900', color: c.text }}>RH</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* RESUMEN LIMPIO EN UNA LÍNEA */}
-                  {vistaPreviaEcualizador && (
-                    <div style={{ padding: '8px 10px', borderRadius: '8px', background: c.surfaceCard, border: `1px solid ${c.border}`, fontSize: '11.5px', color: c.text, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <div>• <strong>Ruta Personal:</strong> <span style={{ color: c.accent, fontWeight: '800' }}>{vistaPreviaEcualizador.rutaEmpleados}</span></div>
-                      {puedeActivarJefe && (
-                        <div>• <strong>Ruta del Jefe:</strong> <span style={{ color: c.accent, fontWeight: '800' }}>{vistaPreviaEcualizador.rutaJefe}</span></div>
-                      )}
-                    </div>
-                  )}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>
+                    3. Gerencia / División (Firma 2)
+                  </label>
+                  <select
+                    value={modalDepto.gerente_id || ''}
+                    onChange={e => setModalDepto({ ...modalDepto, gerente_id: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '700', boxSizing: 'border-box' }}
+                  >
+                    <option value="">Directo a Recursos Humanos (Sin Gerencia)</option>
+                    {candidatosGerenteDivision.map(g => (
+                      <option key={g.id} value={g.id}>
+                        {formatearNombreNaturalMayus(g)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
+                {/* UNA SOLA CASILLA SIMPLE SOLO CUANDO HAY JEFE Y GERENTE */}
+                {mostrarOpcionGerencia && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', background: modoOscuro ? '#161616' : '#f8fafc', border: `1px solid ${c.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: c.text }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(modalDepto.emp_requiere_gerente)}
+                      onChange={e => setModalDepto({ ...modalDepto, emp_requiere_gerente: e.target.checked })}
+                      style={{ width: '16px', height: '16px', accentColor: c.accent, cursor: 'pointer' }}
+                    />
+                    <span>Incluir también la firma de <strong>{nombreGerente}</strong> en los permisos de los empleados</span>
+                  </label>
+                )}
+
+                {/* RESUMEN FINAL LIMPIO */}
+                {vistaPreviaEcualizador && (
+                  <div style={{ padding: '10px 12px', borderRadius: '8px', background: c.accentSoft, border: `1px solid ${c.accent}`, fontSize: '12px', color: c.text, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div>• <strong>Ruta Personal:</strong> <span style={{ color: c.accent, fontWeight: '800' }}>{vistaPreviaEcualizador.rutaEmpleados}</span></div>
+                    {modalDepto.jefe_id && (
+                      <div>• <strong>Ruta del Jefe:</strong> <span style={{ color: c.accent, fontWeight: '800' }}>{vistaPreviaEcualizador.rutaJefe}</span></div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button type="button" onClick={() => setModalDepto(null)} style={{ flex: 1, padding: '10px', borderRadius: '7px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
                     Cancelar
                   </button>
-                  <button type="submit" disabled={guardando} style={{ flex: 1.6, padding: '10px', borderRadius: '7px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar Flujo del Depto'}
+                  <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '7px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </form>
@@ -1062,13 +916,13 @@ export default function VistaArbol({
         );
       })()}
 
-      {/* MODAL PARA REUBICAR A UN COLABORADOR INDIVIDUAL EN EL ORGANIGRAMA */}
+      {/* MODAL PARA EDITAR COLABORADOR INDIVIDUAL DESDE EL ÁRBOL */}
       {userEditando && (
         <div onClick={() => setUserEditando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500, padding: '16px' }}>
           <div onClick={e => e.stopPropagation()} style={{ background: c.surfaceCard, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '20px', width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${c.border}`, paddingBottom: '10px' }}>
               <div>
-                <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>Ubicación y Mando Individual</div>
+                <div style={{ fontSize: '10.5px', fontWeight: '800', color: c.accent, textTransform: 'uppercase' }}>Ubicación Individual</div>
                 <div style={{ fontSize: '14px', fontWeight: '800', color: c.text }}>{userEditando.nombre_completo}</div>
               </div>
               <button onClick={() => setUserEditando(null)} style={{ background: 'none', border: 'none', color: c.subText, cursor: 'pointer' }}><X size={18} /></button>
@@ -1124,13 +978,13 @@ export default function VistaArbol({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>4. Jefe Inmediato de esta persona:</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>4. Jefe Inmediato:</label>
                 <select
                   value={userEditando.reporta_a_id || ''}
                   onChange={e => setUserEditando({ ...userEditando, reporta_a_id: e.target.value })}
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
-                  <option value="">Usar el Jefe del Departamento automáticamente</option>
+                  <option value="">Automático (El Jefe del Departamento)</option>
                   {posiblesJefesParaUsuario.map(j => (
                     <option key={j.id} value={j.id}>{formatearNombreNaturalMayus(j)} ({j.area || j.puesto})</option>
                   ))}
@@ -1138,19 +992,19 @@ export default function VistaArbol({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>5. Nivel de Autoridad en el Sistema</label>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: c.subText, marginBottom: '4px', textTransform: 'uppercase' }}>5. Nivel en el Sistema</label>
                 <select
                   value={userEditando.rol}
                   onChange={e => setUserEditando({ ...userEditando, rol: e.target.value })}
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12.5px', fontWeight: '600', boxSizing: 'border-box' }}
                 >
-                  <option value="empleado">EMPLEADO / OPERADOR (Solo solicita sus permisos)</option>
-                  <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR (Autoriza Firma 1)</option>
-                  <option value="gerente_division">VALIDADOR SUPERIOR / NUEVA GERENCIA (Autoriza Firma 2)</option>
-                  <option value="gerente_produccion">GERENTE DE PRODUCCIÓN / PLANTA (Firma 2)</option>
-                  <option value="gerente_admin">GERENTE ADMINISTRATIVO / DIRECCIÓN (Firma 2)</option>
-                  <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS (Firma 3 Final)</option>
-                  <option value="rh_nominas">TITULAR RH / NÓMINAS (Dictamina nómina)</option>
+                  <option value="empleado">EMPLEADO / OPERADOR</option>
+                  <option value="jefe_area">JEFE DE ÁREA / SUPERVISOR</option>
+                  <option value="gerente_division">GERENTE DE DIVISIÓN / VALIDADOR</option>
+                  <option value="gerente_produccion">GERENTE DE PRODUCCIÓN</option>
+                  <option value="gerente_admin">GERENTE ADMINISTRATIVO</option>
+                  <option value="gerente_rh">GERENTE DE RECURSOS HUMANOS</option>
+                  <option value="rh_nominas">TITULAR RH / NÓMINAS</option>
                   <option value="caseta">CASETA / VIGILANCIA</option>
                   <option value="superadmin">SUPER ADMINISTRADOR</option>
                 </select>
@@ -1163,20 +1017,19 @@ export default function VistaArbol({
                     checked={Boolean(userEditando.es_titular_depto)}
                     onChange={e => setUserEditando({ ...userEditando, es_titular_depto: e.target.checked })}
                   />
-                  <span>Nombrar Jefe Titular de todo el departamento</span>
+                  <span>Es el Jefe Titular de todo el departamento</span>
                 </label>
               )}
 
-              {/* VISTA PREVIA EN VIVO DE SU RUTA DE FIRMAS INDIVIDUAL */}
-              <div style={{ padding: '9px 12px', borderRadius: '8px', background: modoOscuro ? '#161616' : '#f8fafc', border: `1px solid ${c.border}`, fontSize: '11.5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                <span style={{ color: c.subText, fontWeight: '700' }}>Ruta de firmas resultante:</span>
+              <div style={{ padding: '9px 12px', borderRadius: '8px', background: c.accentSoft, border: `1px solid ${c.accent}`, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ color: c.text, fontWeight: '700' }}>• Ruta Personal:</span>
                 <strong style={{ color: c.accent }}>{rutaEnVivoUserEditando}</strong>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                 <button type="button" onClick={() => setUserEditando(null)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: `1px solid ${c.border}`, background: 'transparent', color: c.subText, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Cancelar</button>
                 <button type="submit" disabled={guardando} style={{ flex: 1.5, padding: '10px', borderRadius: '6px', border: 'none', background: c.accent, color: '#fff', fontWeight: '800', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar Cambios'}
+                  <Save size={14} /> {guardando ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </form>
@@ -1193,10 +1046,6 @@ export default function VistaArbol({
       />
     </div>
   );
-}
-
-function podeMostrarCarrilJefe(puedeActivarGerente) {
-  return Boolean(puedeActivarGerente);
 }
 
 function renderPlacaIndustrial(u, c, setFotoZoom, modoOscuro, seguridadDesbloqueada, onEditarUsuario, tipoNodo = 'operativo', esMobile = false) {
