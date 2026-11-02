@@ -157,8 +157,9 @@ export default function Caseta() {
     }
 
     // 4. Tiene pase para salir a la calle
-    if (pasePuerta && pasePuerta.tipo_permiso === 'salida') {
-      return {
+// 4. Tiene pase para salir a la calle (SOLO si ya registró entrada hoy en planta)
+    if (entro && pasePuerta && pasePuerta.tipo_permiso === 'salida') {
+    return {
         color: '#0284c7',
         fondo: modoOscuro ? 'rgba(2,132,199,0.10)' : '#f0f9ff',
         estado: '🔵 Tiene pase de salida',
@@ -390,8 +391,10 @@ export default function Caseta() {
   ]);
   const listaDetenidosEnPuerta = empleadosSede.filter(e => idsDetenidos.has(e.id));
 
-  const idsPasesSalidaOReingreso = new Set([
-    ...pasesPorCruzar.filter(p => p.tipo_permiso === 'salida' && !p.seRegresaACasa).map(p => p.usuario_id),
+ const idsPasesSalidaOReingreso = new Set([
+    ...pasesPorCruzar
+      .filter(p => p.tipo_permiso === 'salida' && !p.seRegresaACasa && Boolean(mapaAsistencias[p.usuario_id]?.hora_entrada))
+      .map(p => p.usuario_id),
     ...personalFuera.map(p => p.usuario_id)
   ]);
   const listaSalidasYReingresos = empleadosSede.filter(e => idsPasesSalidaOReingreso.has(e.id));

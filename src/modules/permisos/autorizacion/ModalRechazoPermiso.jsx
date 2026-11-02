@@ -8,7 +8,13 @@ export default function ModalRechazoPermiso({
   const [motivoRechazo, setMotivoRechazo] = useState('');
 
   if (!solicitud) return null;
-  const esRetardo = (solicitud.tipo_permiso || '').toLowerCase() === 'retardo';
+
+  const hoyIsoModal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  const tipoLower = (solicitud.tipo_permiso || '').toLowerCase();
+  const estaEnPuerta = /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const esRetardo =
+    (tipoLower === 'retardo' && (solicitud.fecha_permiso <= hoyIsoModal || estaEnPuerta)) ||
+    (tipoLower === 'falta' && /FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || ''));
 
   const handleSubmit = (e) => {
     e.preventDefault();

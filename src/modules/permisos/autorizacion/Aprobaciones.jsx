@@ -97,22 +97,27 @@ export default function Aprobaciones() {
 
   const solicitudesDelUsuario = solicitudes.filter(s => {
     if (esRH) return true;
-    if (esMandoArea) return s.firma_1_id === usuario.id;
+    if (esMandoArea) return s.firma_1_id === usuario.id || s.firma_2_id === usuario.id;
     if (esGerente) return s.firma_2_id === usuario.id || s.firma_1_id === usuario.id;
     return false;
   });
+
+  const esEnPuertaOAnomalia = (s) =>
+    /\[(?:LLEGADA EN PUERTA|COMPORTAMIENTO INUSUAL EN CASETA|HORARIO NO COINCIDE EN CASETA):/i.test(s?.observaciones || '');
 
   const solicitudesPendientes = solicitudesDelUsuario.filter(s => {
     if (s.usuario_id === usuario.id) return false;
     if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)) return false;
 
+    const urgenciaPuerta = esEnPuertaOAnomalia(s);
     const firma1OK = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(s.firma_1_estado);
     const firma2OK = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(s.firma_2_estado);
 
     if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return true;
+    if (s.firma_2_id === usuario.id && s.firma_2_estado === 'pendiente' && (firma1OK || urgenciaPuerta)) return true;
 
-    if (esRH) return firma1OK && firma2OK && s.firma_3_estado === 'pendiente';
-    if (esGerente) return firma1OK && s.firma_2_estado === 'pendiente' && s.firma_2_id === usuario.id;
+    if (esRH) return (firma1OK && firma2OK && s.firma_3_estado === 'pendiente') || (urgenciaPuerta && s.firma_3_estado === 'pendiente');
+    if (esGerente) return (firma1OK || urgenciaPuerta) && s.firma_2_estado === 'pendiente' && s.firma_2_id === usuario.id;
     if (esMandoArea) return s.firma_1_estado === 'pendiente' && s.firma_1_id === usuario.id;
     return false;
   });
@@ -120,6 +125,7 @@ export default function Aprobaciones() {
   const solicitudesTransito = solicitudesDelUsuario.filter(s => {
     if (!esRH || s.usuario_id === usuario.id) return false;
     if (['rechazado', 'autorizado', 'aprobado', 'completado_caseta', 'cancelado'].includes(s.estado_general)) return false;
+    if (esEnPuertaOAnomalia(s)) return false;
     if (s.firma_1_id === usuario.id && s.firma_1_estado === 'pendiente') return false;
     return s.firma_1_estado === 'pendiente' || s.firma_2_estado === 'pendiente';
   });

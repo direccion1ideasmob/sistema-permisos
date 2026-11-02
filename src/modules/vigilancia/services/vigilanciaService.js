@@ -121,7 +121,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     const esRechazado = rawPase.estado_general === 'rechazado';
     const pagoLower = (rawPase.pago || '').toLowerCase();
     const seRegresaPorDictamen = pagoLower.includes('regresa');
-    const seRegresaACasa = seRegresaPorDictamen || (tipo === 'retardo' && esRechazado);
+    const seRegresaACasa = seRegresaPorDictamen || (tipo === 'retardo' && esRechazado && Boolean(horaLlegadaPuerta));
 
     const yaSalio = Boolean(horaSalidaCaseta);
     const yaRegreso = Boolean(horaEntradaCaseta);
@@ -147,8 +147,10 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     let autorizadoPor = null;
     const mGer = obs.match(/VoBo Gerencia:\s*([^|]+)/i);
     const mJefe = obs.match(/VoBo Jefe:\s*([^|]+)/i);
+    const mRH = obs.match(/VoBo RH:\s*([^|]+)/i);
     const mSub = obs.match(/VoBo Sub[áa]rea:\s*([^|]+)/i);
-    if (mGer) autorizadoPor = mGer[1].trim();
+    if (mRH) autorizadoPor = mRH[1].trim();
+    else if (mGer) autorizadoPor = mGer[1].trim();
     else if (mJefe) autorizadoPor = mJefe[1].trim();
     else if (mSub) autorizadoPor = mSub[1].trim();
     else if (rawPase.firmante1?.nombre_completo && f1Resuelta) autorizadoPor = rawPase.firmante1.nombre_completo;
@@ -199,7 +201,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             color: esFaltaSinAviso ? '#dc2626' : '#d97706',
             bg: esFaltaSinAviso ? 'rgba(220,38,38,0.14)' : 'rgba(245,158,11,0.14)'
           };
-        } else {
+        } else if (!esRechazado) {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_autorizado',
             paseId: rawPase.id,
@@ -368,15 +370,15 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   };
 };
 
-// REGLA MAESTRA RH: Cualquier comportamiento inusual en puerta modifica el permiso existente
-// y retiene al colaborador en espera de autorización de Jefatura / RH
+// REGLA MAESTRA RH: Cualquier comportamiento inusual en puerta modifica el permiso existente,
+// notifica a las 3 firmas involucradas y permite que cualquiera de ellas lo resuelva.
 export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia = 'presentacion_en_ausencia', detalleAdicional = '') => {
   const ahora = new Date();
   const horaFormateada = ahora.toTimeString().slice(0, 5);
 
   const { data: permiso, error: errGet } = await supabase
     .from('permisos')
-    .select('*, usuarios:usuario_id (id, nombre_completo, foto_url, departamento_id)')
+    .select('*, usuarios:usuario_id (id, nombre_completo, foto_url, rol, departamento_id)')
     .eq('id', permisoId)
     .single();
 
@@ -400,13 +402,28 @@ export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia
   const selloInusual = `⚠️ [COMPORTAMIENTO INUSUAL EN CASETA (${horaFormateada} hrs): ${descripcionInusual}]`;
   const nuevasObs = `${obsLimpia} | ${selloInusual} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.replace(/^\s*\|\s*/, '').trim();
 
-  const f1Activa = Boolean(permiso.firma_1_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_1_estado);
-  const f2Activa = Boolean(permiso.firma_2_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_2_estado);
+  const esRetardoAnomalia = (permiso.tipo_permiso || '').toLowerCase() === 'retardo' || tipoAnomalia === 'retardo_excedido';
+  const cadena = await resolverCadenaFirmasPorEcualizador({
+    userId: permiso.usuario_id,
+    rolUsuario: permiso.usuarios?.rol,
+    deptoId: permiso.usuarios?.departamento_id,
+    tipoPermiso: esRetardoAnomalia ? 'retardo' : permiso.tipo_permiso,
+    esMismoDia: true,
+    notificarATodosEnPuerta: true
+  });
+
+  const f1Id = cadena.jefeFinalId || permiso.firma_1_id || null;
+  const f2Id = esRetardoAnomalia ? cadena.gerenteFinalId : (cadena.gerenteFinalId || permiso.firma_2_id || null);
+  const f3Id = cadena.rhFinalId || permiso.firma_3_id || null;
+
   const updates = {
     estado_general: 'en_firmas',
     pago: 'Pendiente de dictamen (Cambio en Caseta)',
-    firma_1_estado: f1Activa ? 'pendiente' : 'omitido',
-    firma_2_estado: f2Activa ? 'pendiente' : 'omitido',
+    firma_1_id: f1Id,
+    firma_1_estado: f1Id ? 'pendiente' : 'omitido',
+    firma_2_id: f2Id,
+    firma_2_estado: f2Id ? 'pendiente' : 'omitido',
+    firma_3_id: f3Id,
     firma_3_estado: 'pendiente',
     observaciones: nuevasObs
   };
@@ -425,15 +442,17 @@ export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia
     .eq('activo', true);
 
   const dest = [
-    permiso.firma_1_id,
+    f1Id,
+    f2Id,
+    f3Id,
     ...(rhUsers || []).map(u => u.id)
-  ].filter(Boolean);
+  ].filter(id => Boolean(id) && id !== permiso.usuario_id);
 
   if (dest.length > 0) {
     try {
       await enviarNotificacionPushUsuarios([...new Set(dest)], {
         titulo: '🚨 CAMBIO INUSUAL EN CASETA — REQUIERE AUTORIZACIÓN',
-        mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n⚠️ ${descripcionInusual}\n⏳ Retenido en Vigilancia esperando tu decisión.`,
+        mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n⚠️ ${descripcionInusual}\n⏳ Retenido en Vigilancia esperando decisión.`,
         fotoUrl: permiso.usuarios?.foto_url || null,
         urlDestino: '/aprobaciones'
       });
@@ -449,7 +468,7 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
 
   const { data: permiso, error: errGet } = await supabase
     .from('permisos')
-    .select('*, usuarios:usuario_id (id, nombre_completo, foto_url, departamento_id)')
+    .select('*, usuarios:usuario_id (id, nombre_completo, foto_url, rol, departamento_id)')
     .eq('id', permisoId)
     .single();
 
@@ -459,13 +478,15 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
   const notaDesfase = `⚠️ [HORARIO NO COINCIDE EN CASETA (${horaFormateada} hrs - ${tipoMovimiento.toUpperCase()}): ${detalleDesfase}]`;
   const nuevasObs = `${obsActual} | ${notaDesfase} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.trim();
 
-  const f1Activa = Boolean(permiso.firma_1_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_1_estado);
-  const f2Activa = Boolean(permiso.firma_2_id) && !['omitido', 'no_aplica', 'auto_aprobado'].includes(permiso.firma_2_estado);
+  const f1Id = permiso.firma_1_id || null;
+  const f2Id = permiso.firma_2_id || null;
+  const f3Id = permiso.firma_3_id || null;
+
   const updates = {
     estado_general: 'en_firmas',
     pago: 'Pendiente de dictamen (Exceso de horario)',
-    firma_1_estado: f1Activa ? 'pendiente' : 'omitido',
-    firma_2_estado: f2Activa ? 'pendiente' : 'omitido',
+    firma_1_estado: f1Id ? 'pendiente' : 'omitido',
+    firma_2_estado: f2Id ? 'pendiente' : 'omitido',
     firma_3_estado: 'pendiente',
     observaciones: nuevasObs
   };
@@ -484,9 +505,11 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
     .eq('activo', true);
 
   const dest = [
-    permiso.firma_1_id,
+    f1Id,
+    f2Id,
+    f3Id,
     ...(rhUsers || []).map(u => u.id)
-  ].filter(Boolean);
+  ].filter(id => Boolean(id) && id !== permiso.usuario_id);
 
   if (dest.length > 0) {
     try {
@@ -509,7 +532,7 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
 
   const { data: permiso, error: errGet } = await supabase
     .from('permisos')
-    .select('id, usuario_id, tipo_permiso, estado_general, observaciones')
+    .select('id, usuario_id, fecha_permiso, tipo_permiso, estado_general, observaciones')
     .eq('id', permisoId)
     .single();
 
@@ -770,7 +793,7 @@ export const sincronizarCierreTurnoAutomatico = async () => {
 
       const obs = String(p.observaciones || '');
       const pagoLow = String(p.pago || '').toLowerCase();
-      if (pagoLow === 'cancelado' || /CANCELADO por/i.test(obs)) continue;
+      if (pagoLow === 'cancelado' || /CANCELADO por/i.test(obs) || /\[PASE CANCELADO/i.test(obs)) continue;
 
       const tipo = (p.tipo_permiso || '').toLowerCase();
       const regAsist = mapaAsist.get(`${p.usuario_id}_${fPase}`);
@@ -904,7 +927,7 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
     if (!(p.fecha_permiso <= hoyStr && fin >= hoyStr)) return false;
     const pagoL = String(p.pago || '').toLowerCase();
     const obsL = String(p.observaciones || '');
-    return pagoL !== 'cancelado' && !/CANCELADO por/i.test(obsL);
+    return pagoL !== 'cancelado' && !/CANCELADO por/i.test(obsL) && !/\[PASE CANCELADO/i.test(obsL);
   });
 
   const yaRegresadoHoy = activosHoy.find(p =>
@@ -944,15 +967,26 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
       const nuevaObs = `${obsPrev} | [LLEGADA EN PUERTA: ${horaActual} hrs]`.replace(/^\s*\|\s*/, '');
       await supabase.from('permisos').update({ observaciones: nuevaObs }).eq('id', paseActual.id);
     }
+
+    const { data: rhUsers } = await supabase
+      .from('usuarios')
+      .select('id')
+      .in('rol', ['gerente_rh', 'rh_nominas'])
+      .eq('activo', true);
+
     const destExistente = [];
     if (paseActual.firma_1_estado === 'pendiente' && paseActual.firma_1_id) destExistente.push(paseActual.firma_1_id);
-    else if (paseActual.firma_2_estado === 'pendiente' && paseActual.firma_2_id) destExistente.push(paseActual.firma_2_id);
-    else if (paseActual.firma_3_estado === 'pendiente' && paseActual.firma_3_id) destExistente.push(paseActual.firma_3_id);
+    if (paseActual.firma_2_estado === 'pendiente' && paseActual.firma_2_id) destExistente.push(paseActual.firma_2_id);
+    if (paseActual.firma_3_estado === 'pendiente') {
+      if (paseActual.firma_3_id) destExistente.push(paseActual.firma_3_id);
+      if (rhUsers) destExistente.push(...rhUsers.map(u => u.id));
+    }
+
     if (destExistente.length > 0) {
       try {
         await enviarNotificacionPushUsuarios([...new Set(destExistente)], {
           titulo: '🚨 EN PUERTA ESPERANDO ACCESO: RETARDO',
-          mensaje: `👤 ${emp.nombre_completo}\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando tu autorización.`,
+          mensaje: `👤 ${emp.nombre_completo}\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando autorización.`,
           fotoUrl: emp.foto_url || null,
           urlDestino: '/aprobaciones'
         });
@@ -961,7 +995,7 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
     return { resultado: 'en_espera_rh', data: paseActual };
   }
 
-  // 2. RESOLUCIÓN CENTRALIZADA MEDIANTE EL ECUALIZADOR DEL DEPARTAMENTO (Idéntica a crearNuevaSolicitudPermiso)
+  // 2. RESOLUCIÓN CENTRALIZADA (Excluye a Pedro Simón en retardos del mismo día y avisa a todas las firmas activas)
   const {
     jefeFinalId,
     gerenteFinalId,
@@ -973,7 +1007,10 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
   } = await resolverCadenaFirmasPorEcualizador({
     userId: emp.id,
     rolUsuario: emp.rol,
-    deptoId: emp.departamento_id
+    deptoId: emp.departamento_id,
+    tipoPermiso: 'retardo',
+    esMismoDia: true,
+    notificarATodosEnPuerta: true
   });
 
   const folioTemporal = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1015,7 +1052,7 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
     try {
       await enviarNotificacionPushUsuarios([...new Set(notificarA.filter(Boolean))], {
         titulo: esPorFaltaSinAviso ? '🚨 RETENIDO EN PUERTA POR FALTA SIN AVISO' : '🚨 URGENTE EN PUERTA: RETARDO',
-        mensaje: `👤 ${emp.nombre_completo}\n🏠 PERSONAL / FAMILIAR\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando tu autorización.`,
+        mensaje: `👤 ${emp.nombre_completo}\n🏠 PERSONAL / FAMILIAR\n🕒 Llegada en puerta: ${horaActual} hrs\n⏳ Detenido en caseta esperando autorización.`,
         fotoUrl: emp.foto_url || null,
         urlDestino: '/aprobaciones'
       });
@@ -1037,18 +1074,22 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
   const [hLim, mLim] = (horaLimiteStr || '07:15').split(':').map(Number);
   const LIMITE_TOLERANCIA_MINUTOS = (isNaN(hLim) ? 7 : hLim) * 60 + (isNaN(mLim) ? 15 : mLim);
 
-  const { data: pasesHoy } = await supabase
+  // Consulta por rango (lte fecha_permiso) para detectar también Vacaciones de varios días que cubran hoy
+  const { data: pasesRango } = await supabase
     .from('permisos')
-    .select('id, tipo_permiso, estado_general, pago, observaciones')
+    .select('id, folio, fecha_permiso, fecha_fin, tipo_permiso, estado_general, pago, asunto_motivo, observaciones')
     .eq('usuario_id', usuarioId)
-    .eq('fecha_permiso', hoyStr)
+    .lte('fecha_permiso', hoyStr)
     .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']);
 
-  const pasesVigentesHoy = (pasesHoy || []).filter(p => {
+  const pasesVigentesHoy = (pasesRango || []).filter(p => {
+    const fin = p.fecha_fin || p.fecha_permiso;
+    if (!(p.fecha_permiso <= hoyStr && fin >= hoyStr)) return false;
     const pagoL = String(p.pago || '').toLowerCase();
     const obsL = String(p.observaciones || '');
-    return pagoL !== 'cancelado' && !/CANCELADO por/i.test(obsL);
+    return pagoL !== 'cancelado' && !/CANCELADO por/i.test(obsL) && !/\[PASE CANCELADO/i.test(obsL);
   });
+
   const regresadoHoy = pasesVigentesHoy.find(p =>
     (p.pago || '').toLowerCase().includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(p.observaciones || '')
   );

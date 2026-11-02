@@ -25,7 +25,8 @@ export default function TarjetaAprobacion({
   const estaAtoradoConJefe = solicitud.firma_1_estado === 'pendiente';
   const estaAtoradoConGerente = solicitud.firma_1_estado !== 'pendiente' && solicitud.firma_2_estado === 'pendiente';
   const esPropioPermiso = solicitud.usuario_id === usuarioActual?.id;
-  const mostrarOverride = !esPropioPermiso && esRH && esPendiente && !soyFirmante1Directo && (estaAtoradoConJefe || estaAtoradoConGerente);
+ const esUrgenciaCaseta = /\[(?:LLEGADA EN PUERTA|COMPORTAMIENTO INUSUAL EN CASETA|HORARIO NO COINCIDE EN CASETA):/i.test(solicitud.observaciones || '');
+  const mostrarOverride = !esPropioPermiso && !esUrgenciaCaseta && esRH && esPendiente && !soyFirmante1Directo && (estaAtoradoConJefe || estaAtoradoConGerente);
 
   const firma1Lista = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(solicitud.firma_1_estado);
   const firma2Lista = ['autorizado', 'aprobado', 'auto_aprobado', 'omitido', 'no_aplica', 'escalado'].includes(solicitud.firma_2_estado);
@@ -34,8 +35,8 @@ export default function TarjetaAprobacion({
     if (esPropioPermiso) return false;
     if (soyFirmante1Directo) return true;
     if (['jefe_area', 'encargado'].includes(usuarioActual?.rol) && solicitud.firma_1_estado === 'pendiente' && (!solicitud.firma_1_id || solicitud.firma_1_id === usuarioActual?.id)) return true;
-    if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && firma1Lista) return true;
-    if (esRH && solicitud.firma_3_estado === 'pendiente' && firma1Lista && firma2Lista) return true;
+    if (solicitud.firma_2_id === usuarioActual?.id && solicitud.firma_2_estado === 'pendiente' && (firma1Lista || esUrgenciaCaseta)) return true;
+    if (esRH && solicitud.firma_3_estado === 'pendiente' && ((firma1Lista && firma2Lista) || esUrgenciaCaseta)) return true;
     return false;
   };
 
