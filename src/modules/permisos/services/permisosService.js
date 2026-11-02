@@ -4,7 +4,7 @@ import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/not
 import { esRolValidadorSuperior } from '../../directorio/utils/directorioHelpers';
 
 // ============================================================================
-// MOTOR CENTRAL DEL ECUALIZADOR DE FIRMAS (COMPARTIDO CON CASETA DE VIGILANCIA)
+// MOTOR DE FIRMAS DIRECTO (RESPETA JEFE INMEDIATO INDIVIDUAL Y FIRMAS DEL DEPTO)
 // ============================================================================
 export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, deptoId }) => {
   const [resDepto, resSolicitante, resTodosEmpDepto, resRHUsers] = await Promise.all([
@@ -17,7 +17,7 @@ export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, d
       : Promise.resolve({ data: null }),
     supabase.from('usuarios').select('id, area, rol, reporta_a_id, tipo_personal').eq('id', userId).maybeSingle(),
     deptoId
-      ? supabase.from('usuarios').select('id, area, rol, activo').eq('departamento_id', deptoId).eq('activo', true)
+      ? supabase.from('usuarios').select('id, area, rol, activo, reporta_a_id').eq('departamento_id', deptoId).eq('activo', true)
       : Promise.resolve({ data: [] }),
     supabase.from('usuarios').select('id, rol').in('rol', ['gerente_rh', 'rh_nominas']).eq('activo', true)
   ]);
@@ -33,100 +33,52 @@ export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, d
   const rolSol = (rolUsuario || solicitante?.rol || 'empleado').toLowerCase().trim();
   const reportaAId = solicitante?.reporta_a_id || null;
 
-  // Verificar si el solicitante es Validador Superior / Gerente, o si es el Jefe Titular del Departamento
-  const esSolicitanteValidadorSuperior =
+  const esSolicitanteGerenteDiv =
     esRolValidadorSuperior(rolSol) ||
-    rolSol === 'superadmin' ||
-    (depto?.gerente_id && depto.gerente_id === userId);
+    rolSol === 'superadmin';
 
   const tieneSubordinadosDirectos = listaDepto.some(u => u.reporta_a_id === userId && u.id !== userId);
   const esSolicitanteJefe =
-    !esSolicitanteValidadorSuperior &&
+    !esSolicitanteGerenteDiv &&
     ((depto?.jefe_id && depto.jefe_id === userId) ||
       rolSol === 'jefe_area' ||
       rolSol === 'rh_nominas' ||
-      (rolSol === 'encargado' && (!depto?.jefe_id || depto.jefe_id === userId)) ||
       tieneSubordinadosDirectos);
-
-  // Obtener datos del Gerente configurado en el departamento
-  let gerenteDeptoObj = null;
-  if (depto?.gerente_id) {
-    const { data: gData } = await supabase
-      .from('usuarios')
-      .select('id, rol, activo')
-      .eq('id', depto.gerente_id)
-      .maybeSingle();
-    if (gData && gData.activo !== false) {
-      gerenteDeptoObj = gData;
-    }
-  }
-
-  // Interruptores del Ecualizador del departamento (con defaults seguros)
-  const swEmpRequiereJefe = depto ? depto.emp_requiere_jefe !== false : true;
-  const swEmpRequiereGerente = depto ? Boolean(depto.emp_requiere_gerente) : false;
-  const swJefeRequiereGerente = depto ? depto.jefe_requiere_gerente !== false : true;
 
   let jefeFinalId = null;
   let gerenteFinalId = null;
 
-  if (esSolicitanteValidadorSuperior) {
-    // 1. Si quien pide el permiso es un Gerente de División / Validador Superior -> Pasa directo a RH
+  if (esSolicitanteGerenteDiv) {
+    // 1. Si pide un Gerente (Pedro, Reynaldo, Coca) -> Directo a RH
     jefeFinalId = null;
     gerenteFinalId = null;
   } else if (esSolicitanteJefe) {
-    // 2. Si quien pide el permiso es el Jefe del Departamento (o Sub-jefa de área):
-    // Firma 1 se omite porque él mismo es jefatura; Firma 2 depende del switch jefe_requiere_gerente
+    // 2. Si pide un Jefe de Área (ej. Suheilli, Juan Antonio, René, Rubén):
+    // Miramos quién es SU Jefe Inmediato en su tarjeta (reporta_a_id).
+    // Si tiene asignado a Pedro o Reynaldo, va a Firma 2. Si no tiene a nadie (o tiene a RH), pasa directo a RH.
     jefeFinalId = null;
-    if (swJefeRequiereGerente && gerenteDeptoObj && gerenteDeptoObj.id !== userId) {
-      gerenteFinalId = gerenteDeptoObj.id;
+    if (reportaAId && reportaAId !== userId && reportaAId !== rhFinalId) {
+      const { data: supJefe } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
+      if (supJefe && supJefe.activo !== false && supJefe.rol !== 'gerente_rh') {
+        gerenteFinalId = supJefe.id;
+      }
     }
   } else {
-    // 3. Si quien pide el permiso es un Empleado / Operador:
-    // A) Evaluar Firma 1 según el switch emp_requiere_jefe
-    if (swEmpRequiereJefe) {
-      if (reportaAId && reportaAId !== userId) {
-        const { data: supDirecto } = await supabase
-          .from('usuarios')
-          .select('id, rol, activo')
-          .eq('id', reportaAId)
-          .maybeSingle();
-        if (supDirecto && supDirecto.activo !== false) {
-          // Si su reporta_a_id apunta directamente al Gerente de la división y no hay jefe de área, no duplicar en Firma 1
-          if (gerenteDeptoObj && supDirecto.id === gerenteDeptoObj.id && (!depto?.jefe_id || depto.jefe_id === gerenteDeptoObj.id)) {
-            jefeFinalId = null;
-          } else {
-            jefeFinalId = supDirecto.id;
-          }
-        }
+    // 3. Si pide un Empleado:
+    // Firma 1: Su Jefe Inmediato individual (reporta_a_id) o el Jefe del Departamento (depto.jefe_id)
+    if (reportaAId && reportaAId !== userId) {
+      const { data: supEmp } = await supabase.from('usuarios').select('id, rol, activo').eq('id', reportaAId).maybeSingle();
+      if (supEmp && supEmp.activo !== false && supEmp.rol !== 'gerente_rh' && supEmp.id !== rhFinalId) {
+        jefeFinalId = supEmp.id;
       }
-
-      if (!jefeFinalId && depto?.jefe_id && depto.jefe_id !== userId) {
-        jefeFinalId = depto.jefe_id;
-      }
-
-      // Fallback si en el departamento hay un jefe_area en su misma área aunque no estuviera en depto.jefe_id
-      if (!jefeFinalId) {
-        const areaSol = (solicitante?.area || '').trim().toUpperCase();
-        const mandoArea = listaDepto.find(
-          u => ['jefe_area', 'encargado'].includes(u.rol) && u.id !== userId && (u.area || '').trim().toUpperCase() === areaSol
-        );
-        if (mandoArea) jefeFinalId = mandoArea.id;
-      }
+    } else if (depto?.emp_requiere_jefe !== false && depto?.jefe_id && depto.jefe_id !== userId) {
+      jefeFinalId = depto.jefe_id;
     }
 
-    // B) Evaluar Firma 2 según el switch emp_requiere_gerente
-    if (swEmpRequiereGerente && gerenteDeptoObj && gerenteDeptoObj.id !== userId && gerenteDeptoObj.id !== jefeFinalId) {
-      gerenteFinalId = gerenteDeptoObj.id;
+    // Firma 2: Solo si el departamento tiene Firma 2 activa (emp_requiere_gerente = true)
+    if (depto?.emp_requiere_gerente && depto?.gerente_id && depto.gerente_id !== userId && depto.gerente_id !== jefeFinalId && depto.gerente_id !== rhFinalId) {
+      gerenteFinalId = depto.gerente_id;
     }
-  }
-
-  // Si el Gerente de Firma 2 resulta ser la misma persona que cierra Firma 3 (José Coca), omitir Firma 2 para no duplicar su firma
-  const esGerenteMismoRH =
-    gerenteFinalId &&
-    (gerenteFinalId === rhFinalId || gerenteDeptoObj?.rol === 'gerente_rh');
-
-  if (esGerenteMismoRH) {
-    gerenteFinalId = null;
   }
 
   let estadoFirma1 = jefeFinalId ? (jefeFinalId === userId ? 'auto_aprobado' : 'pendiente') : 'omitido';
@@ -139,7 +91,6 @@ export const resolverCadenaFirmasPorEcualizador = async ({ userId, rolUsuario, d
     estadoFirma3 = 'auto_aprobado';
   }
 
-  // Determinar a quién notificar en el primer eslabón pendiente
   let notificarA = [];
   if (estadoFirma1 === 'pendiente' && jefeFinalId) {
     notificarA = [jefeFinalId];
@@ -828,7 +779,7 @@ export const forzarSaltoFirmaRH = async (solicitud) => {
   }
 };
 
-// 9. CREAR NUEVA SOLICITUD DE PASE GOBERNADA POR EL ECUALIZADOR DE DEPARTAMENTOS
+// 9. CREAR NUEVA SOLICITUD DE PASE
 export const crearNuevaSolicitudPermiso = async ({
   userId, rolUsuario, deptoId, sedeId, tipoPersonal, nombreSolicitante, fotoSolicitante,
   tipoPermiso, naturaleza, fechaHoy, fechaPermiso, fechaFinVacaciones,
@@ -930,7 +881,6 @@ export const crearNuevaSolicitudPermiso = async ({
     }
   }
 
-  // === RESOLUCIÓN CENTRALIZADA MEDIANTE EL ECUALIZADOR DEL DEPARTAMENTO ===
   const {
     depto,
     jefeFinalId,
