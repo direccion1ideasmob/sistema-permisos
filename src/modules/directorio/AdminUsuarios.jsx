@@ -12,7 +12,7 @@ export default function AdminUsuarios() {
   const [puestosUnicos, setPuestosUnicos] = useState([]);
   const [sedes, setSedes] = useState([]);
   
-  const [cargando, setCargando] = useState(true);
+  const [cargandoInicial, setCargandoInicial] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [vista, setVista] = useState('arbol');
 
@@ -28,8 +28,9 @@ export default function AdminUsuarios() {
     };
   }, []);
 
-  const cargarDatos = useCallback(async () => {
-    setCargando(true);
+  // Recarga en segundo plano sin desmontar VisorDirectorio (conserva el candado abierto y tus filtros activos)
+  const cargarDatos = useCallback(async (esSilencioso = true) => {
+    if (!esSilencioso) setCargandoInicial(true);
     try {
       const data = await obtenerDatosDirectorio();
       setSedes(data.sedes);
@@ -40,11 +41,11 @@ export default function AdminUsuarios() {
     } catch (err) {
       console.error("Error cargando directorio:", err);
     } finally {
-      setCargando(false);
+      setCargandoInicial(false);
     }
   }, []);
 
-  useEffect(() => { cargarDatos(); }, [cargarDatos]);
+  useEffect(() => { cargarDatos(false); }, [cargarDatos]);
 
   const c = obtenerTemaGlobal(modoOscuro);
 
@@ -199,7 +200,7 @@ export default function AdminUsuarios() {
           </div>
         </header>
 
-        {cargando ? (
+        {cargandoInicial ? (
           <div style={{ textAlign: 'center', padding: '40px', color: c.textMuted, fontSize: '13.5px', fontWeight: '600' }}>
             Sincronizando estructura organizacional...
           </div>
@@ -211,7 +212,7 @@ export default function AdminUsuarios() {
             sedes={sedes}
             areas={areasUnicas}
             puestos={puestosUnicos}
-            recargarDatos={cargarDatos}
+            recargarDatos={() => cargarDatos(true)}
             modoOscuro={modoOscuro}
           />
         )}
@@ -219,7 +220,7 @@ export default function AdminUsuarios() {
         {modalAbierto && (
           <ModalColaborador 
             onClose={() => setModalAbierto(false)} 
-            onSuccess={() => { setModalAbierto(false); cargarDatos(); }}
+            onSuccess={() => { setModalAbierto(false); cargarDatos(true); }}
             usuarios={usuarios}
             departamentos={departamentos} 
             areas={areasUnicas} 
