@@ -1,13 +1,26 @@
 import { formatearApellidosNombreMayus, compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 import React, { useState, useMemo, useEffect } from 'react';
-import { Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import { Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw, SlidersHorizontal, X, AlertTriangle } from 'lucide-react';
 import { obtenerTemaGrid, generarEstilosCSS } from './utils/gridStyles';
-import { obtenerClaveOrdenApellido, desglosarNombreExistente } from './utils/directorioHelpers';
+import { desglosarNombreExistente } from './utils/directorioHelpers';
 import { tramitarBajaColaborador, reactivarColaborador } from './services/directorioService';
 import { subirImagenUsuario } from '../../core/services/storageService';
 import ModalSeguridadPin from './ModalSeguridadPin';
 import ModalBajaColaborador from './ModalBajaColaborador';
 import DossierLateral from './DossierLateral';
+
+const obtenerFaltantesExpediente = (u) => {
+  if (!u || !u.activo || u.rol === 'caseta') return [];
+  const f = [];
+  if (!u.foto_url) f.push('Sin Foto');
+  if (!u.firma_url) f.push('Sin Firma');
+  if (!u.puesto || !String(u.puesto).trim()) f.push('Sin Puesto');
+  if (!u.departamento_id) f.push('Sin Depto');
+  if (!u.sede_id) f.push('Sin Sede');
+  if (!u.celular || !String(u.celular).trim()) f.push('Sin Celular');
+  if (!u.fecha_ingreso) f.push('Sin F. Ingreso');
+  return f;
+};
 
 export default function DirectorioGrid({ 
   usuarios = [], departamentos = [], sedes = [], areas = [], puestos = [], 
@@ -28,6 +41,7 @@ export default function DirectorioGrid({
   const [filtroNomina, setFiltroNomina] = useState('ALL');
   const [filtroDepto, setFiltroDepto] = useState('ALL');
   const [filtroEstatus, setFiltroEstatus] = useState('activos');
+  const [filtroExpediente, setFiltroExpediente] = useState('ALL');
   
   const [columnaOrden, setColumnaOrden] = useState('nombre_completo');
   const [direccionOrden, setDireccionOrden] = useState('asc');
@@ -47,6 +61,18 @@ export default function DirectorioGrid({
     return departamentos.filter(d => idsEnUso.has(d.id));
   }, [usuarios, departamentos]);
 
+  const mapaFaltantes = useMemo(() => {
+    const m = {};
+    usuarios.forEach(u => {
+      m[u.id] = obtenerFaltantesExpediente(u);
+    });
+    return m;
+  }, [usuarios]);
+
+  const totalIncompletos = useMemo(() => {
+    return usuarios.filter(u => u.activo && (mapaFaltantes[u.id] || []).length > 0).length;
+  }, [usuarios, mapaFaltantes]);
+
   const cambiarOrden = (columna) => {
     if (columnaOrden === columna) setDireccionOrden(prev => prev === 'asc' ? 'desc' : 'asc');
     else { setColumnaOrden(columna); setDireccionOrden('asc'); }
@@ -58,9 +84,10 @@ export default function DirectorioGrid({
     setFiltroNomina('ALL');
     setFiltroDepto('ALL');
     setFiltroEstatus('activos');
+    setFiltroExpediente('ALL');
   };
 
-  const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== 'ALL' || filtroDepto !== 'ALL' || filtroEstatus !== 'activos';
+  const hayFiltros = busqueda !== '' || filtroSede !== 'ALL' || filtroNomina !== 'ALL' || filtroDepto !== 'ALL' || filtroEstatus !== 'activos' || filtroExpediente !== 'ALL';
   
   const usuariosFiltrados = useMemo(() => {
     return [...usuarios]
@@ -83,6 +110,13 @@ export default function DirectorioGrid({
         if (filtroDepto !== 'ALL' && u.departamento_id !== filtroDepto) return false;
         if (filtroEstatus === 'activos' && !u.activo) return false;
         if (filtroEstatus === 'bajas' && u.activo) return false;
+
+        const faltantes = mapaFaltantes[u.id] || [];
+        if (filtroExpediente === 'incompletos' && faltantes.length === 0) return false;
+        if (filtroExpediente === 'sin_foto' && !faltantes.includes('Sin Foto')) return false;
+        if (filtroExpediente === 'sin_firma' && !faltantes.includes('Sin Firma')) return false;
+        if (filtroExpediente === 'sin_datos' && !faltantes.some(f => f !== 'Sin Foto' && f !== 'Sin Firma')) return false;
+
         return true;
       })
       .sort((a, b) => {
@@ -107,7 +141,7 @@ export default function DirectorioGrid({
         const res = String(vA).localeCompare(String(vB));
         return direccionOrden === 'asc' ? res : -res;
       });
-  }, [usuarios, busqueda, filtroSede, filtroNomina, filtroDepto, filtroEstatus, columnaOrden, direccionOrden, sedes]);
+  }, [usuarios, busqueda, filtroSede, filtroNomina, filtroDepto, filtroEstatus, filtroExpediente, columnaOrden, direccionOrden, sedes, mapaFaltantes]);
 
   const abrirDossier = (user) => {
     const partes = desglosarNombreExistente(user);
@@ -183,17 +217,69 @@ export default function DirectorioGrid({
     return direccionOrden === 'asc' ? <ArrowUp size={11} color={c.accent} /> : <ArrowDown size={11} color={c.accent} />;
   };
 
+  const renderBadgesFaltantes = (id) => {
+    const faltantes = mapaFaltantes[id] || [];
+    if (faltantes.length === 0) return null;
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '3px' }}>
+        {faltantes.map(et => (
+          <span
+            key={et}
+            style={{
+              fontSize: '9.5px',
+              fontWeight: '800',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              background: 'rgba(245, 158, 11, 0.14)',
+              color: '#d97706',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {et}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="grid-wrapper">
       <style>{generarEstilosCSS(c, modoOscuro)}</style>
 
-      {/* BARRA SUPERIOR MINIMALISTA: CONTADOR A LA IZQ <---> BOTONES DISCRETOS A LA DER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
+      {/* BARRA SUPERIOR: CONTADOR A LA IZQ <---> BOTONES A LA DER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px', flexWrap: 'wrap' }}>
         <div style={{ fontSize: '13px', fontWeight: '600', color: c.textMuted }}>
           <strong style={{ color: c.text, fontWeight: '800' }}>{usuariosFiltrados.length}</strong> de {usuarios.length} colaboradores
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {/* BOTÓN DIRECTO DE EXPEDIENTES INCOMPLETOS */}
+          {totalIncompletos > 0 && (
+            <button
+              type="button"
+              onClick={() => setFiltroExpediente(prev => prev === 'incompletos' ? 'ALL' : 'incompletos')}
+              title="Ver colaboradores con foto, firma o datos pendientes"
+              style={{
+                height: '32px',
+                padding: '0 10px',
+                borderRadius: '8px',
+                border: `1px solid ${filtroExpediente !== 'ALL' ? '#f59e0b' : 'rgba(245, 158, 11, 0.45)'}`,
+                background: filtroExpediente !== 'ALL' ? '#f59e0b' : 'rgba(245, 158, 11, 0.12)',
+                color: filtroExpediente !== 'ALL' ? '#ffffff' : '#d97706',
+                fontSize: '11.5px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <AlertTriangle size={13} />
+              <span>{esMobile ? `Incompletos (${totalIncompletos})` : `Expedientes Incompletos (${totalIncompletos})`}</span>
+            </button>
+          )}
+
           {/* BOTÓN DISCRETO DE BÚSQUEDA Y FILTROS */}
           <button
             type="button"
@@ -278,7 +364,7 @@ export default function DirectorioGrid({
         </div>
       </div>
 
-      {/* PANEL DESPLEGABLE DE BÚSQUEDA Y FILTROS (OCULTO POR DEFECTO) */}
+      {/* PANEL DESPLEGABLE DE BÚSQUEDA Y FILTROS */}
       {mostrarFiltros && (
         <div style={{
           background: c.surfaceCard,
@@ -342,6 +428,17 @@ export default function DirectorioGrid({
               </select>
             </div>
 
+            <div className={`filter-pill ${filtroExpediente !== 'ALL' ? 'active' : ''}`}>
+              <span>⚠️</span>
+              <select className="pill-select" value={filtroExpediente} onChange={e => setFiltroExpediente(e.target.value)}>
+                <option value="ALL">Expediente: Todos</option>
+                <option value="incompletos">Cualquier dato faltante ({totalIncompletos})</option>
+                <option value="sin_foto">Falta Foto de Perfil</option>
+                <option value="sin_firma">Falta Firma Digital</option>
+                <option value="sin_datos">Falta Puesto / Celular / Ingreso</option>
+              </select>
+            </div>
+
             <div className={`filter-pill ${filtroEstatus !== 'ALL' ? 'active' : ''}`}>
               <span>●</span>
               <select className="pill-select" value={filtroEstatus} onChange={e => setFiltroEstatus(e.target.value)}>
@@ -379,11 +476,11 @@ export default function DirectorioGrid({
                       {formatearApellidosNombreMayus(user)}
                     </div>
                     <div style={{ fontSize: '11px', color: c.textMuted, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.puesto || user.area || 'Sin puesto'}</span>
                       <span>•</span>
                       <span style={{ flexShrink: 0 }}>{sedeObj?.nombre || 'Sin Sede'}</span>
                     </div>
+                    {renderBadgesFaltantes(user.id)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginLeft: '8px' }}>
@@ -420,8 +517,11 @@ export default function DirectorioGrid({
                     <td className="mono-id">#{user.numero_empleado}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                        <img src={urlFoto} alt="" onClick={(e) => { e.stopPropagation(); if (setFotoZoom) setFotoZoom({ url: urlFoto, nombre: user.nombre_completo }); }} style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <span style={{ fontWeight: '600' }}>{formatearApellidosNombreMayus(user)}</span>
+                        <img src={urlFoto} alt="" onClick={(e) => { e.stopPropagation(); if (setFotoZoom) setFotoZoom({ url: urlFoto, nombre: user.nombre_completo }); }} style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontWeight: '600' }}>{formatearApellidosNombreMayus(user)}</div>
+                          {renderBadgesFaltantes(user.id)}
+                        </div>
                       </div>
                     </td>
                     <td><span style={{ fontSize: '12px' }}>{sedeObj?.nombre || 'Sin Sede'}</span></td>

@@ -10,6 +10,22 @@ const limpiarTexto = (txt) => {
     : txt.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 };
 
+const resolverClasifYGerentePorNomina = async (tipoPersonal = 'produccion') => {
+  const tp = String(tipoPersonal || 'produccion').toLowerCase().trim();
+  const clasif = tp.includes('admin') ? 'administrativo' : (tp.includes('obra') ? 'obra' : 'produccion');
+  const rolGerenteBuscado = clasif === 'administrativo' ? 'gerente_admin' : 'gerente_produccion';
+
+  const { data: ger } = await supabase
+    .from('usuarios')
+    .select('id')
+    .eq('rol', rolGerenteBuscado)
+    .eq('activo', true)
+    .limit(1)
+    .maybeSingle();
+
+  return { clasif, gerenteId: ger?.id || null };
+};
+
 // 1. CARGAR TODO EL DIRECTORIO Y CATÁLOGOS
 export const obtenerDatosDirectorio = async () => {
   const [resSedes, resUsuarios, resDeptos] = await Promise.all([
@@ -108,7 +124,10 @@ export const registrarNuevoColaborador = async ({
 
   let deptoFinalId = formData.departamento_id;
   if (creandoNuevo.depto && textosNuevos.depto.trim()) {
-    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, 'produccion', departamentos);
+    const { clasif, gerenteId } = await resolverClasifYGerentePorNomina(formData.tipo_personal);
+    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, clasif, departamentos, {
+      gerente_id: gerenteId
+    });
   }
 
   let areaFinal = formData.area;
@@ -199,7 +218,10 @@ export const actualizarExpedienteColaborador = async ({
 
   let deptoFinalId = datosEdit.departamento_id || null;
   if (creandoNuevo.depto && textosNuevos.depto?.trim()) {
-    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, 'produccion', departamentos);
+    const { clasif, gerenteId } = await resolverClasifYGerentePorNomina(datosEdit.tipo_personal);
+    deptoFinalId = await resolverDepartamentoId(textosNuevos.depto, clasif, departamentos, {
+      gerente_id: gerenteId
+    });
   }
 
   const nombreDeptoSeleccionado = departamentos.find(d => d.id === deptoFinalId)?.nombre || textosNuevos.depto || 'GENERAL';
@@ -329,7 +351,6 @@ export const actualizarDepartamentoSeguro = async (
     if (jefeActual && jefeActual.rol === 'empleado') {
       await supabase.from('usuarios').update({ rol: 'jefe_area' }).eq('id', configFirmas.jefe_id);
     }
-    // Sincronizar a los empleados operativos de este departamento (excepto RH que tiene subáreas propias)
     if (nomLimpio !== 'RECURSOS HUMANOS') {
       await supabase
         .from('usuarios')
@@ -401,7 +422,7 @@ export const alternarSwitchFirmaDepartamento = async (deptoId, campo, nuevoValor
   if (error) throw error;
 };
 
-// 6.D SWITCH MAESTRO POR DIVISIÓN (PRENDER O APAGAR FIRMA DE GERENCIA EN TODOS LOS DEPTOS DE ESA RAMA)
+// 6.D SWITCH MAESTRO POR DIVISIÓN
 export const alternarFirmaGerenciaMasivoDivision = async (idsDepartamentos = [], nuevoValor) => {
   if (!idsDepartamentos.length) return;
   const { error } = await supabase
