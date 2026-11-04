@@ -33,14 +33,27 @@ const cancelarSalidasMismoDiaPorRetiro = async (usuarioId, fechaPermiso, folioRe
       if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL)) continue;
       if (/\[SALIDA CASETA:/i.test(obsL)) continue;
 
-      await supabase
+      const nuevaObs = `${obsL} | CANCELADO por Sistema: [PASE CANCELADO: El colaborador fue regresado a casa en puerta (${folioRetardo || 'Retardo'})]`.replace(/^\s*\|\s*/, '');
+
+      const { error: err1 } = await supabase
         .from('permisos')
         .update({
           estado_general: 'rechazado',
           pago: 'Cancelado',
-          observaciones: `${obsL} | [PASE CANCELADO: El colaborador fue regresado a casa en puerta (${folioRetardo || 'Retardo'})]`.replace(/^\s*\|\s*/, '')
+          observaciones: nuevaObs
         })
         .eq('id', sal.id);
+
+      if (err1) {
+        await supabase
+          .from('permisos')
+          .update({
+            estado_general: 'rechazado',
+            pago: 'Sin goce',
+            observaciones: nuevaObs
+          })
+          .eq('id', sal.id);
+      }
     }
   } catch (err) {
     console.warn('Aviso al cancelar salidas del mismo día:', err);
@@ -1081,14 +1094,26 @@ export const crearNuevaSolicitudPermiso = async ({
     }
     const pasesSinSello = (tipoPermiso === 'falta' && retardoPrevio && !tieneSelloFisicoCaseta(retardoPrevio)) ? [retardoPrevio] : [];
     for (const pPrev of pasesSinSello) {
-      await supabase
+      const obsSustituida = `${pPrev.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de ${tipoPermiso.toUpperCase()} del mismo día`;
+      const { error: errSust } = await supabase
         .from('permisos')
         .update({
           estado_general: 'rechazado',
           pago: 'Cancelado',
-          observaciones: `${pPrev.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de ${tipoPermiso.toUpperCase()} del mismo día`
+          observaciones: obsSustituida
         })
         .eq('id', pPrev.id);
+
+      if (errSust) {
+        await supabase
+          .from('permisos')
+          .update({
+            estado_general: 'rechazado',
+            pago: 'Sin goce',
+            observaciones: obsSustituida
+          })
+          .eq('id', pPrev.id);
+      }
     }
   }
 
@@ -1484,7 +1509,7 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
 
   const nuevasObs = `${permiso.observaciones || ''} | CANCELADO por ${etiquetaQuien}: ${motivoLimpio}`;
 
-  const { error } = await supabase
+  const { error: error1 } = await supabase
     .from('permisos')
     .update({
       estado_general: 'rechazado',
@@ -1493,9 +1518,21 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
     })
     .eq('id', permiso.id);
 
-  if (error) throw error;
-};
+  if (error1) {
+    const { error: error2 } = await supabase
+      .from('permisos')
+      .update({
+        estado_general: 'rechazado',
+        pago: 'Sin goce',
+        observaciones: nuevasObs
+      })
+      .eq('id', permiso.id);
 
+    if (error2) {
+      throw new Error(error2.message || error1.message || 'No se pudo cancelar el permiso.');
+    }
+  }
+};
 export const depurarPermisosCanceladosRH = async (ids = []) => {
   if (!Array.isArray(ids) || ids.length === 0) return 0;
   const { error } = await supabase
