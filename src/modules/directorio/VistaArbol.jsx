@@ -351,6 +351,54 @@ export default function VistaArbol({
       });
   }, [listaUsuariosLocal]);
 
+  // Resuelve el Jefe de Área real del departamento (sea por d.jefe_id o por el Jefe de Depto que aparece en el Organigrama)
+  const obtenerJefeEfectivoId = (depto) => {
+    if (!depto) return '';
+    if (depto.jefe_id) {
+      const existeActivo = (listaUsuariosLocal || []).some(u => u.id === depto.jefe_id && u.activo !== false);
+      if (existeActivo) return depto.jefe_id;
+    }
+    const personalActivo = (listaUsuariosLocal || []).filter(
+      u => u.departamento_id === depto.id && u.activo !== false && !esRolValidadorSuperior(u.rol)
+    );
+    const nombreDeptoNorm = normalizar(depto.nombre);
+    const jefeDirecto =
+      personalActivo.find(u => u.rol === 'jefe_area' && normalizar(u.area || depto.nombre) === nombreDeptoNorm) ||
+      personalActivo.find(u => u.rol === 'jefe_area') ||
+      personalActivo.find(u => u.rol === 'encargado' && normalizar(u.area || depto.nombre) === nombreDeptoNorm);
+    return jefeDirecto ? jefeDirecto.id : '';
+  };
+
+  // Auto-sincronizar en segundo plano cualquier departamento donde el Organigrama tenía Jefe pero d.jefe_id estaba vacío
+  useEffect(() => {
+    if (!listaDeptosLocal?.length || !listaUsuariosLocal?.length) return;
+    const desincronizados = listaDeptosLocal.filter(d => !d.jefe_id && obtenerJefeEfectivoId(d));
+    if (desincronizados.length === 0) return;
+
+    setListaDeptosLocal(prev =>
+      prev.map(d => {
+        if (!d.jefe_id) {
+          const idDetectado = obtenerJefeEfectivoId(d);
+          if (idDetectado) return { ...d, jefe_id: idDetectado, emp_requiere_jefe: true };
+        }
+        return d;
+      })
+    );
+
+    desincronizados.forEach(d => {
+      const idDetectado = obtenerJefeEfectivoId(d);
+      if (idDetectado) {
+        actualizarDepartamentoSeguro(d.id, d.nombre, d.clasificacion, d.nombre, {
+          jefe_id: idDetectado,
+          gerente_id: d.gerente_id,
+          emp_requiere_jefe: true,
+          emp_requiere_gerente: d.emp_requiere_gerente,
+          jefe_requiere_gerente: d.jefe_requiere_gerente !== false
+        }).catch(() => {});
+      }
+    });
+  }, [listaUsuariosLocal, listaDeptosLocal.length]);
+
   // Departamentos que tienen personal activo (para no mostrar departamentos vacíos)
   const deptosConPersonal = useMemo(() => {
     return (listaDeptosLocal || []).filter(d =>
@@ -865,7 +913,8 @@ export default function VistaArbol({
                 </thead>
                 <tbody>
                   {deptosConPersonal.map(d => {
-                    const tieneJefe = Boolean(d.jefe_id);
+                    const jefeEfectivoId = d.jefe_id || obtenerJefeEfectivoId(d);
+                    const tieneJefe = Boolean(jefeEfectivoId);
                     const tieneGerente = Boolean(d.gerente_id);
                     const jefePideGerente = tieneGerente && d.jefe_requiere_gerente !== false;
                     const empPidenGerente = tieneGerente && Boolean(d.emp_requiere_gerente);
@@ -879,7 +928,7 @@ export default function VistaArbol({
                         {/* Selector de Jefe del Departamento */}
                         <td style={{ padding: '10px 8px' }}>
                           <select
-                            value={d.jefe_id || ''}
+                            value={jefeEfectivoId}
                             onChange={e => cambiarTitularEnMatriz(d, 'jefe_id', e.target.value)}
                             style={{ width: '100%', padding: '7px 8px', borderRadius: '6px', border: `1px solid ${c.border}`, background: c.inputBg, color: c.text, fontSize: '12px', fontWeight: '600' }}
                           >

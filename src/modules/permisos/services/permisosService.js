@@ -139,8 +139,14 @@ export const resolverCadenaFirmasPorEcualizador = async ({
       if (supEmp && supEmp.activo !== false && supEmp.rol !== 'gerente_rh' && supEmp.id !== rhFinalId) {
         jefeFinalId = supEmp.id;
       }
-    } else if (depto?.emp_requiere_jefe !== false && depto?.jefe_id && depto.jefe_id !== userId) {
-      jefeFinalId = depto.jefe_id;
+    } else if (depto?.emp_requiere_jefe !== false) {
+      if (depto?.jefe_id && depto.jefe_id !== userId) {
+        jefeFinalId = depto.jefe_id;
+      } else {
+        const jefeEnDepto = listaDepto.find(u => u.rol === 'jefe_area' && u.id !== userId) ||
+                            listaDepto.find(u => u.rol === 'encargado' && u.id !== userId);
+        if (jefeEnDepto) jefeFinalId = jefeEnDepto.id;
+      }
     }
 
     if (depto?.emp_requiere_gerente && depto?.gerente_id && depto.gerente_id !== userId && depto.gerente_id !== jefeFinalId && depto.gerente_id !== rhFinalId) {
