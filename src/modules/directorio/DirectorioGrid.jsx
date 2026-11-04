@@ -1,6 +1,6 @@
 import { formatearApellidosNombreMayus, compararPorApellidoPaterno } from '../../core/utils/ordenNombre';
 import React, { useState, useMemo, useEffect } from 'react';
-import { Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw, SlidersHorizontal, X, AlertTriangle } from 'lucide-react';
+import { Lock, Unlock, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Search, RotateCcw, SlidersHorizontal, X, AlertCircle } from 'lucide-react';
 import { obtenerTemaGrid, generarEstilosCSS } from './utils/gridStyles';
 import { desglosarNombreExistente } from './utils/directorioHelpers';
 import { tramitarBajaColaborador, reactivarColaborador } from './services/directorioService';
@@ -24,7 +24,9 @@ const obtenerFaltantesExpediente = (u) => {
 
 export default function DirectorioGrid({ 
   usuarios = [], departamentos = [], sedes = [], areas = [], puestos = [], 
-  recargarDatos, setFotoZoom, modoOscuro 
+  recargarDatos, setFotoZoom, modoOscuro,
+  seguridadDesbloqueada: propSeguridad,
+  setSeguridadDesbloqueada: propSetSeguridad
 }) {
   const c = obtenerTemaGrid(modoOscuro);
   const [esMobile, setEsMobile] = useState(window.innerWidth < 768);
@@ -51,7 +53,10 @@ export default function DirectorioGrid({
   const [datosEdit, setDatosEdit] = useState({});
   const [subiendoFoto, setSubiendoFoto] = useState(false);
 
-  const [seguridadDesbloqueada, setSeguridadDesbloqueada] = useState(false);
+  const [seguridadLocal, setSeguridadLocal] = useState(false);
+  const seguridadDesbloqueada = propSeguridad !== undefined ? propSeguridad : seguridadLocal;
+  const setSeguridadDesbloqueada = propSetSeguridad || setSeguridadLocal;
+
   const [modalPinAbierto, setModalPinAbierto] = useState(false);
   const [usuarioParaBaja, setUsuarioParaBaja] = useState(null);
   const [procesandoBaja, setProcesandoBaja] = useState(false);
@@ -218,6 +223,7 @@ export default function DirectorioGrid({
   };
 
   const renderBadgesFaltantes = (id) => {
+    if (filtroExpediente === 'ALL') return null;
     const faltantes = mapaFaltantes[id] || [];
     if (faltantes.length === 0) return null;
     return (
@@ -227,12 +233,12 @@ export default function DirectorioGrid({
             key={et}
             style={{
               fontSize: '9.5px',
-              fontWeight: '800',
-              padding: '1px 6px',
+              fontWeight: '700',
+              padding: '1px 5px',
               borderRadius: '4px',
-              background: 'rgba(245, 158, 11, 0.14)',
-              color: '#d97706',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
+              background: c.surface,
+              color: c.textMuted,
+              border: `1px solid ${c.border}`,
               whiteSpace: 'nowrap'
             }}
           >
@@ -247,39 +253,39 @@ export default function DirectorioGrid({
     <div className="grid-wrapper">
       <style>{generarEstilosCSS(c, modoOscuro)}</style>
 
-      {/* BARRA SUPERIOR: CONTADOR A LA IZQ <---> BOTONES A LA DER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px', flexWrap: 'wrap' }}>
-        <div style={{ fontSize: '13px', fontWeight: '600', color: c.textMuted }}>
-          <strong style={{ color: c.text, fontWeight: '800' }}>{usuariosFiltrados.length}</strong> de {usuarios.length} colaboradores
-        </div>
+      {/* BARRA SUPERIOR MINIMALISTA: CONTADOR E ICONO AISLADO A LA IZQ <---> CONTROLES A LA DER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: c.textMuted }}>
+            <strong style={{ color: c.text, fontWeight: '800' }}>{usuariosFiltrados.length}</strong> de {usuarios.length} colaboradores
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          {/* BOTÓN DIRECTO DE EXPEDIENTES INCOMPLETOS */}
           {totalIncompletos > 0 && (
             <button
               type="button"
               onClick={() => setFiltroExpediente(prev => prev === 'incompletos' ? 'ALL' : 'incompletos')}
-              title="Ver colaboradores con foto, firma o datos pendientes"
+              title={filtroExpediente !== 'ALL' ? 'Quitar filtro de incompletos' : `Filtrar expedientes con datos pendientes (${totalIncompletos})`}
               style={{
-                height: '32px',
-                padding: '0 10px',
-                borderRadius: '8px',
-                border: `1px solid ${filtroExpediente !== 'ALL' ? '#f59e0b' : 'rgba(245, 158, 11, 0.45)'}`,
-                background: filtroExpediente !== 'ALL' ? '#f59e0b' : 'rgba(245, 158, 11, 0.12)',
-                color: filtroExpediente !== 'ALL' ? '#ffffff' : '#d97706',
-                fontSize: '11.5px',
-                fontWeight: '800',
+                width: '26px',
+                height: '26px',
+                padding: 0,
+                borderRadius: '6px',
+                border: `1px solid ${filtroExpediente !== 'ALL' ? c.accent : c.border}`,
+                background: filtroExpediente !== 'ALL' ? c.accentSoft : 'transparent',
+                color: filtroExpediente !== 'ALL' ? c.accent : c.textSubtle,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px'
+                justifyContent: 'center',
+                opacity: filtroExpediente !== 'ALL' ? 1 : 0.75
               }}
             >
-              <AlertTriangle size={13} />
-              <span>{esMobile ? `Incompletos (${totalIncompletos})` : `Expedientes Incompletos (${totalIncompletos})`}</span>
+              <AlertCircle size={13} />
             </button>
           )}
+        </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {/* BOTÓN DISCRETO DE BÚSQUEDA Y FILTROS */}
           <button
             type="button"
@@ -429,13 +435,13 @@ export default function DirectorioGrid({
             </div>
 
             <div className={`filter-pill ${filtroExpediente !== 'ALL' ? 'active' : ''}`}>
-              <span>⚠️</span>
+              <span>📋</span>
               <select className="pill-select" value={filtroExpediente} onChange={e => setFiltroExpediente(e.target.value)}>
                 <option value="ALL">Expediente: Todos</option>
-                <option value="incompletos">Cualquier dato faltante ({totalIncompletos})</option>
-                <option value="sin_foto">Falta Foto de Perfil</option>
-                <option value="sin_firma">Falta Firma Digital</option>
-                <option value="sin_datos">Falta Puesto / Celular / Ingreso</option>
+                <option value="incompletos">Con datos pendientes ({totalIncompletos})</option>
+                <option value="sin_foto">Sin Foto de Perfil</option>
+                <option value="sin_firma">Sin Firma Digital</option>
+                <option value="sin_datos">Sin Puesto / Celular / Ingreso</option>
               </select>
             </div>
 
@@ -551,6 +557,7 @@ export default function DirectorioGrid({
         abierto={dossierAbierto}
         onClose={() => setDossierAbierto(false)}
         editando={seguridadDesbloqueada}
+        onDesbloquearEdicion={() => setModalPinAbierto(true)}
         datosEdit={datosEdit}
         setDatosEdit={setDatosEdit}
         usuarios={usuarios}

@@ -24,7 +24,9 @@ import ModalSeguridadPin from './ModalSeguridadPin';
 const normalizar = (txt) => txt ? estandarizar(txt.toUpperCase()) : 'GENERAL';
 
 export default function VistaArbol({
-  usuarios = [], departamentos = [], recargarDatos, setFotoZoom, modoOscuro
+  usuarios = [], departamentos = [], recargarDatos, setFotoZoom, modoOscuro,
+  seguridadDesbloqueada: propSeguridad,
+  setSeguridadDesbloqueada: propSetSeguridad
 }) {
   const [esMobile, setEsMobile] = useState(window.innerWidth < 768);
 
@@ -35,7 +37,7 @@ export default function VistaArbol({
   useEffect(() => { setListaDeptosLocal(departamentos); }, [departamentos]);
   useEffect(() => { setListaUsuariosLocal(usuarios); }, [usuarios]);
 
-  // Persistir qué divisiones están abiertas y el desbloqueo del PIN en sessionStorage
+  // Persistir qué divisiones están abiertas
   const [divisionesAbiertas, setDivisionesAbiertas] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('arbol_divs_abiertas') || '{}'); } catch { return {}; }
   });
@@ -44,13 +46,12 @@ export default function VistaArbol({
   });
   const [subareasAbiertas, setSubareasAbiertas] = useState({});
 
-  const [seguridadDesbloqueada, setSeguridadDesbloqueada] = useState(() => {
-    return sessionStorage.getItem('arbol_pin_desbloqueado') === 'true';
-  });
-
+  // Candado en memoria: compartido con la Tabla, pero se cierra solo al recargar (F5) o salir
+  const [seguridadLocal, setSeguridadLocal] = useState(false);
+  const seguridadDesbloqueada = propSeguridad !== undefined ? propSeguridad : seguridadLocal;
   const cambiarEstadoSeguridad = (estado) => {
-    setSeguridadDesbloqueada(estado);
-    sessionStorage.setItem('arbol_pin_desbloqueado', estado ? 'true' : 'false');
+    if (propSetSeguridad) propSetSeguridad(Boolean(estado));
+    else setSeguridadLocal(Boolean(estado));
   };
 
   useEffect(() => {

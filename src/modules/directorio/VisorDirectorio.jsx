@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DirectorioGrid from './DirectorioGrid';
 import VistaArbol from './VistaArbol';
 import ModalFotoZoom from '../../core/ui/ModalFotoZoom';
@@ -9,6 +9,16 @@ export default function VisorDirectorio({
 }) {
   const [deptosAbiertos, setDeptosAbiertos] = useState({});
   const [fotoZoom, setFotoZoom] = useState(null);
+
+  // Candado único en memoria: dura toda la edición en Tabla y Árbol, pero se bloquea solo al recargar (F5) o salir del módulo
+  const [seguridadDesbloqueada, setSeguridadDesbloqueada] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.removeItem('arbol_pin_desbloqueado');
+    return () => {
+      sessionStorage.removeItem('arbol_pin_desbloqueado');
+    };
+  }, []);
 
   const toggleDepto = (id) => {
     setDeptosAbiertos(prev => ({ ...prev, [id]: !prev[id] }));
@@ -25,7 +35,9 @@ export default function VisorDirectorio({
           puestos={puestos} 
           recargarDatos={recargarDatos} 
           setFotoZoom={setFotoZoom}
-          modoOscuro={modoOscuro} 
+          modoOscuro={modoOscuro}
+          seguridadDesbloqueada={seguridadDesbloqueada}
+          setSeguridadDesbloqueada={setSeguridadDesbloqueada}
         />
       ) : (
         <VistaArbol 
@@ -35,7 +47,9 @@ export default function VisorDirectorio({
           toggleDepto={toggleDepto} 
           setFotoZoom={setFotoZoom} 
           recargarDatos={recargarDatos}
-          modoOscuro={modoOscuro} 
+          modoOscuro={modoOscuro}
+          seguridadDesbloqueada={seguridadDesbloqueada}
+          setSeguridadDesbloqueada={setSeguridadDesbloqueada}
         />
       )}
 

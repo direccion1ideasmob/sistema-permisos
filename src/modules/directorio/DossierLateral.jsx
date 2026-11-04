@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle } from 'lucide-react';
+import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool, CheckCircle, Lock } from 'lucide-react';
 import {
   estandarizar,
   formatearNombreNaturalMayus,
@@ -9,7 +9,7 @@ import { actualizarExpedienteColaborador, eliminarColaboradorDefinitivo } from '
 import { subirImagenUsuario } from '../../core/services/storageService';
 
 export default function DossierLateral({
-  colaborador, abierto, onClose, editando, datosEdit, setDatosEdit,
+  colaborador, abierto, onClose, editando, onDesbloquearEdicion, datosEdit, setDatosEdit,
   usuarios = [], departamentos = [], sedes = [], areas = [], puestos = [], subiendoFoto, onCambiarFoto,
   recargarDatos, onAbrirBaja, onReactivar, setFotoZoom, c
 }) {
@@ -151,7 +151,6 @@ export default function DossierLateral({
     try {
       const urlFinal = await subirImagenUsuario(archivo, colaborador.id, 'firma');
       setDatosEdit(prev => ({ ...prev, firma_url: urlFinal }));
-      alert("Firma cargada en vista previa. Presiona Guardar Cambios para confirmar.");
     } catch (err) {
       alert("Error al subir la firma: " + err.message);
     } finally {
@@ -228,9 +227,35 @@ export default function DossierLateral({
               <span>#{colaborador.numero_empleado}</span><span>•</span><span>{sedeNombre}</span>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: c.textMuted, cursor: 'pointer', padding: '6px', display: 'flex' }}>
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {!editando && onDesbloquearEdicion && (
+              <button
+                type="button"
+                onClick={onDesbloquearEdicion}
+                title="Desbloquear edición para esta sesión"
+                style={{
+                  height: '30px',
+                  padding: '0 10px',
+                  borderRadius: '8px',
+                  border: `1px solid ${c.border}`,
+                  background: c.bg,
+                  color: c.textMuted,
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <Lock size={12} color="#f59e0b" />
+                <span>Editar</span>
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: c.textMuted, cursor: 'pointer', padding: '6px', display: 'flex' }}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="dossier-body-scroll" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', background: c.bg }}>
