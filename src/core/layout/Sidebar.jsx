@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../api/supabaseClient';
 import imageCompression from 'browser-image-compression';
-import { useAuth } from '../auth/AuthContext';
-import { registrarSuscripcionPush } from '../notificaciones/notificacionesService';
+import { useAuth, sincronizarPushUsuarioActivo } from '../auth/AuthContext';
 import ModalGuiaRapidaRH from '../../modules/permisos/historial/ModalGuiaRapidaRH';
 
 import { 
   DoorOpen, PenLine, FileBarChart, Users,
   LogOut, X, Camera, Image as ImageIcon, Sun, Moon,
-  Settings, FilePlus, Bell, Clock, ClipboardList, BookOpen
+  Settings, FilePlus, Bell, ClipboardList, BookOpen
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -79,34 +78,19 @@ export default function Sidebar({
     if (suscribiendo) return;
     setSuscribiendo(true);
     try {
-      if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.register('/sw.js');
-      }
-
-      const sub = await registrarSuscripcionPush();
-      if (!sub) {
+      const permiso = await Notification.requestPermission();
+      if (permiso !== 'granted') {
         alert("No se otorgaron permisos de notificación en este navegador.");
-        setSuscribiendo(false);
         return;
       }
 
-      const endpointActual = sub.endpoint;
+      const ok = await sincronizarPushUsuarioActivo(usuarioLogueado.id, true);
+      if (!ok) {
+        alert("No se pudo registrar la suscripción en este navegador.");
+        return;
+      }
 
-      await supabase
-        .from('suscripciones_push')
-        .delete()
-        .eq('endpoint', endpointActual);
-
-      const { error } = await supabase
-        .from('suscripciones_push')
-        .insert([{ 
-          usuario_id: usuarioLogueado.id, 
-          subscription: sub,
-          endpoint: endpointActual
-        }]);
-
-      if (error) throw error;
-      alert("✅ Alertas push activadas correctamente en este dispositivo.");
+      alert("✅ Alertas push activas y verificadas en este dispositivo.");
     } catch (error) {
       console.error("Error al guardar suscripción:", error);
       alert("Hubo un error al activar las alertas: " + (error.message || ''));
