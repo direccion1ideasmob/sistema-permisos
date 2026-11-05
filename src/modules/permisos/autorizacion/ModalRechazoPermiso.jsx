@@ -15,6 +15,7 @@ export default function ModalRechazoPermiso({
   const esRetardo =
     (tipoLower === 'retardo' && (solicitud.fecha_permiso <= hoyIsoModal || estaEnPuerta)) ||
     (tipoLower === 'falta' && /FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || ''));
+  const esRetardoAnticipado = tipoLower === 'retardo' && !esRetardo;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -58,7 +59,11 @@ export default function ModalRechazoPermiso({
             </div>
             <div>
               <div style={{ fontSize: '19px', fontWeight: '900', color: c.danger, letterSpacing: '-0.01em' }}>
-                {esRetardo ? 'REGRESAR A CASA (SIN ACCESO)' : 'RECHAZAR SOLICITUD'}
+                {esRetardo
+                  ? 'REGRESAR A CASA (SIN ACCESO)'
+                  : esRetardoAnticipado
+                    ? 'NO AUTORIZAR RETARDO (ENTRA PUNTUAL)'
+                    : 'RECHAZAR SOLICITUD'}
               </div>
               <div style={{ fontSize: '14.5px', color: c.textMuted, fontWeight: '600', marginTop: '3px' }}>
                 {solicitud.tipo_permiso?.toUpperCase()} • <strong style={{ color: c.text }}>{formatearApellidosNombre(solicitud.usuarios?.nombre_completo)}</strong>
@@ -82,11 +87,21 @@ export default function ModalRechazoPermiso({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: c.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
-              {esRetardo ? 'Motivo por el que se regresa al colaborador *' : 'Motivo o Razón del Rechazo *'}
+              {esRetardo
+                ? 'Motivo por el que se regresa al colaborador *'
+                : esRetardoAnticipado
+                  ? 'Motivo por el que debe presentarse en su horario normal *'
+                  : 'Motivo o Razón del Rechazo *'}
             </label>
             <textarea 
               required rows={4} autoFocus
-              placeholder={esRetardo ? "Ej. Llegó después de la tolerancia sin aviso previo / reincidencia..." : "Explica por qué no es posible autorizar este pase..."}
+              placeholder={
+                esRetardo
+                  ? "Ej. Llegó después de la tolerancia sin aviso previo / reincidencia..."
+                  : esRetardoAnticipado
+                    ? "Ej. Se requiere tu presencia desde las 07:00 AM por carga de trabajo..."
+                    : "Explica por qué no es posible autorizar este pase..."
+              }
               value={motivoRechazo} onChange={e => setMotivoRechazo(e.target.value)}
               style={{
                 width: '100%', padding: '13px 15px', borderRadius: '12px',
@@ -100,7 +115,9 @@ export default function ModalRechazoPermiso({
           <div style={{ fontSize: '13.5px', color: c.textMuted, fontStyle: 'italic', lineHeight: 1.45 }}>
             {esRetardo
               ? '* Al confirmar, este registro se convertirá automáticamente en Falta (Por retardo) sin goce de sueldo, se generará su folio oficial y se ordenará a Caseta retirar al colaborador.'
-              : '* Esta explicación se le enviará directamente al colaborador en su notificación.'}
+              : esRetardoAnticipado
+                ? '* No se generará falta ni se regresará a casa. El colaborador recibirá una notificación indicándole que debe presentarse en su horario normal de entrada.'
+                : '* Esta explicación se le enviará directamente al colaborador en su notificación.'}
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
@@ -121,7 +138,13 @@ export default function ModalRechazoPermiso({
                 cursor: 'pointer'
               }}
             >
-              {procesando ? 'Procesando...' : (esRetardo ? 'Confirmar Regreso a Casa' : 'Confirmar Rechazo')}
+              {procesando
+                ? 'Procesando...'
+                : esRetardo
+                  ? 'Confirmar Regreso a Casa'
+                  : esRetardoAnticipado
+                    ? 'Rechazar (Entra Puntual)'
+                    : 'Confirmar Rechazo'}
             </button>
           </div>
         </form>

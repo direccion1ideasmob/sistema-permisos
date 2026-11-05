@@ -14,11 +14,23 @@ export default function TarjetaAprobacion({
   const u = solicitud.usuarios || {};
   const urlFoto = u.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nombre_completo || 'U')}&background=334155&color=f8fafc&bold=true`;
 
+ 
+const hoyIso = (() => {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  })();
+
   const tipo = (solicitud.tipo_permiso || '').toLowerCase();
-  const esFaltaEnPuerta = (tipo === 'falta' || tipo === 'vacaciones') && /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const estaEnPuertaFisica = /\[LLEGADA EN PUERTA:/i.test(solicitud.observaciones || '');
+  const esFaltaEnPuerta = (tipo === 'falta' || tipo === 'vacaciones') && estaEnPuertaFisica;
   const esInusualEnPuerta = /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(solicitud.observaciones || '');
   const esSalidaDesfaseHorario = tipo === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(solicitud.observaciones || '');
   const esRetardo = tipo === 'retardo' || esFaltaEnPuerta || esInusualEnPuerta;
+  const esRetardoDelDiaOEnPuerta =
+    (tipo === 'retardo' && (solicitud.fecha_permiso <= hoyIso || estaEnPuertaFisica)) ||
+    esFaltaEnPuerta ||
+    esInusualEnPuerta;
+  const esRetardoAnticipado = tipo === 'retardo' && !esRetardoDelDiaOEnPuerta;
 
   const esRH = usuarioActual?.rol === 'rh_nominas' || usuarioActual?.rol === 'gerente_rh' || usuarioActual?.rol === 'superadmin';
   const soyFirmante1Directo = solicitud.firma_1_id === usuarioActual?.id && solicitud.firma_1_estado === 'pendiente';
@@ -550,7 +562,7 @@ export default function TarjetaAprobacion({
                   background: 'transparent', color: c.textMuted, fontWeight: '700'
                 }}
               >
-                <X size={15} color={c.danger} /> {esRetardo ? 'Regresar a Casa' : (esSalidaDesfaseHorario ? 'Denegar Paso' : 'Rechazar')}
+                <X size={15} color={c.danger} /> {esRetardoDelDiaOEnPuerta ? 'Regresar a Casa' : (esRetardoAnticipado ? 'Rechazar (Entra puntual)' : (esSalidaDesfaseHorario ? 'Denegar Paso' : 'Rechazar'))}
               </button>
               <button
                 onClick={() => onAprobar(solicitud)}
@@ -560,7 +572,7 @@ export default function TarjetaAprobacion({
                   backgroundColor: c.accent, color: '#fff', fontWeight: '800'
                 }}
               >
-                <Check size={15} /> {(esRetardo || esSalidaDesfaseHorario) ? 'Permitir Acceso' : 'Evaluar'}
+                <Check size={15} /> {(esRetardoDelDiaOEnPuerta || esSalidaDesfaseHorario) ? 'Permitir Acceso' : 'Evaluar'}
               </button>
             </>
           )}
