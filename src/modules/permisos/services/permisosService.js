@@ -867,18 +867,22 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   const esInusualRech = /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(obsRechActual);
   const esDesfaseSalidaRech = tipoRechLower === 'salida' && /\[HORARIO NO COINCIDE EN CASETA/i.test(obsRechActual);
 
-  // Diferenciar Retardo del Día/En Puerta (Se regresa a casa -> Falta) vs Retardo Anticipado de días futuros (Rechazo simple)
+  // Diferenciar Retardo del Día/En Puerta (Se regresa a casa -> Falta) vs Retardo Anticipado de días futuros (Rechazo simple: entra puntual)
   const esRetardoDelDiaOEnPuerta =
     (tipoRechLower === 'retardo' && (solicitud.fecha_permiso <= hoyIso || estaEnPuertaRech)) ||
     (tipoRechLower === 'falta' && /FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || ''));
 
+  const esRetardoAnticipadoFuturo = tipoRechLower === 'retardo' && !esRetardoDelDiaOEnPuerta;
+
   const partesNomRech = String(usuario.nombre_completo || '').trim().split(/\s+/).filter(Boolean);
-  const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNom.length - 2]}` : partesNom.join(' ');
+  const nomCortoRech = partesNomRech.length > 2 ? `${partesNomRech[0]} ${partesNomRech[partesNomRech.length - 2]}` : (usuario?.nombre_completo || 'Validador');
   const motivoLimpioRech = String(motivoRechazo || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
 
   const etiquetaBitacora = esRetardoDelDiaOEnPuerta
     ? `Nota Dictamen (${nomCortoRech}): Se regresa a casa — ${motivoLimpioRech}`
-    : `RECHAZO (${nomCortoRech}): ${motivoLimpioRech}`;
+    : esRetardoAnticipadoFuturo
+      ? `RECHAZO (${nomCortoRech}): Retardo anticipado no autorizado (Debe presentarse en horario normal) — ${motivoLimpioRech}`
+      : `RECHAZO (${nomCortoRech}): ${motivoLimpioRech}`;
 
   let updates = {
     estado_general: (esRetardoDelDiaOEnPuerta || esInusualRech || esDesfaseSalidaRech) ? 'autorizado' : 'rechazado',
@@ -904,7 +908,7 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     const yaHabiaSalido = /\[SALIDA CASETA:/i.test(obsRechActual);
     updates = {
       estado_general: yaHabiaSalido ? 'autorizado' : 'rechazado',
-      pago: yaHabiaSalido ? 'Sin goce (Se regresa)' : 'Rechazado',
+      pago: yaHabiaSalido ? 'Sin goce (Se regresa)' : 'Sin goce',
       observaciones: `${obsRechActual} | ${etiquetaBitacora}`
     };
   }
@@ -973,10 +977,16 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
 
   const tipoPaseR = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
   await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
-    titulo: esRetardoDelDiaOEnPuerta ? '↩️ Acceso no autorizado (Se regresa)' : `❌ ${tipoPaseR} Rechazado`,
+    titulo: esRetardoDelDiaOEnPuerta
+      ? '↩️ Acceso no autorizado (Se regresa)'
+      : esRetardoAnticipadoFuturo
+        ? '❌ Retardo Anticipado No Autorizado'
+        : `❌ ${tipoPaseR} Rechazado`,
     mensaje: esRetardoDelDiaOEnPuerta
       ? `Falta por retardo (${updates.folio || solicitud.folio}) • Motivo: ${motivoRechazo}`
-      : `Motivo: ${motivoRechazo}`,
+      : esRetardoAnticipadoFuturo
+        ? `Debes presentarte en tu horario normal de entrada • Motivo: ${motivoRechazo}`
+        : `Motivo: ${motivoRechazo}`,
     urlDestino: '/mis-permisos'
   });
 };
