@@ -734,9 +734,16 @@ export default function TablaHistorial({
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!window.confirm(`¿Deseas eliminar definitivamente de la base de datos los ${solicitudesProcesadas.length} registros cancelados que se muestran en pantalla?\n\nEsta acción limpia los folios REQ- cancelados que no afectan nómina.`)) return;
+                    const depurablesReq = solicitudesProcesadas.filter(x => String(x.folio || '').startsWith('REQ-'));
+                    const oficialesConservados = solicitudesProcesadas.length - depurablesReq.length;
+                    if (depurablesReq.length === 0) {
+                      alert('No hay cancelados con folio temporal (REQ-) para depurar.\n\nLos cancelados con folio oficial se conservan siempre para que la numeración no tenga huecos sin explicación.');
+                      return;
+                    }
+                    if (!window.confirm(`¿Eliminar definitivamente los ${depurablesReq.length} cancelados con folio temporal (REQ-)?${oficialesConservados > 0 ? `\n\nLos ${oficialesConservados} cancelados con folio oficial NO se borran: se conservan con su número marcado como CANCELADO.` : ''}`)) return;
                     try {
-                      await depurarPermisosCanceladosRH(solicitudesProcesadas.map(x => x.id));
+                      const borrados = await depurarPermisosCanceladosRH(depurablesReq.map(x => x.id));
+                      alert(`Se depuraron ${borrados} registros cancelados con folio temporal.`);
                       if (onRecargar) onRecargar();
                     } catch (err) {
                       alert('Error al depurar cancelados: ' + err.message);

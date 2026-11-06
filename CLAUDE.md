@@ -48,6 +48,11 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
   - Si baja a `empleado` → todos los que tenían `reporta_a_id` hacia él pasan al `jefe_id` vigente de su depto (si existe y no es él mismo) o a `null`. Nadie reporta a un `empleado`.
 - Alta/edición (`ModalColaborador.jsx`, `DossierLateral.jsx`): `reporta_a_id` por defecto lo resuelve `resolverJefeInmediatoPorArea`: subárea con `jefe_area`/`encargado` activo → ese supervisor; área general, subárea nueva o sin supervisor → `departamentos.jefe_id`. Si el colaborador es él mismo `jefe_area`/`encargado`, va al Jefe General. El usuario puede sobrescribirlo manualmente.
 
+### 7. Folios oficiales
+- El folio oficial (`A-/P-/O-AA-NNNN`) se obtiene **solo** con `generarFolioOficial`, que llama a la función de Supabase `siguiente_folio` (contador `folios_contador`, ver `docs/sql/folios_contador.sql`). No calcular folios a mano.
+- Se asigna una sola vez; no cambia si el pase cambia de tipo (retardo → falta). `REQ-` es temporal.
+- Un folio oficial **nunca se borra ni se reutiliza**: un pase cancelado lo conserva. `depurarPermisosCanceladosRH` solo elimina cancelados `REQ-`.
+
 ## Convenciones
 - Fecha "hoy" siempre en hora local: `obtenerFechaLocalHoyISO()` (no `new Date().toISOString()` directo).
 - Antes de dictaminar, re-leer el estado del permiso en BD y abortar si ya está en `autorizado/aprobado/completado_caseta/rechazado/cancelado`.

@@ -404,10 +404,29 @@ export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuar
 };
 
 // 5. GENERADOR DE FOLIO OFICIAL (A-26-0001 / P-26-0001 / O-26-0001)
-// Toma el consecutivo MÁS ALTO del año (no el del último pase creado: un pase viejo que se oficializa
-// tarde dejaba de ser "el último creado" y el siguiente folio salía repetido).
-// Se consulta por longitud (4 y 5 dígitos) para que el orden alfabético coincida con el numérico.
+// FOLIO OFICIAL: lo entrega el contador de Supabase (tabla `folios_contador` + función `siguiente_folio`),
+// que atiende una petición a la vez, así dos autorizaciones simultáneas nunca reciben el mismo número.
+// Reglas: el folio oficial se asigna una sola vez, no cambia si el pase cambia de tipo (retardo → falta),
+// y nunca se reutiliza ni se borra (un pase cancelado conserva su número marcado como CANCELADO).
 export const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
+  const { data: folioContador, error: errContador } = await supabase.rpc('siguiente_folio', {
+    p_prefijo: prefijoLetra,
+    p_anio: parseInt(anio2Digitos, 10)
+  });
+  if (!errContador && folioContador) return folioContador;
+
+  // Solo si la función todavía no existe en la base (antes de correr el SQL) se usa el cálculo anterior.
+  // Cualquier otro error se reporta: calcular "a mano" mientras el contador existe podría repetir números.
+  const funcionNoExiste = errContador && (errContador.code === 'PGRST202' || errContador.code === '42883');
+  if (!funcionNoExiste) {
+    throw new Error(`No se pudo obtener el folio oficial del contador: ${errContador?.message || 'respuesta vacía'}. Intenta de nuevo.`);
+  }
+  return generarFolioOficialPorMaximo(prefijoLetra, anio2Digitos);
+};
+
+// Respaldo (sin contador): toma el consecutivo más alto existente del año.
+// Se consulta por longitud (4 y 5 dígitos) para que el orden alfabético coincida con el numérico.
+const generarFolioOficialPorMaximo = async (prefijoLetra, anio2Digitos) => {
   const base = `${prefijoLetra}-${anio2Digitos}-`;
   const [res4, res5] = await Promise.all([
     supabase.from('permisos').select('folio').like('folio', `${base}____`).order('folio', { ascending: false }).limit(1),
@@ -1703,14 +1722,32 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
     }
   }
 };
+// Solo se depuran pases cancelados que nunca recibieron folio oficial (REQ-).
+// Un folio oficial cancelado se conserva siempre para que no queden huecos sin explicación en la numeración.
 export const depurarPermisosCanceladosRH = async (ids = []) => {
   if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const { data: candidatosDep, error: errLeerDep } = await supabase
+    .from('permisos')
+    .select('id, folio, estado_general, pago, observaciones')
+    .in('id', ids);
+  if (errLeerDep) throw errLeerDep;
+
+  const idsDepurables = (candidatosDep || [])
+    .filter(p => {
+      const pagoDep = String(p.pago || '').toLowerCase();
+      const obsDep = String(p.observaciones || '');
+      const esCanceladoDep = pagoDep === 'cancelado' || /CANCELADO por/i.test(obsDep) || /\[PASE CANCELADO/i.test(obsDep);
+      return esCanceladoDep && String(p.folio || '').startsWith('REQ-');
+    })
+    .map(p => p.id);
+  if (idsDepurables.length === 0) return 0;
+
   const { error } = await supabase
     .from('permisos')
     .delete()
-    .in('id', ids);
+    .in('id', idsDepurables);
   if (error) throw error;
-  return ids.length;
+  return idsDepurables.length;
 };
 
 // ============================================================================

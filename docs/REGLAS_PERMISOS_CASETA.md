@@ -126,6 +126,21 @@
 
 ---
 
+## 7. Folios
+
+- **`REQ-123456`** es temporal: lo tiene el pase mientras espera firmas. No gasta ningún número oficial.
+- **`P-26-0041`** es el folio oficial (A = administración, P = producción, O = obra). Se asigna **una sola vez**, al quedar autorizado,
+  y lo entrega el contador de Supabase (`docs/sql/folios_contador.sql`), que nunca repite números.
+
+| Caso | Qué pasa con el folio |
+|---|---|
+| Retardo que se convierte en falta | Si era `REQ-`, recibe su folio oficial en ese momento. Si ya tenía folio oficial, **conserva el mismo número**; solo cambia el tipo y queda anotado en la bitácora. |
+| Cancelado siendo `REQ-` | No gastó número oficial. Se puede depurar. |
+| Cancelado con folio oficial | **Conserva su número** marcado como CANCELADO. Nunca se reutiliza ni se borra. |
+| Vacaciones partidas por reincorporación | El pase original conserva su folio (días ya disfrutados); los días restantes reciben un folio nuevo con una nota que los liga. |
+
+---
+
 ## Pendientes de código (diferencias con el sistema actual al 2026-11-06)
 
 Se irán marcando conforme se corrijan. Cuando un punto toque una regla sagrada de `CLAUDE.md`,
