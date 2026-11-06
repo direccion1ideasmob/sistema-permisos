@@ -1005,7 +1005,9 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
         ? '❌ Retardo Anticipado No Autorizado'
         : `❌ ${tipoPaseR} Rechazado`,
     mensaje: esRetardoDelDiaOEnPuerta
-      ? `Falta por retardo (${updates.folio || solicitud.folio}) • Motivo: ${motivoRechazo}`
+      ? (estaEnPuertaRech
+        ? `Falta por retardo (${updates.folio || solicitud.folio}) • Motivo: ${motivoRechazo}`
+        : `Tu retardo de hoy no fue autorizado. Debes presentarte en Caseta de todos modos; ahí se registrará tu retiro (${updates.folio || solicitud.folio}) • Motivo: ${motivoRechazo}`)
       : esRetardoAnticipadoFuturo
         ? `Debes presentarte en tu horario normal de entrada • Motivo: ${motivoRechazo}`
         : `Motivo: ${motivoRechazo}`,
@@ -1601,7 +1603,9 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
 
   await enviarNotificacionPushUsuarios(permiso.usuario_id, {
     titulo: `❌ ${tipoPaseR}`,
-    mensaje: `🚫 Motivo: ${motivoRechazo.trim()}`,
+    mensaje: (esRetDelDia && !estaEnPuerta)
+      ? `Tu retardo de hoy no fue autorizado. Debes presentarte en Caseta de todos modos; ahí se registrará tu retiro • Motivo: ${motivoRechazo.trim()}`
+      : `🚫 Motivo: ${motivoRechazo.trim()}`,
     urlDestino: '/mis-permisos'
   });
 };

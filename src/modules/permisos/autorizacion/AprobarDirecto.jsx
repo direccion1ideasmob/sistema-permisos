@@ -211,7 +211,11 @@ export default function AprobarDirecto() {
                 </button>
 
                 <button onClick={() => setModoRechazo(true)} disabled={procesando} style={s.btnRechazar}>
-                  <X size={15} /> {permiso?.tipo_permiso === 'retardo' ? 'Regresar a Casa (Escribir motivo)' : 'Rechazar Solicitud'}
+                  <X size={15} /> {permiso?.tipo_permiso === 'retardo'
+                    ? ((permiso.fecha_permiso <= new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0] || /\[LLEGADA EN PUERTA:/i.test(permiso.observaciones || ''))
+                      ? 'Regresar a Casa (Escribir motivo)'
+                      : 'Rechazar (Entra puntual)')
+                    : 'Rechazar Solicitud'}
                 </button>
               </div>
             )}

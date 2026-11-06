@@ -30,7 +30,8 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
   - Al rechazar se dictamina **"Regresar a Casa"**: se convierte en `tipo_permiso: 'falta'`, `pago: 'Sin goce (Se regresa)'`, `total_horas: 8`, `estado_general: 'autorizado'`, se genera folio oficial si era `REQ-`, se cancelan las salidas del mismo día y se notifica a Caseta.
 - **Retardo anticipado futuro**: `tipo === 'retardo'` que no es del día ni en puerta.
   - Al rechazar es un **rechazo simple, "Rechazar (Entra puntual)"**: `estado_general: 'rechazado'`; el colaborador debe presentarse en su horario normal.
-- Esta distinción debe ser consistente en `rechazarSolicitudPermiso` (service), `TarjetaAprobacion.jsx` (etiqueta del botón) y `ModalRechazoPermiso.jsx` (título, texto y botón).
+- Esta distinción debe ser consistente en `rechazarSolicitudPermiso` y `rechazarPermisoDirectoJefatura` (service), `TarjetaAprobacion.jsx` y `AprobarDirecto.jsx` (etiqueta del botón) y `ModalRechazoPermiso.jsx` (título, texto y botón).
+- Política: aunque el retardo del día se rechace antes de que llegue, el trabajador **siempre se presenta en Caseta**; el aviso se lo indica y ahí se sella el retiro.
 
 ### 5. Bloqueo de cancelación con sello físico de Caseta
 - `tieneSelloFisicoCaseta(permiso)` es `true` si: el folio empieza con `CAS-`, `estado_general === 'completado_caseta'`, o las observaciones contienen `[LLEGADA EN PUERTA:`, `[SALIDA CASETA:`, `[ENTRADA CASETA:`, `[REINGRESO CASETA:` o `[REGRESADO EN PUERTA:`.
