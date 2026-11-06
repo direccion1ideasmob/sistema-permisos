@@ -135,13 +135,13 @@ esa regla se actualiza en el mismo cambio.
 - [x] Un retardo pendiente bloquea la tarjeta de Caseta todo el día y no se registra la llegada (`Caseta.jsx:124`, `vigilanciaService.js:187-203, 316-318`).
 - [x] "DEJAR PASAR" con retardo autorizado se salta la revisión de llegada puntual y de +15 min (`Caseta.jsx:175-186, 284-287`).
 - [x] El corte convierte retardos en falta automáticamente y nunca corre antes de las 17:00. Debe mandar todo a la bandeja de RH y respetar S (`vigilanciaService.js:760, 802-866`).
-- [ ] El empleado puede cancelar su retardo a cualquier hora; debe ser solo antes de E (`permisosService.js` → `cancelarSolicitudPermiso`, `MisPermisos.jsx`).
+- [x] El empleado puede cancelar su retardo a cualquier hora; debe ser solo antes de E (`permisosService.js` → `cancelarSolicitudPermiso`, `MisPermisos.jsx`).
 - [ ] Caseta registra la salida de turno a cualquier hora sin pase (`Caseta.jsx:228`, `registrarAsistenciaLista`).
 - [ ] Regla sagrada 1: `pago: 'Cancelado'` sin reintento con `'Sin goce'` (`vigilanciaService.js:640, 893`).
 
 ### Prioridad 2 — control de RH
 - [ ] RH no puede crear pases a nombre de otro colaborador (`Solicitar.jsx` / `FormularioSolicitud.jsx`).
-- [ ] RH no puede cancelar ni corregir pases con sello; desde el Historial ni siquiera se envía su rol (`TablaHistorial.jsx:1030`, `cancelarSolicitudPermiso`). Implica actualizar la regla sagrada 5.
+- [ ] RH no puede cancelar ni corregir pases con sello; el Historial ya envía su rol (hecho junto con el punto 4 de P1); falta permitir sello en `cancelarSolicitudPermiso`. Implica actualizar la regla sagrada 5.
 - [ ] El pase de lista de RH solo permite marcar el día de hoy (`VistaAsistenciaDiariaRH.jsx:731`, `registrarAsistenciaLista`).
 - [ ] Cuando RH marca la entrada, se cancela el retardo aunque la persona haya llegado tarde (`forzarDirectoRH`).
 - [ ] La falta sin aviso de ayer busca un permiso con `SIN AVISO` que nadie crea; debe usar el pase de lista. Además debe registrarse como reincorporación y no como retardo, y solo marcar esa falta (`vigilanciaService.js:84-93, 1104-1125`, `permisosService.js:740-757`).

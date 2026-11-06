@@ -3,6 +3,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { obtenerPermisosUsuario, escalarPermisoAGerencia, cancelarSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
 import { obtenerTemaPermisos, generarEstilosPermisos } from '../permisosStyles';
 import { parsearDatosObservaciones, limpiarMotivo } from '../historial/TablaHistorial';
+import { obtenerHoraLimiteTolerancia } from '../../vigilancia/services/vigilanciaService';
 import {
   Clock, FileText, AlertTriangle, ShieldCheck,
   XCircle, FastForward, MessageSquare, DoorOpen, CornerUpLeft,
@@ -27,6 +28,23 @@ export default function MisPermisos() {
     const timer = setInterval(() => setHoraActual(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Hora de entrada (E) que fija RH: después de ella el empleado ya no cancela retardo/falta/vacaciones del día
+  const [horaEntradaRH, setHoraEntradaRH] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
+  useEffect(() => {
+    obtenerHoraLimiteTolerancia().then(h => { if (h) setHoraEntradaRH(h); }).catch(() => {});
+  }, []);
+
+  const puedeCancelarPorHorario = (p) => {
+    const tipoMP = String(p.tipo_permiso || '').toLowerCase();
+    if (!['retardo', 'falta', 'vacaciones'].includes(tipoMP)) return true;
+    const hoyMP = `${horaActual.getFullYear()}-${String(horaActual.getMonth() + 1).padStart(2, '0')}-${String(horaActual.getDate()).padStart(2, '0')}`;
+    if (p.fecha_permiso > hoyMP) return true;
+    if (p.fecha_permiso < hoyMP) return false;
+    const [hEMP, mEMP] = String(horaEntradaRH || '07:15').split(':').map(Number);
+    const minEMP = (isNaN(hEMP) ? 7 : hEMP) * 60 + (isNaN(mEMP) ? 15 : mEMP);
+    return horaActual.getHours() * 60 + horaActual.getMinutes() <= minEMP;
+  };
 
   const cargarHistorial = useCallback(async () => {
     if (!usuario?.id) return;
@@ -667,7 +685,7 @@ export default function MisPermisos() {
                         {renderSelloArea('R. Humanos', p.firma_3_estado)}
                       </div>
 
-                      {!tieneSelloFisicoCaseta(p) && (
+                      {!tieneSelloFisicoCaseta(p) && puedeCancelarPorHorario(p) && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2px' }}>
                           <button
                             type="button"
@@ -904,7 +922,7 @@ export default function MisPermisos() {
                                       Motivo de rechazo: {motivoRechazo}
                                     </div>
                                   )}
-                                  {esAutorizado && !seRegreso && !tieneSelloFisicoCaseta(p) && p.fecha_permiso >= new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0] && (
+                                  {esAutorizado && !seRegreso && !tieneSelloFisicoCaseta(p) && p.fecha_permiso >= new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0] && puedeCancelarPorHorario(p) && (
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
                                       <button
                                         type="button"

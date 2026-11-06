@@ -1,4 +1,4 @@
-import { obtenerHoraSalidaOficial } from '../../vigilancia/services/vigilanciaService';
+import { obtenerHoraSalidaOficial, obtenerHoraLimiteTolerancia } from '../../vigilancia/services/vigilanciaService';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 import { esRolValidadorSuperior } from '../../directorio/utils/directorioHelpers';
@@ -1499,16 +1499,39 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
     throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia.');
   }
 
+  // Re-leer el estado real en BD antes de cancelar (puede haber cambiado en Caseta o por una firma)
+  const { data: permisoBDCancel } = await supabase
+    .from('permisos')
+    .select('id, folio, usuario_id, fecha_permiso, tipo_permiso, estado_general, pago, observaciones')
+    .eq('id', permiso.id)
+    .maybeSingle();
+  if (permisoBDCancel) {
+    if (tieneSelloFisicoCaseta(permisoBDCancel)) {
+      throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia.');
+    }
+    const pagoBDCancel = String(permisoBDCancel.pago || '').toLowerCase();
+    if (permisoBDCancel.estado_general === 'rechazado' || pagoBDCancel === 'cancelado' || /CANCELADO por/i.test(permisoBDCancel.observaciones || '')) {
+      throw new Error(`Este pase ya fue dictaminado o cancelado (Folio ${permisoBDCancel.folio}). Actualiza la pantalla.`);
+    }
+    permiso = { ...permiso, ...permisoBDCancel };
+  }
+
   const esRHOAdmin = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(usuario?.rol);
   const hoyIso = obtenerFechaLocalHoyISO();
   const tipoP = (permiso.tipo_permiso || '').toLowerCase();
-  const yaAutorizado = ['autorizado', 'aprobado'].includes(permiso.estado_general);
 
-  if (!esRHOAdmin && yaAutorizado && ['falta', 'vacaciones'].includes(tipoP) && permiso.fecha_permiso <= hoyIso) {
-    const ahora = new Date();
-    const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
-    if (permiso.fecha_permiso < hoyIso || minAhora >= 7 * 60 + 15) {
-      throw new Error('No puedes cancelar desde la aplicación una Falta o Vacaciones ya autorizadas una vez iniciado el turno. Si te presentaste a laborar, regístrate en Caseta de Vigilancia.');
+  // Regla: después de la hora de entrada (E, la fija RH) el empleado ya no cancela
+  // retardos, faltas ni vacaciones de hoy o días pasados. Solo RH. La salida sí, en cualquier momento.
+  if (!esRHOAdmin && ['retardo', 'falta', 'vacaciones'].includes(tipoP) && permiso.fecha_permiso <= hoyIso) {
+    const horaECancel = await obtenerHoraLimiteTolerancia();
+    const [hECancel, mECancel] = String(horaECancel || '07:15').split(':').map(Number);
+    const minECancel = (isNaN(hECancel) ? 7 : hECancel) * 60 + (isNaN(mECancel) ? 15 : mECancel);
+    const ahoraCancel = new Date();
+    const minAhoraCancel = ahoraCancel.getHours() * 60 + ahoraCancel.getMinutes();
+    if (permiso.fecha_permiso < hoyIso || minAhoraCancel > minECancel) {
+      throw new Error(tipoP === 'retardo'
+        ? `Ya pasó la hora de entrada (${horaECancel} hrs). Tu retardo ya no se puede cancelar: preséntate en Caseta de Vigilancia.`
+        : `Ya pasó la hora de entrada (${horaECancel} hrs). Una ${tipoP === 'falta' ? 'Falta' : 'solicitud de Vacaciones'} ya iniciada solo la puede cancelar Recursos Humanos. Si te presentaste a laborar, regístrate en Caseta de Vigilancia.`);
     }
   }
 

@@ -1,6 +1,7 @@
 import { formatearApellidosNombre, compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import React, { useState, useMemo } from 'react';
 import { cancelarSolicitudPermiso, tieneSelloFisicoCaseta, depurarPermisosCanceladosRH } from '../services/permisosService';
+import { useAuth } from '../../../core/auth/AuthContext';
 import {
   Search, ChevronLeft, ChevronRight, Printer, CheckSquare, Square,
   FileSpreadsheet, RotateCcw, CheckCircle2, XCircle, ChevronDown, ChevronUp,
@@ -171,6 +172,7 @@ export default function TablaHistorial({
   onAbrirExportar,
   onSeleccionarPapeleta
 }) {
+  const { usuario: usuarioSesionTH } = useAuth();
   const [busqueda, setBusqueda] = useState('');
   const [nominaFiltro, setNominaFiltro] = useState('todas'); // 'todas' | 'produccion' | 'administracion' | 'obra'
   const [deptoFiltro, setDeptoFiltro] = useState('todos');
@@ -1027,7 +1029,7 @@ export default function TablaHistorial({
                                           const mot = window.prompt('Motivo de cancelación del pase (ej. Vacaciones pospuestas / Ya no se ocupó):');
                                           if (!mot || !mot.trim()) return;
                                           try {
-                                            await cancelarSolicitudPermiso({ permiso: s, usuario: { nombre_completo: 'Recursos Humanos' }, motivoCancelacion: mot });
+                                            await cancelarSolicitudPermiso({ permiso: s, usuario: usuarioSesionTH || { nombre_completo: 'Recursos Humanos' }, motivoCancelacion: mot });
                                             if (onRecargar) onRecargar();
                                           } catch (err) {
                                             alert(err.message);
