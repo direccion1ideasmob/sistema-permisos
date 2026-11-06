@@ -280,6 +280,12 @@ export default function ControlHoraCorteRH({ usuario, c }) {
             Entrada límite (después es retardo): <span style={{ color: c?.text || '#111', fontFamily: 'ui-monospace, monospace' }}>{entradaCalculada}</span>
           </div>
 
+          {toleranciaActual > 180 && (
+            <div style={{ fontSize: '11px', fontWeight: '700', color: '#b45309', background: 'rgba(245,158,11,0.12)', borderRadius: '8px', padding: '6px 8px' }}>
+              ⚠️ La entrada límite guardada ({horaCorte}) está muy lejos del inicio de turno. Abre el candado y pulsa «Restaurar» o pon la tolerancia correcta.
+            </div>
+          )}
+
           {desbloqueado && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <button
