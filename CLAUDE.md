@@ -2,6 +2,9 @@
 
 App React + Vite sobre Supabase. Verificar cambios con `npm run build` (debe quedar en 0 errores).
 
+## Especificación de negocio
+`docs/REGLAS_PERMISOS_CASETA.md` es la especificación aprobada de cómo debe funcionar el sistema (permisos, Caseta, cancelaciones, corte del día). Cualquier cambio en estos flujos debe acercar el código a ese documento. Al corregir un punto de su sección "Pendientes de código", márcalo como hecho, y si ese punto contradice una regla sagrada de abajo, actualiza esa regla en el mismo cambio.
+
 ## Reglas sagradas (NO romper)
 
 Viven principalmente en `src/modules/permisos/services/permisosService.js` y `src/modules/directorio/services/directorioService.js`. Cualquier cambio en estos flujos debe preservar lo siguiente.
