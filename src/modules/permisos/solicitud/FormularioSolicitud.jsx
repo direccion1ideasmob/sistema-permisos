@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase, Lock } from 'lucide-react';
 import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
-import { obtenerHoraLimiteTolerancia, obtenerHoraSalidaOficial } from '../../vigilancia/services/vigilanciaService';
+import { obtenerHoraLimiteTolerancia, obtenerHoraSalidaOficial, obtenerHoraInicioTurno } from '../../vigilancia/services/vigilanciaService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
 import { supabase } from '../../../core/api/supabaseClient';
 import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
@@ -68,6 +68,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [horaRegreso, setHoraRegreso] = useState('16:00');
   const [horaLimiteRH, setHoraLimiteRH] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
   const [horaSalidaOficialRH, setHoraSalidaOficialRH] = useState(() => localStorage.getItem('hora_salida_oficial_rh') || '17:00');
+  const [horaInicioTurnoRH, setHoraInicioTurnoRH] = useState(() => localStorage.getItem('hora_inicio_turno_rh') || '07:00');
   const [horaLlegadaRetardo, setHoraLlegadaRetardo] = useState('07:30');
 
   const [motivo, setMotivo] = useState('');
@@ -226,6 +227,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     obtenerHoraSalidaOficial().then((hSal) => {
       if (hSal) setHoraSalidaOficialRH(hSal);
     }).catch(() => {});
+    obtenerHoraInicioTurno().then((hIni) => {
+      if (hIni) setHoraInicioTurnoRH(hIni);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -288,10 +292,9 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
 
     if (tipoPermiso === 'retardo') {
       const [h, m] = (horaLlegadaRetardo || '07:30').split(':').map(Number);
-      const [hLim, mLim] = (horaLimiteRH || '07:15').split(':').map(Number);
-      const baseHora = hLim === 7 ? 7 : hLim;
-      const baseMin = hLim === 7 ? 0 : mLim;
-      const dInicio = new Date(2000, 0, 1, baseHora, baseMin);
+      // Horas de retardo = llegada - inicio de turno que fija RH
+      const [hIniT, mIniT] = (horaInicioTurnoRH || '07:00').split(':').map(Number);
+      const dInicio = new Date(2000, 0, 1, isNaN(hIniT) ? 7 : hIniT, isNaN(mIniT) ? 0 : mIniT);
       const dLlegada = new Date(2000, 0, 1, h, m);
       const diff = (dLlegada - dInicio) / 3600000;
       return diff > 0 ? parseFloat(diff.toFixed(2)) : 0;

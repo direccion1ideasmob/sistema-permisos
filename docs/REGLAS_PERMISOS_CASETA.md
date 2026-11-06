@@ -146,7 +146,7 @@ esa regla se actualiza en el mismo cambio.
 - [x] Cuando RH marca la entrada, se cancela el retardo aunque la persona haya llegado tarde (`forzarDirectoRH`).
 - [x] La falta sin aviso de ayer busca un permiso con `SIN AVISO` que nadie crea; debe usar el pase de lista. Además debe registrarse como reincorporación y no como retardo, y solo marcar esa falta (`vigilanciaService.js:84-93, 1104-1125`, `permisosService.js:740-757`).
 - [x] Falta o vacaciones en puerta: hoy decide cualquier firma; debe decidir RH. Al rechazar se pierde el pago original (`permisosService.js:904`) y las vacaciones se cancelan completas (`vigilanciaService.js:636-644`).
-- [ ] Reloj de RH: agregar inicio de turno y tolerancia; contar las horas de retardo desde I (`FormularioSolicitud.jsx:253-262`, `vigilanciaService.js:625, 1018`).
+- [x] Reloj de RH: agregar inicio de turno y tolerancia; contar las horas de retardo desde I (`FormularioSolicitud.jsx:253-262`, `vigilanciaService.js:625, 1018`).
 
 ### Prioridad 3 — consistencia
 - [ ] Reingreso después de una salida definitiva: se vuelve a retener en bucle y no limpia `hora_salida` (`permisosService.js:721-724`, `vigilanciaService.js:564-578, 662`).

@@ -716,9 +716,11 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
       totalHorasReales = parseFloat(((minReingReal - minSalReal) / 60).toFixed(2));
     }
   } else if (tipo === 'retardo') {
+    // Horas de retardo = llegada real - inicio de turno que fija RH
     const minLlegadaReal = parsearMin(horaEfectivaCruce);
-    if (minLlegadaReal !== null && minLlegadaReal > 7 * 60) {
-      totalHorasReales = parseFloat(((minLlegadaReal - 7 * 60) / 60).toFixed(2));
+    const minInicioTurnoCheck = minutosDesdeHHMM(await obtenerHoraInicioTurno(), '07:00');
+    if (minLlegadaReal !== null && minLlegadaReal > minInicioTurnoCheck) {
+      totalHorasReales = parseFloat(((minLlegadaReal - minInicioTurnoCheck) / 60).toFixed(2));
     }
   }
 
@@ -887,6 +889,43 @@ export const guardarHoraLimiteTolerancia = async (nuevaHora) => {
       .upsert([{ clave: 'hora_limite_tolerancia', valor: limpia, updated_at: new Date().toISOString() }], { onConflict: 'clave' });
   } catch (_) {}
   return limpia;
+};
+
+// Inicio de turno (I): desde aquí se cuentan las horas de retardo. La entrada límite E = I + tolerancia.
+export const obtenerHoraInicioTurno = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('configuracion_caseta')
+      .select('valor')
+      .eq('clave', 'hora_inicio_turno')
+      .maybeSingle();
+
+    if (!error && data?.valor && /^\d{2}:\d{2}$/.test(data.valor.trim())) {
+      localStorage.setItem('hora_inicio_turno_rh', data.valor.trim());
+      return data.valor.trim();
+    }
+  } catch (_) {}
+  return localStorage.getItem('hora_inicio_turno_rh') || '07:00';
+};
+
+export const guardarHoraInicioTurno = async (nuevaHora) => {
+  const limpia = (nuevaHora || '07:00').trim();
+  localStorage.setItem('hora_inicio_turno_rh', limpia);
+  try {
+    await supabase
+      .from('configuracion_caseta')
+      .upsert([{ clave: 'hora_inicio_turno', valor: limpia, updated_at: new Date().toISOString() }], { onConflict: 'clave' });
+  } catch (_) {}
+  return limpia;
+};
+
+const minutosDesdeHHMM = (hhmm, porDefecto) => {
+  const [hMin, mMin] = String(hhmm || porDefecto).split(':').map(Number);
+  if (isNaN(hMin) || isNaN(mMin)) {
+    const [hDef, mDef] = porDefecto.split(':').map(Number);
+    return hDef * 60 + mDef;
+  }
+  return hMin * 60 + mMin;
 };
 
 export const obtenerHoraSalidaOficial = async () => {
@@ -1077,7 +1116,8 @@ export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, moti
 
   const folioTemporal = `REQ-${Math.floor(100000 + Math.random() * 900000)}`;
   const [hAct, mAct] = horaActual.split(':').map(Number);
-  const diffHoras = Math.max(0, parseFloat((((hAct * 60 + mAct) - (7 * 60)) / 60).toFixed(2)));
+  const minInicioTurnoPuerta = minutosDesdeHHMM(await obtenerHoraInicioTurno(), '07:00');
+  const diffHoras = Math.max(0, parseFloat((((hAct * 60 + mAct) - minInicioTurnoPuerta) / 60).toFixed(2)));
   const detalleHorarioTexto = `🕒 Llegada en puerta: ${horaActual} hrs | [LLEGADA EN PUERTA: ${horaActual} hrs]`;
 
   const payload = {

@@ -4,36 +4,53 @@ import {
   obtenerHoraLimiteTolerancia,
   guardarHoraLimiteTolerancia,
   obtenerHoraSalidaOficial,
-  guardarHoraSalidaOficial
+  guardarHoraSalidaOficial,
+  obtenerHoraInicioTurno,
+  guardarHoraInicioTurno
 } from '../../vigilancia/services/vigilanciaService';
+
+// Reloj de RH: Inicio de turno (I) + Tolerancia (T) = Entrada límite (E). Salida oficial (S).
+// Las horas de retardo se cuentan desde I; después de E es retardo; antes de S se necesita pase.
+const aMinutosReloj = (hhmm, porDefecto) => {
+  const [h, m] = String(hhmm || porDefecto).split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) {
+    const [hd, md] = porDefecto.split(':').map(Number);
+    return hd * 60 + md;
+  }
+  return h * 60 + m;
+};
+
+const aHHMMReloj = (minutos) => {
+  const total = ((minutos % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
 
 export default function ControlHoraCorteRH({ usuario, c }) {
   const rol = String(usuario?.rol || '').toLowerCase();
   const esRHOSuper = rol === 'gerente_rh' || rol === 'rh_nominas' || rol === 'superadmin';
 
+  const [horaInicio, setHoraInicio] = useState(() => localStorage.getItem('hora_inicio_turno_rh') || '07:00');
   const [horaCorte, setHoraCorte] = useState(() => localStorage.getItem('hora_limite_retardo_rh') || '07:15');
   const [horaSalida, setHoraSalida] = useState(() => localStorage.getItem('hora_salida_oficial_rh') || '17:00');
   const [abierto, setAbierto] = useState(false);
   const [desbloqueado, setDesbloqueado] = useState(false);
-  const [inputHoraEntrada, setInputHoraEntrada] = useState('07:15');
+  const [inputInicio, setInputInicio] = useState('07:00');
+  const [inputTolerancia, setInputTolerancia] = useState('15');
   const [inputHoraSalida, setInputHoraSalida] = useState('17:00');
   const [guardando, setGuardando] = useState(false);
   const contenedorRef = useRef(null);
 
+  const toleranciaActual = Math.max(0, aMinutosReloj(horaCorte, '07:15') - aMinutosReloj(horaInicio, '07:00'));
+
   useEffect(() => {
     if (!esRHOSuper) return;
-    obtenerHoraLimiteTolerancia().then((h) => {
-      if (h) {
-        setHoraCorte(h);
-        setInputHoraEntrada(h);
-      }
-    });
-    obtenerHoraSalidaOficial().then((hSal) => {
-      if (hSal) {
-        setHoraSalida(hSal);
-        setInputHoraSalida(hSal);
-      }
-    });
+    Promise.all([obtenerHoraInicioTurno(), obtenerHoraLimiteTolerancia(), obtenerHoraSalidaOficial()])
+      .then(([hIni, hLim, hSal]) => {
+        if (hIni) setHoraInicio(hIni);
+        if (hLim) setHoraCorte(hLim);
+        if (hSal) setHoraSalida(hSal);
+      })
+      .catch(() => {});
   }, [esRHOSuper]);
 
   useEffect(() => {
@@ -50,22 +67,35 @@ export default function ControlHoraCorteRH({ usuario, c }) {
 
   if (!esRHOSuper) return null;
 
-  const guardarAmbos = async (entExplicita = null, salExplicita = null) => {
+  const toleranciaInputNum = parseInt(inputTolerancia, 10);
+  const entradaCalculada = aHHMMReloj(aMinutosReloj(inputInicio, '07:00') + (isNaN(toleranciaInputNum) ? 0 : toleranciaInputNum));
+
+  const guardarReloj = async (iniExpl = null, tolExpl = null, salExpl = null) => {
     if (!desbloqueado) return;
-    const valEnt = typeof entExplicita === 'string' ? entExplicita : inputHoraEntrada;
-    const valSal = typeof salExplicita === 'string' ? salExplicita : inputHoraSalida;
-    if (!valEnt || !valSal) return;
+    const valIni = typeof iniExpl === 'string' ? iniExpl : inputInicio;
+    const valTol = tolExpl !== null ? tolExpl : parseInt(inputTolerancia, 10);
+    const valSal = typeof salExpl === 'string' ? salExpl : inputHoraSalida;
+    if (!valIni || !valSal) return;
+    if (isNaN(valTol) || valTol < 0 || valTol > 180) {
+      alert('La tolerancia debe ser un número de minutos entre 0 y 180.');
+      return;
+    }
+    const valEnt = aHHMMReloj(aMinutosReloj(valIni, '07:00') + valTol);
+    if (aMinutosReloj(valSal, '17:00') <= aMinutosReloj(valEnt, '07:15')) {
+      alert('La salida oficial debe ser posterior a la entrada límite.');
+      return;
+    }
 
     setGuardando(true);
     try {
-      const [nuevaEnt, nuevaSal] = await Promise.all([
+      const [nuevaIni, nuevaEnt, nuevaSal] = await Promise.all([
+        guardarHoraInicioTurno(valIni),
         guardarHoraLimiteTolerancia(valEnt),
         guardarHoraSalidaOficial(valSal)
       ]);
+      setHoraInicio(nuevaIni);
       setHoraCorte(nuevaEnt);
-      setInputHoraEntrada(nuevaEnt);
       setHoraSalida(nuevaSal);
-      setInputHoraSalida(nuevaSal);
       setDesbloqueado(false);
       setAbierto(false);
     } catch (e) {
@@ -73,6 +103,28 @@ export default function ControlHoraCorteRH({ usuario, c }) {
     } finally {
       setGuardando(false);
     }
+  };
+
+  const estiloInput = {
+    width: '100%',
+    height: '34px',
+    border: `1px solid ${desbloqueado ? (c?.accent || '#16a34a') : (c?.border || '#cbd5e1')}`,
+    borderRadius: '8px',
+    background: desbloqueado ? (c?.bg || '#f8fafc') : 'rgba(148,163,184,0.12)',
+    color: c?.text || '#111',
+    fontSize: '13.5px',
+    fontWeight: '800',
+    fontFamily: 'ui-monospace, monospace',
+    padding: '0 8px',
+    outline: 'none',
+    boxSizing: 'border-box',
+    cursor: desbloqueado ? 'pointer' : 'not-allowed',
+    opacity: desbloqueado ? 1 : 0.65
+  };
+
+  const estiloLabel = {
+    display: 'block', fontSize: '10px', fontWeight: '700', color: c?.textMuted || '#64748b',
+    marginBottom: '3px', textTransform: 'uppercase'
   };
 
   return (
@@ -84,13 +136,14 @@ export default function ControlHoraCorteRH({ usuario, c }) {
             setAbierto(false);
             setDesbloqueado(false);
           } else {
-            setInputHoraEntrada(horaCorte);
+            setInputInicio(horaInicio);
+            setInputTolerancia(String(toleranciaActual));
             setInputHoraSalida(horaSalida);
             setDesbloqueado(false);
             setAbierto(true);
           }
         }}
-        title={`Horarios RH • Entrada: ${horaCorte} | Salida: ${horaSalida}`}
+        title={`Horarios RH • Inicio: ${horaInicio} | Tolerancia: ${toleranciaActual} min (entrada límite ${horaCorte}) | Salida: ${horaSalida}`}
         style={{
           height: '34px',
           padding: '0 10px',
@@ -108,7 +161,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
         }}
       >
         <Clock size={14} />
-        <span>{horaCorte} – {horaSalida}</span>
+        <span>{horaInicio} (+{toleranciaActual}′) – {horaSalida}</span>
       </button>
 
       <style>{`
@@ -117,7 +170,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
           top: 40px;
           right: 0;
           z-index: 9999;
-          width: 266px;
+          width: 300px;
           box-sizing: border-box;
         }
         @media (max-width: 640px) {
@@ -127,7 +180,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
             left: 12px !important;
             right: 12px !important;
             width: auto !important;
-            max-width: 340px !important;
+            max-width: 360px !important;
             margin: 0 auto !important;
           }
         }
@@ -188,69 +241,50 @@ export default function ControlHoraCorteRH({ usuario, c }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: c?.textMuted || '#64748b', marginBottom: '3px', textTransform: 'uppercase' }}>
-                Tolerancia Entrada
-              </label>
+              <label style={estiloLabel}>Inicio turno</label>
               <input
                 type="time"
-                value={inputHoraEntrada}
+                value={inputInicio}
                 disabled={!desbloqueado}
-                onChange={(e) => setInputHoraEntrada(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '34px',
-                  border: `1px solid ${desbloqueado ? (c?.accent || '#16a34a') : (c?.border || '#cbd5e1')}`,
-                  borderRadius: '8px',
-                  background: desbloqueado ? (c?.bg || '#f8fafc') : 'rgba(148,163,184,0.12)',
-                  color: c?.text || '#111',
-                  fontSize: '13.5px',
-                  fontWeight: '800',
-                  fontFamily: 'ui-monospace, monospace',
-                  padding: '0 8px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  cursor: desbloqueado ? 'pointer' : 'not-allowed',
-                  opacity: desbloqueado ? 1 : 0.65
-                }}
+                onChange={(e) => setInputInicio(e.target.value)}
+                style={estiloInput}
               />
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: c?.textMuted || '#64748b', marginBottom: '3px', textTransform: 'uppercase' }}>
-                Salida Oficial
-              </label>
+              <label style={estiloLabel}>Tolerancia (min)</label>
+              <input
+                type="number"
+                min="0"
+                max="180"
+                value={inputTolerancia}
+                disabled={!desbloqueado}
+                onChange={(e) => setInputTolerancia(e.target.value)}
+                style={estiloInput}
+              />
+            </div>
+            <div>
+              <label style={estiloLabel}>Salida oficial</label>
               <input
                 type="time"
                 value={inputHoraSalida}
                 disabled={!desbloqueado}
                 onChange={(e) => setInputHoraSalida(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '34px',
-                  border: `1px solid ${desbloqueado ? (c?.accent || '#16a34a') : (c?.border || '#cbd5e1')}`,
-                  borderRadius: '8px',
-                  background: desbloqueado ? (c?.bg || '#f8fafc') : 'rgba(148,163,184,0.12)',
-                  color: c?.text || '#111',
-                  fontSize: '13.5px',
-                  fontWeight: '800',
-                  fontFamily: 'ui-monospace, monospace',
-                  padding: '0 8px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  cursor: desbloqueado ? 'pointer' : 'not-allowed',
-                  opacity: desbloqueado ? 1 : 0.65
-                }}
+                style={estiloInput}
               />
             </div>
+          </div>
+
+          <div style={{ fontSize: '11.5px', fontWeight: '700', color: c?.textMuted || '#64748b' }}>
+            Entrada límite (después es retardo): <span style={{ color: c?.text || '#111', fontFamily: 'ui-monospace, monospace' }}>{entradaCalculada}</span>
           </div>
 
           {desbloqueado && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <button
                 type="button"
-                onClick={() => guardarAmbos()}
+                onClick={() => guardarReloj()}
                 disabled={guardando}
                 style={{
                   height: '32px',
@@ -270,10 +304,10 @@ export default function ControlHoraCorteRH({ usuario, c }) {
                 <Check size={14} strokeWidth={3} /> Guardar horarios
               </button>
 
-              {(horaCorte !== '07:15' || horaSalida !== '17:00') && (
+              {(horaInicio !== '07:00' || horaCorte !== '07:15' || horaSalida !== '17:00') && (
                 <button
                   type="button"
-                  onClick={() => guardarAmbos('07:15', '17:00')}
+                  onClick={() => guardarReloj('07:00', 15, '17:00')}
                   disabled={guardando}
                   style={{
                     height: '27px',
@@ -290,7 +324,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
                     gap: '5px'
                   }}
                 >
-                  <RotateCcw size={11} /> Restaurar (07:15 / 17:00)
+                  <RotateCcw size={11} /> Restaurar (07:00 + 15 min / 17:00)
                 </button>
               )}
             </div>
