@@ -184,6 +184,17 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             color: '#ef4444',
             bg: 'rgba(239,68,68,0.14)'
           };
+        } else if (!jefeYaDecidioRetardo && tipo === 'retardo' && !horaLlegadaPuerta) {
+          // Retardo pendiente de firma pero la persona aún no llega: NO está retenida.
+          // Caseta debe poder registrar su llegada (puntual → se cancela; tarde → queda en puerta).
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: 'retardo_pendiente_sin_llegar',
+            paseId: rawPase.id,
+            esperandoFirmaDe,
+            etiqueta: `⏳ Retardo pendiente de firma (aún no llega) • Firma: ${esperandoFirmaDe}`,
+            color: '#d97706',
+            bg: 'rgba(245,158,11,0.10)'
+          };
         } else if (!jefeYaDecidioRetardo) {
           const esInusualAusencia = /COMPORTAMIENTO INUSUAL EN CASETA/i.test(obs);
           const esFaltaSinAviso = tipo === 'falta' || /FALTA PREVIA SIN AVISO|FALTA SIN AVISO/i.test(rawPase.asunto_motivo || '') || /FALTA PREVIA SIN AVISO/i.test(obs);
@@ -314,7 +325,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     }
 
     if ((tipo === 'retardo' || esFaltaRetenidaPuerta) && !jefeYaDecidioRetardo) {
-      retenidosEnEspera.push(p);
+      // Solo está "retenido" quien ya se presentó físicamente en puerta
+      if (horaLlegadaPuerta) retenidosEnEspera.push(p);
       return;
     }
 

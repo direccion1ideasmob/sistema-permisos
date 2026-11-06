@@ -182,6 +182,18 @@ export default function Caseta() {
           paseId: pasePuerta?.id || inc?.paseId
         };
       }
+      // Tiene retardo pendiente de firma y apenas llega: registrar su llegada.
+      // Puntual → el retardo se cancela solo; tarde → queda en puerta y se avisa a las firmas.
+      if (inc?.tipo === 'retardo_pendiente_sin_llegar') {
+        const llegaPuntual = ahoraM <= limEntM;
+        return {
+          color: llegaPuntual ? '#16a34a' : '#d97706',
+          fondo: llegaPuntual ? c.surfaceCard : (modoOscuro ? 'rgba(245,158,11,0.12)' : '#fffbeb'),
+          estado: llegaPuntual ? '🟢 A tiempo (retardo sin firmar se cancela)' : '⏳ Retardo sin firmar • Llega ahora',
+          boton: llegaPuntual ? '✓ PASAR' : '✋ REGISTRAR LLEGADA',
+          tipoAccion: 'ENTRADA_LISTA'
+        };
+      }
       // Faltó ayer sin aviso
       if (inc?.tipo === 'falta_ayer_sin_aviso') {
         return {
