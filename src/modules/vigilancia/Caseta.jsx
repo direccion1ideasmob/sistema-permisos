@@ -171,6 +171,23 @@ export default function Caseta() {
 
     // 5. Viene entrando a trabajar
     if (!entro) {
+      // Retardo autorizado por adelantado (aún no pasaba por puerta): se revisa al llegar.
+      // Puntual → se cancela el retardo; dentro de lo prometido +15 → pasa; más tarde → queda en puerta.
+      const esRetardoPrevioSinPuerta =
+        !pasePuerta &&
+        inc?.tipo === 'retardo_autorizado' &&
+        inc?.tipoPase === 'retardo' &&
+        !inc?.horaLlegadaPuerta;
+      if (esRetardoPrevioSinPuerta) {
+        const llegaPuntual = ahoraM <= limEntM;
+        return {
+          color: '#16a34a',
+          fondo: llegaPuntual ? c.surfaceCard : (modoOscuro ? 'rgba(22,163,74,0.14)' : '#f0fdf4'),
+          estado: llegaPuntual ? '🟢 A tiempo (su retardo se cancela)' : '✅ Tiene retardo autorizado',
+          boton: llegaPuntual ? '✓ PASAR' : '✓ REGISTRAR LLEGADA',
+          tipoAccion: 'ENTRADA_LISTA'
+        };
+      }
       // Ya autorizado por su jefe después de estar detenido
       if (inc?.tipo === 'retardo_autorizado' || (pasePuerta && pasePuerta.tipo_permiso !== 'salida')) {
         return {
@@ -283,6 +300,10 @@ export default function Caseta() {
         const res = await registrarAsistenciaLista(emp.id, 'entrada', usuario?.id || null, false);
         if (res?.resultado === 'ok' || res?.resultado === 'entrada_registrada') {
           mostrarAviso('verde', `✅ PASA A PLANTA: ${emp.nombre_completo}`, () => revertirEntrada(emp.id));
+        } else if (res?.resultado === 'se_regresa') {
+          mostrarAviso('rojo', `🚫 NO PASA: ${emp.nombre_completo} tiene dictamen de regreso a casa`);
+        } else if (res?.resultado === 'retenido_por_inusual') {
+          mostrarAviso('rojo', `✋ DETENIDO: ${emp.nombre_completo} llegó más de 15 min después de lo avisado. Se pidió firma.`);
         } else {
           mostrarAviso('rojo', `✋ DETENIDO: ${emp.nombre_completo} (Esperando autorización)`);
         }

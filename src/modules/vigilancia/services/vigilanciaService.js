@@ -156,7 +156,10 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     else if (rawPase.firmante1?.nombre_completo && f1Resuelta) autorizadoPor = rawPase.firmante1.nombre_completo;
 
     const incExistente = mapaIncidenciasHoy[rawPase.usuario_id];
-    const puedeEscribirIncidencia = !incExistente || (esRechazado === false && incExistente.esRechazado);
+    // Un retardo manda sobre un pase de salida normal: la entrada ocurre antes que la salida
+    // y Caseta necesita saber cómo recibir a la persona.
+    const retardoDesplazaSalida = tipo === 'retardo' && incExistente?.tipo === 'salida_autorizada';
+    const puedeEscribirIncidencia = !incExistente || (esRechazado === false && incExistente.esRechazado) || retardoDesplazaSalida;
     if (puedeEscribirIncidencia) {
       if (tipo === 'vacaciones' && !esRechazado && !(rawPase.estado_general === 'en_firmas' && Boolean(horaLlegadaPuerta))) {
         mapaIncidenciasHoy[rawPase.usuario_id] = {
@@ -216,6 +219,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
             tipo: 'retardo_autorizado',
             paseId: rawPase.id,
+            tipoPase: tipo,
+            horaLlegadaPuerta,
             autorizadoPor: autorizadoPor || 'Jefatura / RH',
             dictamen: rawPase.pago || 'Autorizado',
             yaEntro: yaRegreso,
