@@ -136,7 +136,7 @@ esa regla se actualiza en el mismo cambio.
 - [x] "DEJAR PASAR" con retardo autorizado se salta la revisión de llegada puntual y de +15 min (`Caseta.jsx:175-186, 284-287`).
 - [x] El corte convierte retardos en falta automáticamente y nunca corre antes de las 17:00. Debe mandar todo a la bandeja de RH y respetar S (`vigilanciaService.js:760, 802-866`).
 - [x] El empleado puede cancelar su retardo a cualquier hora; debe ser solo antes de E (`permisosService.js` → `cancelarSolicitudPermiso`, `MisPermisos.jsx`).
-- [ ] Caseta registra la salida de turno a cualquier hora sin pase (`Caseta.jsx:228`, `registrarAsistenciaLista`).
+- [x] Caseta registra la salida de turno a cualquier hora sin pase (`Caseta.jsx:228`, `registrarAsistenciaLista`).
 - [ ] Regla sagrada 1: `pago: 'Cancelado'` sin reintento con `'Sin goce'` (`vigilanciaService.js:640, 893`).
 
 ### Prioridad 2 — control de RH

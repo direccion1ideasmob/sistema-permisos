@@ -253,8 +253,18 @@ export default function Caseta() {
       };
     }
 
-    // 6. Ya está en planta -> Salida de turno
+    // 6. Ya está en planta -> Salida de turno (solo desde la hora oficial de salida que fija RH)
     if (!salio) {
+      if (ahoraM < aMinutos(horaSalidaOficialStr || '17:00')) {
+        return {
+          color: '#0284c7',
+          fondo: c.surfaceCard,
+          estado: `🏭 En planta • Sin pase: no sale antes de ${horaSalidaOficialStr || '17:00'} (hablar con RH)`,
+          boton: `Salida ${horaSalidaOficialStr || '17:00'}`,
+          tipoAccion: 'SALIDA_TURNO',
+          deshabilitado: true
+        };
+      }
       return {
         color: '#0284c7',
         fondo: c.surfaceCard,

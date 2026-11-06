@@ -1061,6 +1061,16 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
     }
   }
 
+  // Regla: nadie sale antes de la hora oficial sin pase autorizado. Solo RH (forzarDirectoRH) puede registrarlo.
+  if (tipoMarca === 'salida' && !forzarDirectoRH) {
+    const horaSalidaOficialLista = await obtenerHoraSalidaOficial();
+    const [hSalLista, mSalLista] = String(horaSalidaOficialLista || '17:00').split(':').map(Number);
+    const minSalidaLista = (isNaN(hSalLista) ? 17 : hSalLista) * 60 + (isNaN(mSalLista) ? 0 : mSalLista);
+    if (minutosDelDia < minSalidaLista) {
+      throw new Error(`No puede salir antes de las ${horaSalidaOficialLista} hrs sin un pase de salida autorizado. Debe hablar con Recursos Humanos para que le genere el pase.`);
+    }
+  }
+
   const { data: existente, error: errBusqueda } = await supabase
     .from('asistencias_caseta')
     .select('id, usuario_id, fecha, hora_entrada, hora_salida, registrado_por')
