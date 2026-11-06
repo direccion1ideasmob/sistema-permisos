@@ -145,7 +145,7 @@ esa regla se actualiza en el mismo cambio.
 - [x] El pase de lista de RH solo permite marcar el día de hoy (`VistaAsistenciaDiariaRH.jsx:731`, `registrarAsistenciaLista`).
 - [x] Cuando RH marca la entrada, se cancela el retardo aunque la persona haya llegado tarde (`forzarDirectoRH`).
 - [x] La falta sin aviso de ayer busca un permiso con `SIN AVISO` que nadie crea; debe usar el pase de lista. Además debe registrarse como reincorporación y no como retardo, y solo marcar esa falta (`vigilanciaService.js:84-93, 1104-1125`, `permisosService.js:740-757`).
-- [ ] Falta o vacaciones en puerta: hoy decide cualquier firma; debe decidir RH. Al rechazar se pierde el pago original (`permisosService.js:904`) y las vacaciones se cancelan completas (`vigilanciaService.js:636-644`).
+- [x] Falta o vacaciones en puerta: hoy decide cualquier firma; debe decidir RH. Al rechazar se pierde el pago original (`permisosService.js:904`) y las vacaciones se cancelan completas (`vigilanciaService.js:636-644`).
 - [ ] Reloj de RH: agregar inicio de turno y tolerancia; contar las horas de retardo desde I (`FormularioSolicitud.jsx:253-262`, `vigilanciaService.js:625, 1018`).
 
 ### Prioridad 3 — consistencia

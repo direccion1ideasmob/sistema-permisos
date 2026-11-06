@@ -1,7 +1,7 @@
 import { compararPorApellidoPaterno } from '../../../core/utils/ordenNombre';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
-import { resolverCadenaFirmasPorEcualizador } from '../../permisos/services/permisosService';
+import { resolverCadenaFirmasPorEcualizador, generarFolioOficial } from '../../permisos/services/permisosService';
 
 export const obtenerFechaLocalHoy = () => {
   const ahora = new Date();
@@ -480,6 +480,10 @@ export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia
   const nuevasObs = `${obsLimpia} | ${selloInusual} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.replace(/^\s*\|\s*/, '').trim();
 
   const esRetardoAnomalia = (permiso.tipo_permiso || '').toLowerCase() === 'retardo' || tipoAnomalia === 'retardo_excedido';
+  const tipoPermisoInusual = (permiso.tipo_permiso || '').toLowerCase();
+  // Regla: si se presenta en día de FALTA o VACACIONES, decide SOLO RH.
+  const esAusenciaDecideRH = ['falta', 'vacaciones'].includes(tipoPermisoInusual) &&
+    ['presentacion_en_falta', 'presentacion_en_vacaciones'].includes(tipoAnomalia);
   const cadena = await resolverCadenaFirmasPorEcualizador({
     userId: permiso.usuario_id,
     rolUsuario: permiso.usuarios?.rol,
@@ -493,17 +497,33 @@ export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia
   const f2Id = esRetardoAnomalia ? cadena.gerenteFinalId : (cadena.gerenteFinalId || permiso.firma_2_id || null);
   const f3Id = cadena.rhFinalId || permiso.firma_3_id || null;
 
-  const updates = {
-    estado_general: 'en_firmas',
-    pago: 'Pendiente de dictamen (Cambio en Caseta)',
-    firma_1_id: f1Id,
-    firma_1_estado: f1Id ? 'pendiente' : 'omitido',
-    firma_2_id: f2Id,
-    firma_2_estado: f2Id ? 'pendiente' : 'omitido',
-    firma_3_id: f3Id,
-    firma_3_estado: 'pendiente',
-    observaciones: nuevasObs
-  };
+  // Guardar el pago original para restaurarlo si RH no autoriza la reincorporación
+  const yaTieneTagPago = /\[PAGO ORIGINAL:/i.test(nuevasObs);
+  const pagoOriginalInusual = String(permiso.pago || '');
+  const obsConPagoOriginal = (esAusenciaDecideRH && !yaTieneTagPago && pagoOriginalInusual && !/pendiente/i.test(pagoOriginalInusual))
+    ? `${nuevasObs} | [PAGO ORIGINAL: ${pagoOriginalInusual}]`
+    : nuevasObs;
+
+  const updates = esAusenciaDecideRH
+    ? {
+        // Firmas 1 y 2 conservan su estado: solo RH (firma 3) decide
+        estado_general: 'en_firmas',
+        pago: 'Pendiente de dictamen (Cambio en Caseta)',
+        firma_3_id: f3Id,
+        firma_3_estado: 'pendiente',
+        observaciones: obsConPagoOriginal
+      }
+    : {
+        estado_general: 'en_firmas',
+        pago: 'Pendiente de dictamen (Cambio en Caseta)',
+        firma_1_id: f1Id,
+        firma_1_estado: f1Id ? 'pendiente' : 'omitido',
+        firma_2_id: f2Id,
+        firma_2_estado: f2Id ? 'pendiente' : 'omitido',
+        firma_3_id: f3Id,
+        firma_3_estado: 'pendiente',
+        observaciones: nuevasObs
+      };
 
   const { error } = await supabase
     .from('permisos')
@@ -518,17 +538,15 @@ export const solicitarAutorizacionInusualCaseta = async (permisoId, tipoAnomalia
     .in('rol', ['gerente_rh', 'rh_nominas'])
     .eq('activo', true);
 
-  const dest = [
-    f1Id,
-    f2Id,
-    f3Id,
-    ...(rhUsers || []).map(u => u.id)
-  ].filter(id => Boolean(id) && id !== permiso.usuario_id);
+  const dest = (esAusenciaDecideRH
+    ? [f3Id, ...(rhUsers || []).map(u => u.id)]
+    : [f1Id, f2Id, f3Id, ...(rhUsers || []).map(u => u.id)]
+  ).filter(id => Boolean(id) && id !== permiso.usuario_id);
 
   if (dest.length > 0) {
     try {
       await enviarNotificacionPushUsuarios([...new Set(dest)], {
-        titulo: '🚨 CAMBIO INUSUAL EN CASETA — REQUIERE AUTORIZACIÓN',
+        titulo: esAusenciaDecideRH ? '🚨 SE PRESENTÓ EN DÍA DE AUSENCIA — DECIDE RH' : '🚨 CAMBIO INUSUAL EN CASETA — REQUIERE AUTORIZACIÓN',
         mensaje: `👤 ${permiso.usuarios?.nombre_completo || 'Colaborador'}\n⚠️ ${descripcionInusual}\n⏳ Retenido en Vigilancia esperando decisión.`,
         fotoUrl: permiso.usuarios?.foto_url || null,
         urlDestino: '/aprobaciones'
@@ -609,7 +627,7 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
 
   const { data: permiso, error: errGet } = await supabase
     .from('permisos')
-    .select('id, usuario_id, fecha_permiso, tipo_permiso, estado_general, observaciones')
+    .select('*')
     .eq('id', permisoId)
     .single();
 
@@ -710,13 +728,46 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
     ...(totalHorasReales !== null ? { total_horas: totalHorasReales } : {})
   };
 
+  let continuacionVacaciones = null;
   if ((tipo === 'falta' || tipo === 'vacaciones') && /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obsActual) && !mov.includes('retiro')) {
+    // Regla: RH autorizó que entre. Solo se descuenta el día de HOY; el resto del periodo se conserva.
     const hoyIsoCheck = obtenerFechaLocalHoy();
-    if (tipo === 'falta' || permiso.fecha_permiso >= hoyIsoCheck) {
+    const sumarDiasIso = (iso, n) => {
+      const dSum = new Date(`${iso}T12:00:00`);
+      dSum.setDate(dSum.getDate() + n);
+      return `${dSum.getFullYear()}-${String(dSum.getMonth() + 1).padStart(2, '0')}-${String(dSum.getDate()).padStart(2, '0')}`;
+    };
+    const horasPorRango = (ini, fin) => {
+      const dIni = new Date(`${ini}T12:00:00`);
+      const dFin = new Date(`${fin}T12:00:00`);
+      return Math.max(1, Math.round((dFin - dIni) / 86400000) + 1) * 8;
+    };
+    const inicioVac = permiso.fecha_permiso;
+    const finVac = permiso.fecha_fin || permiso.fecha_permiso;
+    const ayerIsoCheck = sumarDiasIso(hoyIsoCheck, -1);
+    const mananaIsoCheck = sumarDiasIso(hoyIsoCheck, 1);
+
+    if (tipo === 'falta' || inicioVac >= hoyIsoCheck) {
+      // Falta, o vacaciones que empiezan hoy: este pase queda como un solo día (hoy) y se cancela
       updates.estado_general = 'rechazado';
       updates.pago = 'Cancelado';
-      updates.observaciones = `${nuevasObservaciones} | [PASE CANCELADO: Ingreso a laborar registrado en Caseta]`;
+      updates.observaciones = `${nuevasObservaciones} | [PASE CANCELADO: Ingreso a laborar registrado en Caseta el ${hoyIsoCheck}]`;
+      if (tipo === 'vacaciones' && finVac > hoyIsoCheck) {
+        updates.fecha_fin = hoyIsoCheck;
+        updates.total_horas = 8;
+        continuacionVacaciones = { inicio: mananaIsoCheck, fin: finVac };
+      }
       cierraCicloCaseta = false;
+    } else {
+      // Vacaciones que empezaron antes: este pase se queda con los días ya disfrutados (hasta ayer)
+      updates.fecha_fin = ayerIsoCheck;
+      updates.total_horas = horasPorRango(inicioVac, ayerIsoCheck);
+      updates.observaciones = `${nuevasObservaciones.replace(/📅 Del \S+ al \S+/, `📅 Del ${inicioVac} al ${ayerIsoCheck}`)} | [Vacaciones ajustadas: se reincorporó el ${hoyIsoCheck}]`;
+      if (finVac > hoyIsoCheck) continuacionVacaciones = { inicio: mananaIsoCheck, fin: finVac };
+      cierraCicloCaseta = false;
+    }
+    if (continuacionVacaciones) {
+      continuacionVacaciones.horas = horasPorRango(continuacionVacaciones.inicio, continuacionVacaciones.fin);
     }
   }
 
@@ -738,6 +789,37 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   }
 
   if (error) throw error;
+
+  if (continuacionVacaciones) {
+    try {
+      const letraFolioCont = /^[APO]-/.test(String(permiso.folio || '')) ? String(permiso.folio).charAt(0) : 'P';
+      const folioCont = await generarFolioOficial(letraFolioCont, new Date().getFullYear().toString().slice(-2));
+      const mPagoOrig = String(permiso.observaciones || '').match(/\[PAGO ORIGINAL:\s*([^\]]+)\]/i);
+      await supabase.from('permisos').insert([{
+        folio: folioCont,
+        usuario_id: permiso.usuario_id,
+        fecha_elaboracion: permiso.fecha_elaboracion,
+        fecha_permiso: continuacionVacaciones.inicio,
+        fecha_fin: continuacionVacaciones.fin,
+        tipo_permiso: 'vacaciones',
+        pago: mPagoOrig ? mPagoOrig[1].trim() : 'Con goce',
+        asunto_motivo: permiso.asunto_motivo,
+        total_horas: continuacionVacaciones.horas,
+        observaciones: `📅 Del ${continuacionVacaciones.inicio} al ${continuacionVacaciones.fin} | Continuación de vacaciones del folio ${permiso.folio} (se reincorporó a laborar el ${obtenerFechaLocalHoy()})`,
+        firma_empleado: permiso.firma_empleado,
+        firma_1_id: permiso.firma_1_id,
+        firma_1_estado: permiso.firma_1_estado === 'pendiente' ? 'omitido' : permiso.firma_1_estado,
+        firma_2_id: permiso.firma_2_id,
+        firma_2_estado: permiso.firma_2_estado === 'pendiente' ? 'omitido' : permiso.firma_2_estado,
+        firma_3_id: permiso.firma_3_id,
+        firma_3_estado: 'autorizado',
+        requiere_caseta: permiso.requiere_caseta,
+        estado_general: 'autorizado'
+      }]);
+    } catch (eCont) {
+      console.warn('Aviso al crear la continuación de vacaciones:', eCont);
+    }
+  }
 
   if ((tipo === 'retardo' || tipo === 'falta' || tipo === 'vacaciones') && !mov.includes('retiro')) {
     try {

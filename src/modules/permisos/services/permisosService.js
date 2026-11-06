@@ -404,7 +404,7 @@ export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuar
 };
 
 // 5. GENERADOR DE FOLIO OFICIAL (A-26-0001 / P-26-0001 / O-26-0001)
-const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
+export const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
   const patron = `${prefijoLetra}-${anio2Digitos}-%`;
   const { data } = await supabase
     .from('permisos')
@@ -513,6 +513,13 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     throw new Error(`Esta solicitud ya fue dictaminada hace unos instantes (Folio ${actualBD.folio} • ${actualBD.pago || actualBD.estado_general}). Actualiza tu bandeja.`);
   }
   solicitud = { ...solicitud, ...actualBD };
+
+  // Regla: si se presentó en día de FALTA o VACACIONES, decide SOLO RH.
+  const esAusenciaEnPuertaAprob = ['falta', 'vacaciones'].includes(String(solicitud.tipo_permiso || '').toLowerCase()) &&
+    /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(solicitud.observaciones || '');
+  if (esAusenciaEnPuertaAprob && !['gerente_rh', 'rh_nominas', 'superadmin'].includes(usuario.rol)) {
+    throw new Error('Esta persona se presentó en un día de falta o vacaciones: la decisión corresponde únicamente a Recursos Humanos.');
+  }
 
   const obsActual = solicitud.observaciones || '';
   const esUrgenciaEnPuerta = /\[(?:LLEGADA EN PUERTA|COMPORTAMIENTO INUSUAL EN CASETA|HORARIO NO COINCIDE EN CASETA):/i.test(obsActual);
@@ -711,20 +718,10 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
           observaciones: `${obsConAvalInusual} | [ Reincorporación en día de falta autorizada a las ${horaRealPuerta} hrs ]`
         }).eq('id', solicitud.id);
       } else if (/VACACIONES.*reincorporarse antes/i.test(obsOriginalInusual)) {
-        const hoyIso = obtenerFechaLocalHoyISO();
-        if (solicitud.fecha_permiso < hoyIso) {
-          const ayerDate = new Date();
-          ayerDate.setDate(ayerDate.getDate() - 1);
-          const ayerIso = new Date(ayerDate.getTime() - ayerDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-          await supabase.from('permisos').update({
-            fecha_fin: ayerIso,
-            observaciones: `${obsConAvalInusual} | [Vacaciones recortadas al ${ayerIso} por reincorporación autorizada en puerta]`
-          }).eq('id', solicitud.id);
-        } else {
-          await supabase.from('permisos').update({
-            observaciones: `${obsConAvalInusual} | [Reincorporación anticipada de vacaciones autorizada el ${hoyIso}]`
-          }).eq('id', solicitud.id);
-        }
+        const hoyIsoVac = obtenerFechaLocalHoyISO();
+        await supabase.from('permisos').update({
+          observaciones: `${obsConAvalInusual} | [Reincorporación autorizada por RH el ${hoyIsoVac}: al registrar su entrada se descuenta solo ese día]`
+        }).eq('id', solicitud.id);
       } else if (/SALIDA DEFINITIVA.*reingresar/i.test(obsOriginalInusual)) {
         await supabase.from('permisos').update({
           observaciones: `${obsConAvalInusual} (Regresa: ${horaRealPuerta} hrs)`
@@ -857,6 +854,13 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   }
   solicitud = { ...solicitud, ...actualBD };
 
+  // Regla: si se presentó en día de FALTA o VACACIONES, decide SOLO RH.
+  const esAusenciaEnPuertaRech = ['falta', 'vacaciones'].includes(String(solicitud.tipo_permiso || '').toLowerCase()) &&
+    /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(solicitud.observaciones || '');
+  if (esAusenciaEnPuertaRech && !['gerente_rh', 'rh_nominas', 'superadmin'].includes(usuario.rol)) {
+    throw new Error('Esta persona se presentó en un día de falta o vacaciones: la decisión corresponde únicamente a Recursos Humanos.');
+  }
+
   const esFirmante1 = ['encargado', 'jefe_area'].includes(usuario.rol) || solicitud.firma_1_id === usuario.id;
   const esGerente = solicitud.firma_2_id === usuario.id;
   const esRH = solicitud.firma_3_id === usuario.id || usuario.rol === 'rh_nominas' || usuario.rol === 'gerente_rh' || usuario.rol === 'superadmin';
@@ -896,13 +900,18 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   };
 
   if (esInusualRech && (tipoRechLower === 'vacaciones' || tipoRechLower === 'falta')) {
+    const mPagoOrigRech = obsRechActual.match(/\[PAGO ORIGINAL:\s*([^\]]+)\]/i);
     const obsRestaurada = obsRechActual
       .replace(/\s*\|\s*⚠️\s*\[COMPORTAMIENTO INUSUAL EN CASETA[^\]]*\]/gi, '')
       .replace(/\s*\|\s*\[LLEGADA EN PUERTA:[^\]]*\]/gi, '')
+      .replace(/\s*\|\s*\[PAGO ORIGINAL:[^\]]*\]/gi, '')
       .trim();
+    const pagoRestaurado = mPagoOrigRech
+      ? mPagoOrigRech[1].trim()
+      : (tipoRechLower === 'vacaciones' ? 'Con goce' : (solicitud.pago && !solicitud.pago.includes('Cambio en Caseta') ? solicitud.pago : 'Sin goce'));
     updates = {
       estado_general: 'autorizado',
-      pago: tipoRechLower === 'vacaciones' ? 'Con goce' : (solicitud.pago && !solicitud.pago.includes('Cambio en Caseta') ? solicitud.pago : 'Sin goce'),
+      pago: pagoRestaurado,
       observaciones: `${obsRestaurada} | ${etiquetaBitacora}`
     };
   } else if (esDesfaseSalidaRech) {
@@ -923,24 +932,27 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     updates.folio = await generarFolioOficial(letra, anio);
   }
 
+  const esAusenciaRestauradaRech = esInusualRech && (tipoRechLower === 'vacaciones' || tipoRechLower === 'falta');
+  const estadoFirmaDictamenRech = (esRetardoDelDiaOEnPuerta || esAusenciaRestauradaRech) ? 'autorizado' : 'rechazado';
+
   if (esRH && solicitud.firma_3_estado === 'pendiente' && solicitud.firma_1_id !== usuario.id) {
     updates.firma_3_id = usuario.id;
-    updates.firma_3_estado = esRetardoDelDiaOEnPuerta ? 'autorizado' : 'rechazado';
+    updates.firma_3_estado = estadoFirmaDictamenRech;
     if (solicitud.firma_1_estado === 'pendiente') updates.firma_1_estado = 'omitido';
     if (solicitud.firma_2_estado === 'pendiente') updates.firma_2_estado = 'omitido';
   } else if (esGerente && solicitud.firma_2_estado === 'pendiente') {
     updates.firma_2_id = usuario.id;
-    updates.firma_2_estado = esRetardoDelDiaOEnPuerta ? 'autorizado' : 'rechazado';
+    updates.firma_2_estado = estadoFirmaDictamenRech;
     if (solicitud.firma_1_estado === 'pendiente') updates.firma_1_estado = 'omitido';
     if (solicitud.firma_3_estado === 'pendiente') updates.firma_3_estado = 'omitido';
   } else if (esFirmante1 && solicitud.firma_1_estado === 'pendiente') {
     updates.firma_1_id = usuario.id;
-    updates.firma_1_estado = esRetardoDelDiaOEnPuerta ? 'autorizado' : 'rechazado';
+    updates.firma_1_estado = estadoFirmaDictamenRech;
     if (solicitud.firma_2_estado === 'pendiente') updates.firma_2_estado = 'omitido';
     if (solicitud.firma_3_estado === 'pendiente') updates.firma_3_estado = 'omitido';
   } else {
     updates.firma_1_id = usuario.id;
-    updates.firma_1_estado = esRetardoDelDiaOEnPuerta ? 'autorizado' : 'rechazado';
+    updates.firma_1_estado = estadoFirmaDictamenRech;
     if (solicitud.firma_2_estado === 'pendiente') updates.firma_2_estado = 'omitido';
     if (solicitud.firma_3_estado === 'pendiente') updates.firma_3_estado = 'omitido';
   }
@@ -977,6 +989,14 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
   }
 
   const tipoPaseR = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
+  if (esAusenciaRestauradaRech) {
+    await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
+      titulo: '↩️ Reincorporación no autorizada',
+      mensaje: `Tu ${tipoRechLower === 'vacaciones' ? 'periodo de vacaciones' : 'falta'} sigue vigente hoy • Motivo: ${motivoRechazo}`,
+      urlDestino: '/mis-permisos'
+    });
+    return;
+  }
   await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
     titulo: esRetardoDelDiaOEnPuerta
       ? '↩️ Acceso no autorizado (Se regresa)'
@@ -1368,6 +1388,9 @@ export const autorizarPermisoDirectoJefatura = async (permiso, dictamenPago) => 
     throw new Error(`Esta solicitud ya fue dictaminada previamente (Folio ${actualBD.folio}).`);
   }
   if (actualBD) permiso = { ...permiso, ...actualBD };
+  if (['falta', 'vacaciones'].includes(String(permiso.tipo_permiso || '').toLowerCase()) && /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(permiso.observaciones || '')) {
+    throw new Error('Esta persona se presentó en un día de falta o vacaciones: la decisión corresponde únicamente a Recursos Humanos.');
+  }
 
   const esRetRegresa = (permiso.tipo_permiso || '').toLowerCase() === 'retardo' && String(dictamenPago || '').toLowerCase().includes('regresa');
   let updates = {
@@ -1473,6 +1496,9 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
     throw new Error(`Esta solicitud ya fue dictaminada previamente (Folio ${actualBD.folio}).`);
   }
   if (actualBD) permiso = { ...permiso, ...actualBD };
+  if (['falta', 'vacaciones'].includes(String(permiso.tipo_permiso || '').toLowerCase()) && /\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(permiso.observaciones || '')) {
+    throw new Error('Esta persona se presentó en un día de falta o vacaciones: la decisión corresponde únicamente a Recursos Humanos.');
+  }
 
   const hoyIso = obtenerFechaLocalHoyISO();
   const estaEnPuerta = /\[LLEGADA EN PUERTA:/i.test(permiso.observaciones || '');
