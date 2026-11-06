@@ -156,4 +156,4 @@ esa regla se actualiza en el mismo cambio.
 - [x] Folios oficiales duplicados por calcular el consecutivo ordenando por `created_at` (`permisosService.js:400-418`, `vigilanciaService.js:811-818`).
 - [x] Retardo rechazado: el aviso al empleado debe decir "preséntate en Caseta" (política, principio 6).
 - [x] `AprobarDirecto.jsx:214` dice "Regresar a Casa" para cualquier retardo, aunque sea anticipado.
-- [ ] Quitar código muerto: `ControlCaseta.jsx`, `TablaRegistrosVig.jsx`, `FormularioAsistencia.jsx`.
+- [x] Quitar código muerto: `ControlCaseta.jsx`, `TablaRegistrosVig.jsx`, `FormularioAsistencia.jsx` (y `BuscadorPersonal.jsx`, que tampoco se usaba).
