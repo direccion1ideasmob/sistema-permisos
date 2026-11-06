@@ -10,7 +10,8 @@ import {
   esRolValidadorSuperior,
   obtenerNombreCorto,
   formatearNombreNaturalMayus,
-  compararPorNombreNatural
+  compararPorNombreNatural,
+  esAreaGeneralDepto
 } from './utils/directorioHelpers';
 import {
   actualizarDepartamentoSeguro,
@@ -279,7 +280,7 @@ export default function VistaArbol({
     if (!userEditando) return;
     setGuardando(true);
     try {
-      await reubicarColaboradorEnArbol({
+      const saneo = await reubicarColaboradorEnArbol({
         colaboradorId: userEditando.id,
         departamentoId: userEditando.departamento_id,
         area: userEditando.area,
@@ -287,20 +288,29 @@ export default function VistaArbol({
         rol: userEditando.rol,
         reportaAId: userEditando.reporta_a_id || null
       });
+      const reasignados = new Map((saneo?.reasignaciones || []).map(r => [r.id, r.reporta_a_id]));
+      const deptosLimpiados = new Set(saneo?.deptosLimpiados || []);
       // Actualizar en memoria local sin recargar ni cerrar acordeones
       setListaUsuariosLocal(prev =>
-        prev.map(u => u.id === userEditando.id
-          ? {
+        prev.map(u => {
+          if (u.id === userEditando.id) {
+            return {
               ...u,
               departamento_id: userEditando.departamento_id,
               area: (userEditando.area || '').toUpperCase(),
               puesto: (userEditando.puesto || '').toUpperCase(),
               rol: userEditando.rol,
               reporta_a_id: userEditando.reporta_a_id || null
-            }
-          : u
-        )
+            };
+          }
+          return reasignados.has(u.id) ? { ...u, reporta_a_id: reasignados.get(u.id) } : u;
+        })
       );
+      if (deptosLimpiados.size > 0) {
+        setListaDeptosLocal(prev =>
+          prev.map(d => deptosLimpiados.has(d.id) ? { ...d, jefe_id: null, emp_requiere_jefe: false } : d)
+        );
+      }
       setUserEditando(null);
     } catch (err) {
       alert("Error al guardar: " + err.message);
@@ -352,20 +362,22 @@ export default function VistaArbol({
   }, [listaUsuariosLocal]);
 
   // Resuelve el Jefe de Área real del departamento (sea por d.jefe_id o por el Jefe de Depto que aparece en el Organigrama)
+  // REGLA #6: solo un mando del área GENERAL del depto puede ser Jefe General; un supervisor de subárea nunca.
   const obtenerJefeEfectivoId = (depto) => {
     if (!depto) return '';
     if (depto.jefe_id) {
-      const existeActivo = (listaUsuariosLocal || []).some(u => u.id === depto.jefe_id && u.activo !== false);
+      const existeActivo = (listaUsuariosLocal || []).some(
+        u => u.id === depto.jefe_id && u.activo !== false && u.rol !== 'empleado'
+      );
       if (existeActivo) return depto.jefe_id;
     }
     const personalActivo = (listaUsuariosLocal || []).filter(
       u => u.departamento_id === depto.id && u.activo !== false && !esRolValidadorSuperior(u.rol)
     );
-    const nombreDeptoNorm = normalizar(depto.nombre);
+    const enAreaGeneral = (u) => esAreaGeneralDepto(u.area, depto.nombre);
     const jefeDirecto =
-      personalActivo.find(u => u.rol === 'jefe_area' && normalizar(u.area || depto.nombre) === nombreDeptoNorm) ||
-      personalActivo.find(u => u.rol === 'jefe_area') ||
-      personalActivo.find(u => u.rol === 'encargado' && normalizar(u.area || depto.nombre) === nombreDeptoNorm);
+      personalActivo.find(u => u.rol === 'jefe_area' && enAreaGeneral(u)) ||
+      personalActivo.find(u => u.rol === 'encargado' && enAreaGeneral(u));
     return jefeDirecto ? jefeDirecto.id : '';
   };
 
@@ -913,7 +925,7 @@ export default function VistaArbol({
                 </thead>
                 <tbody>
                   {deptosConPersonal.map(d => {
-                    const jefeEfectivoId = d.jefe_id || obtenerJefeEfectivoId(d);
+                    const jefeEfectivoId = obtenerJefeEfectivoId(d);
                     const tieneJefe = Boolean(jefeEfectivoId);
                     const tieneGerente = Boolean(d.gerente_id);
                     const jefePideGerente = tieneGerente && d.jefe_requiere_gerente !== false;

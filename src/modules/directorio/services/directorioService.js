@@ -258,9 +258,80 @@ export const actualizarExpedienteColaborador = async ({
 
   if (error) throw error;
 
+  await sanearJefaturaPorCambioRol({
+    usuarioId: colaboradorId,
+    rolNuevo: datosEdit.rol || 'empleado',
+    deptoNuevoId: deptoFinalId
+  });
+
   if (pinCambio) {
     await supabase.from('suscripciones_push').delete().eq('usuario_id', colaboradorId);
   }
+};
+
+// 3.B REGLA #6: SANEAR departamentos.jefe_id Y reporta_a_id CUANDO UN MANDO BAJA A EMPLEADO O CAMBIA DE DEPTO
+// - Si era Jefe General (departamentos.jefe_id) y ahora es 'empleado' o pertenece a otro depto:
+//   jefe_id = null y emp_requiere_jefe = false en ese departamento.
+// - Si ahora es 'empleado': nadie puede seguir reportándole; sus subordinados pasan al jefe_id
+//   vigente de su departamento (si existe y no es él mismo) o a null.
+export const sanearJefaturaPorCambioRol = async ({ usuarioId, rolNuevo, deptoNuevoId }) => {
+  const resultado = { deptosLimpiados: [], reasignaciones: [] };
+  if (!usuarioId) return resultado;
+  const esEmpleado = String(rolNuevo || 'empleado').toLowerCase().trim() === 'empleado';
+
+  const { data: deptosQueEncabeza } = await supabase
+    .from('departamentos')
+    .select('id')
+    .eq('jefe_id', usuarioId);
+
+  const idsLimpiar = (deptosQueEncabeza || [])
+    .filter(d => esEmpleado || d.id !== deptoNuevoId)
+    .map(d => d.id);
+
+  if (idsLimpiar.length > 0) {
+    const { error } = await supabase
+      .from('departamentos')
+      .update({ jefe_id: null, emp_requiere_jefe: false })
+      .in('id', idsLimpiar);
+    if (error) throw error;
+    resultado.deptosLimpiados = idsLimpiar;
+  }
+
+  if (!esEmpleado) return resultado;
+
+  const { data: subordinados } = await supabase
+    .from('usuarios')
+    .select('id, departamento_id')
+    .eq('reporta_a_id', usuarioId);
+
+  if (!subordinados || subordinados.length === 0) return resultado;
+
+  const idsDeptosSub = [...new Set(subordinados.map(s => s.departamento_id).filter(Boolean))];
+  const { data: deptosSub } = idsDeptosSub.length
+    ? await supabase.from('departamentos').select('id, jefe_id').in('id', idsDeptosSub)
+    : { data: [] };
+  const jefePorDepto = new Map((deptosSub || []).map(d => [d.id, d.jefe_id]));
+
+  // Agrupar por nuevo jefe para minimizar escrituras
+  const grupos = new Map();
+  subordinados.forEach(s => {
+    const jefeVigente = jefePorDepto.get(s.departamento_id) || null;
+    const nuevoJefe = jefeVigente && jefeVigente !== usuarioId && jefeVigente !== s.id ? jefeVigente : null;
+    const clave = nuevoJefe || '__null__';
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(s.id);
+    resultado.reasignaciones.push({ id: s.id, reporta_a_id: nuevoJefe });
+  });
+
+  for (const [clave, ids] of grupos) {
+    const { error } = await supabase
+      .from('usuarios')
+      .update({ reporta_a_id: clave === '__null__' ? null : clave })
+      .in('id', ids);
+    if (error) throw error;
+  }
+
+  return resultado;
 };
 
 // 4. REUBICAR UN EMPLEADO EN EL ORGANIGRAMA
@@ -277,6 +348,12 @@ export const reubicarColaboradorEnArbol = async ({ colaboradorId, departamentoId
     .eq('id', colaboradorId);
 
   if (error) throw error;
+
+  return sanearJefaturaPorCambioRol({
+    usuarioId: colaboradorId,
+    rolNuevo: rol || 'empleado',
+    deptoNuevoId: departamentoId || null
+  });
 };
 
 // 5. BAJA Y REACTIVACIÓN LABORAL
@@ -331,6 +408,14 @@ export const actualizarDepartamentoSeguro = async (
     clasificacion: clasifLimpia
   };
 
+  // Jefe General anterior: solo se reasignan empleados que le reportaban a él (o a nadie),
+  // nunca los que reportan a un supervisor de subárea
+  let jefeAnteriorId = null;
+  if (configFirmas) {
+    const { data: deptoPrevio } = await supabase.from('departamentos').select('jefe_id').eq('id', deptoId).maybeSingle();
+    jefeAnteriorId = deptoPrevio?.jefe_id || null;
+  }
+
   if (configFirmas) {
     payloadUpdate.jefe_id = configFirmas.jefe_id || null;
     payloadUpdate.gerente_id = configFirmas.gerente_id || null;
@@ -351,20 +436,22 @@ export const actualizarDepartamentoSeguro = async (
     if (jefeActual && jefeActual.rol === 'empleado') {
       await supabase.from('usuarios').update({ rol: 'jefe_area' }).eq('id', configFirmas.jefe_id);
     }
-    if (nomLimpio !== 'RECURSOS HUMANOS') {
+    if (nomLimpio !== 'RECURSOS HUMANOS' && jefeAnteriorId !== configFirmas.jefe_id) {
       await supabase
         .from('usuarios')
         .update({ reporta_a_id: configFirmas.jefe_id })
         .eq('departamento_id', deptoId)
         .eq('rol', 'empleado')
-        .neq('id', configFirmas.jefe_id);
+        .neq('id', configFirmas.jefe_id)
+        .or(jefeAnteriorId ? `reporta_a_id.is.null,reporta_a_id.eq.${jefeAnteriorId}` : 'reporta_a_id.is.null');
     }
-  } else if (configFirmas && !configFirmas.jefe_id && nomLimpio !== 'RECURSOS HUMANOS') {
+  } else if (configFirmas && !configFirmas.jefe_id && jefeAnteriorId && nomLimpio !== 'RECURSOS HUMANOS') {
     await supabase
       .from('usuarios')
       .update({ reporta_a_id: null })
       .eq('departamento_id', deptoId)
-      .eq('rol', 'empleado');
+      .eq('rol', 'empleado')
+      .eq('reporta_a_id', jefeAnteriorId);
   }
 
   if (nombreAnterior && limpiarTexto(nombreAnterior) !== nomLimpio) {

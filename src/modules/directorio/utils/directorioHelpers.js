@@ -33,6 +33,32 @@ export const esRolMando = (rol) => {
   return ROLES_JEFATURA_DEPARTAMENTO.includes(r);
 };
 
+// Una subárea es cualquier usuarios.area distinta del nombre del departamento y de 'GENERAL'
+export const esAreaGeneralDepto = (area, nombreDepto) => {
+  const a = estandarizar(area);
+  return !a || a === 'GENERAL' || a === estandarizar(nombreDepto);
+};
+
+// Jefe inmediato por defecto según la subárea elegida:
+// - Área general del depto -> departamentos.jefe_id
+// - Subárea con jefe_area/encargado activo -> ese supervisor (si no, cae al jefe general)
+export const resolverJefeInmediatoPorArea = ({ area, depto, usuarios = [], excluirId = null, rolColaborador = 'empleado' }) => {
+  if (!depto) return '';
+  const jefeGeneral = depto.jefe_id && depto.jefe_id !== excluirId ? depto.jefe_id : '';
+  if (esAreaGeneralDepto(area, depto.nombre)) return jefeGeneral;
+  // Un supervisor de subárea no reporta a otro supervisor de su misma subárea
+  if (['jefe_area', 'encargado'].includes(rolColaborador)) return jefeGeneral;
+  const areaNorm = estandarizar(area);
+  const supervisor = usuarios.find(u =>
+    u.activo !== false &&
+    u.id !== excluirId &&
+    u.departamento_id === depto.id &&
+    ['jefe_area', 'encargado'].includes(u.rol) &&
+    estandarizar(u.area) === areaNorm
+  );
+  return supervisor ? supervisor.id : jefeGeneral;
+};
+
 // Formateador para el Organigrama: NOMBRE(S) + APELLIDOS
 export const formatearNombreNaturalMayus = (u) => {
   if (!u) return '';

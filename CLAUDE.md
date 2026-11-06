@@ -33,6 +33,16 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
 - Con sello físico **no se puede cancelar** (`cancelarSolicitudPermiso` lanza error) y la UI (`MisPermisos.jsx`, `TablaHistorial.jsx`) oculta el botón de cancelar.
 - Un retardo con sello tampoco puede sustituirse por una falta del mismo día.
 
+### 6. Directorio: Jefe General vs. supervisores de subárea
+- **Subárea** = `usuarios.area` distinta del nombre del departamento y de `GENERAL` (helper `esAreaGeneralDepto` en `directorio/utils/directorioHelpers.js`). No existe columna `subarea`.
+- `departamentos.jefe_id` es **únicamente** el Jefe General del departamento (Firma 1 en la Tabla de Firmas). Solo se asigna explícitamente desde la Tabla de Firmas o, si está vacío, por la auto-sincronización de `VistaArbol.obtenerJefeEfectivoId`, que **solo** considera `jefe_area`/`encargado` del área general (nunca de una subárea).
+- Un `jefe_area`/`encargado` de subárea (ej. Salud Ocupacional, Seguridad Industrial en RH) solo manda vía `reporta_a_id` de su gente; editar su perfil o moverlo en el árbol **nunca** escribe `departamentos.jefe_id`.
+- `actualizarDepartamentoSeguro` al cambiar el Jefe General solo reasigna empleados cuyo `reporta_a_id` era `null` o el jefe anterior; no toca a quienes reportan a un supervisor de subárea.
+- `sanearJefaturaPorCambioRol` (llamado por `actualizarExpedienteColaborador` y `reubicarColaboradorEnArbol`):
+  - Si el titular baja a `empleado` o cambia de departamento → `jefe_id = null` y `emp_requiere_jefe = false` en el depto que encabezaba.
+  - Si baja a `empleado` → todos los que tenían `reporta_a_id` hacia él pasan al `jefe_id` vigente de su depto (si existe y no es él mismo) o a `null`. Nadie reporta a un `empleado`.
+- Alta/edición (`ModalColaborador.jsx`, `DossierLateral.jsx`): `reporta_a_id` por defecto lo resuelve `resolverJefeInmediatoPorArea`: subárea con `jefe_area`/`encargado` activo → ese supervisor; área general, subárea nueva o sin supervisor → `departamentos.jefe_id`. Si el colaborador es él mismo `jefe_area`/`encargado`, va al Jefe General. El usuario puede sobrescribirlo manualmente.
+
 ## Convenciones
 - Fecha "hoy" siempre en hora local: `obtenerFechaLocalHoyISO()` (no `new Date().toISOString()` directo).
 - Antes de dictaminar, re-leer el estado del permiso en BD y abortar si ya está en `autorizado/aprobado/completado_caseta/rechazado/cancelado`.

@@ -3,7 +3,8 @@ import { X, Camera, Save, Briefcase, Phone, ShieldCheck, MessageCircle, PenTool,
 import {
   estandarizar,
   formatearNombreNaturalMayus,
-  compararPorNombreNatural
+  compararPorNombreNatural,
+  resolverJefeInmediatoPorArea
 } from './utils/directorioHelpers';
 import { actualizarExpedienteColaborador, eliminarColaboradorDefinitivo } from './services/directorioService';
 import { subirImagenUsuario } from '../../core/services/storageService';
@@ -23,6 +24,15 @@ export default function DossierLateral({
   const [textosNuevos, setTextosNuevos] = useState({ sede: '', depto: '', area: '', puesto: '' });
 
   const limpiarTexto = (txt) => txt ? estandarizar(txt.toUpperCase()) : '';
+
+  // REGLA #6: jefe inmediato por defecto según depto + subárea
+  const jefePorDefecto = (deptoId, area) => resolverJefeInmediatoPorArea({
+    area,
+    depto: departamentos.find(d => d.id === deptoId),
+    usuarios,
+    excluirId: colaborador?.id,
+    rolColaborador: datosEdit?.rol || colaborador?.rol || 'empleado'
+  });
 
   const deptoActualId = (editando ? datosEdit?.departamento_id : colaborador?.departamento_id) || '';
   const deptoActualObj = departamentos.find(d => d.id === deptoActualId);
@@ -121,11 +131,11 @@ export default function DossierLateral({
                   setCreandoNuevo({ ...creandoNuevo, sede: false });
                   setTextosNuevos({ ...textosNuevos, sede: '' });
                 } else if (tipo === 'depto') {
-                  setDatosEdit({ ...datosEdit, departamento_id: item.id, area: item.nombre, puesto: '', reporta_a_id: item.jefe_id || '' });
+                  setDatosEdit({ ...datosEdit, departamento_id: item.id, area: item.nombre, puesto: '', reporta_a_id: jefePorDefecto(item.id, item.nombre) });
                   setCreandoNuevo({ ...creandoNuevo, depto: false });
                   setTextosNuevos({ ...textosNuevos, depto: '' });
                 } else if (tipo === 'area') {
-                  setDatosEdit({ ...datosEdit, area: etiqueta });
+                  setDatosEdit({ ...datosEdit, area: etiqueta, reporta_a_id: jefePorDefecto(datosEdit.departamento_id, etiqueta) });
                   setCreandoNuevo({ ...creandoNuevo, area: false });
                   setTextosNuevos({ ...textosNuevos, area: '' });
                 } else if (tipo === 'puesto') {
@@ -389,7 +399,7 @@ export default function DossierLateral({
                             ...datosEdit, 
                             departamento_id: e.target.value,
                             area: nuevoDepto ? nuevoDepto.nombre : '',
-                            reporta_a_id: nuevoDepto?.jefe_id && nuevoDepto.jefe_id !== colaborador.id ? nuevoDepto.jefe_id : ''
+                            reporta_a_id: jefePorDefecto(e.target.value, nuevoDepto ? nuevoDepto.nombre : '')
                           });
                         }
                       }}
@@ -416,7 +426,15 @@ export default function DossierLateral({
                     <select 
                       className="touch-field-input" 
                       value={datosEdit.area || ''} 
-                      onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({ ...creandoNuevo, area: true }) : setDatosEdit({ ...datosEdit, area: e.target.value })}
+                      onChange={e => {
+                        if (e.target.value === 'NEW') {
+                          // Subárea nueva: aún no tiene supervisor -> Jefe General del depto
+                          setCreandoNuevo({ ...creandoNuevo, area: true });
+                          setDatosEdit({ ...datosEdit, reporta_a_id: jefePorDefecto(datosEdit.departamento_id, '') });
+                        } else {
+                          setDatosEdit({ ...datosEdit, area: e.target.value, reporta_a_id: jefePorDefecto(datosEdit.departamento_id, e.target.value) });
+                        }
+                      }}
                     >
                       <option value="">General del Departamento</option>
                       {subdeptosDelDepto.map(sub => <option key={sub} value={sub}>{sub}</option>)}

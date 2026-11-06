@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { X, Camera, Image, Eye, UserPlus, Shield, Briefcase, PenTool, CheckCircle } from 'lucide-react';
-import { estandarizar, formatearNombreNaturalMayus, compararPorNombreNatural } from './utils/directorioHelpers';
+import { estandarizar, formatearNombreNaturalMayus, compararPorNombreNatural, resolverJefeInmediatoPorArea } from './utils/directorioHelpers';
 import { registrarNuevoColaborador } from './services/directorioService';
 import { obtenerTemaGlobal } from '../../core/theme/temaGlobal';
 
@@ -92,6 +92,14 @@ export default function ModalColaborador({
 
   const limpiarTexto = (txt) => txt ? estandarizar(txt.toUpperCase()) : '';
 
+  // REGLA #6: jefe inmediato por defecto según depto + subárea
+  const jefePorDefecto = (deptoId, area) => resolverJefeInmediatoPorArea({
+    area,
+    depto: departamentos.find(d => d.id === deptoId),
+    usuarios,
+    rolColaborador: formData.rol || 'empleado'
+  });
+
   const handleGuardar = async (e) => {
     e.preventDefault();
     if (guardando) return;
@@ -128,8 +136,8 @@ export default function ModalColaborador({
             key={i} 
             onClick={() => {
               if (tipo === 'sede') { setFormData({...formData, sede_id: item.id}); setCreandoNuevo({...creandoNuevo, sede: false}); setTextosNuevos({...textosNuevos, sede: ''}); }
-              else if (tipo === 'depto') { setFormData({...formData, departamento_id: item.id, reporta_a_id: item.jefe_id || ''}); setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}); }
-              else if (tipo === 'area') { setFormData({...formData, area: item}); setCreandoNuevo({...creandoNuevo, area: false}); setTextosNuevos({...textosNuevos, area: ''}); }
+              else if (tipo === 'depto') { setFormData({...formData, departamento_id: item.id, reporta_a_id: jefePorDefecto(item.id, formData.area)}); setCreandoNuevo({...creandoNuevo, depto: false}); setTextosNuevos({...textosNuevos, depto: ''}); }
+              else if (tipo === 'area') { setFormData({...formData, area: item, reporta_a_id: jefePorDefecto(formData.departamento_id, item)}); setCreandoNuevo({...creandoNuevo, area: false}); setTextosNuevos({...textosNuevos, area: ''}); }
               else if (tipo === 'puesto') { setFormData({...formData, puesto: item}); setCreandoNuevo({...creandoNuevo, puesto: false}); setTextosNuevos({...textosNuevos, puesto: ''}); }
             }}
             style={{ fontSize: '12px', padding: '8px 10px', background: c.bg, borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: c.text, fontWeight: '600', border: `1px solid ${c.border}` }}
@@ -269,11 +277,10 @@ export default function ModalColaborador({
                         if (e.target.value === 'NEW') {
                           setCreandoNuevo({ ...creandoNuevo, depto: true });
                         } else {
-                          const dSel = departamentos.find(d => d.id === e.target.value);
                           setFormData({
                             ...formData,
                             departamento_id: e.target.value,
-                            reporta_a_id: dSel?.jefe_id || ''
+                            reporta_a_id: jefePorDefecto(e.target.value, formData.area)
                           });
                         }
                       }}
@@ -296,7 +303,15 @@ export default function ModalColaborador({
                 <div className="input-group">
                   <label className="clean-label">Subárea (Opcional)</label>
                   {!creandoNuevo.area ? (
-                    <select className="clean-input" value={formData.area} onChange={e => e.target.value === 'NEW' ? setCreandoNuevo({...creandoNuevo, area: true}) : setFormData({...formData, area: e.target.value})}>
+                    <select className="clean-input" value={formData.area} onChange={e => {
+                      if (e.target.value === 'NEW') {
+                        // Subárea nueva: aún no tiene supervisor -> Jefe General del depto
+                        setCreandoNuevo({...creandoNuevo, area: true});
+                        setFormData({...formData, reporta_a_id: jefePorDefecto(formData.departamento_id, '')});
+                      } else {
+                        setFormData({...formData, area: e.target.value, reporta_a_id: jefePorDefecto(formData.departamento_id, e.target.value)});
+                      }
+                    }}>
                       <option value="">General del Departamento</option>
                       {areas.map(a => <option key={a} value={a}>{a}</option>)}
                       <option value="NEW">+ Nueva Subárea...</option>
