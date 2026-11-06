@@ -23,6 +23,7 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
 - Si el solicitante es gerente/validador superior (`esRolValidadorSuperior` o `superadmin`; p. ej. Pedro, Reynaldo, Coca), la solicitud va **directo a RH**: sin firma 1 ni firma 2.
 - Un mismo usuario nunca debe ocupar dos casillas: el gerente del depto se omite si coincide con el solicitante, con el jefe (`jefeFinalId`) o con RH (`rhFinalId`); el supervisor individual (`reporta_a_id`) se ignora si es `gerente_rh` o el propio RH.
 - Las firmas sin firmante quedan en estado `omitido`; las del propio solicitante, en `auto_aprobado`.
+- Excepción: un pase que RH (`gerente_rh`/`rh_nominas`/`superadmin`) genera a nombre de otro colaborador (`crearNuevaSolicitudPermiso` con `generadoPorRH`) nace `autorizado` con folio oficial: firma 1 y 2 en `omitido`, firma 3 = RH en `autorizado`, y la marca `✅ VoBo RH:` en `observaciones`.
 
 ### 4. Retardo del día / en puerta vs. retardo anticipado futuro
 - **Retardo del día o en puerta**: `tipo === 'retardo'` y (`fecha_permiso <= hoy` o hay `[LLEGADA EN PUERTA:` en observaciones). También aplica a una falta con `FALTA PREVIA SIN AVISO`.

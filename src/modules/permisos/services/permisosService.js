@@ -1019,8 +1019,15 @@ export const forzarSaltoFirmaRH = async (solicitud) => {
 export const crearNuevaSolicitudPermiso = async ({
   userId, rolUsuario, deptoId, sedeId, tipoPersonal, nombreSolicitante, fotoSolicitante,
   tipoPermiso, naturaleza, fechaHoy, fechaPermiso, fechaFinVacaciones,
-  horaSalida, regresaMismoDia, horaRegreso, horaLlegadaRetardo, motivo, totalHoras, esRetardoUrgente
+  horaSalida, regresaMismoDia, horaRegreso, horaLlegadaRetardo, motivo, totalHoras, esRetardoUrgente,
+  generadoPorRH = null, dictamenPagoRH = 'Con goce'
 }) => {
+  // Pase generado por RH a nombre de otro colaborador: nace autorizado con RH como firmante.
+  const esPaseGeneradoPorRH = Boolean(generadoPorRH?.id) && generadoPorRH.id !== userId;
+  if (esPaseGeneradoPorRH && !['gerente_rh', 'rh_nominas', 'superadmin'].includes(String(generadoPorRH.rol || '').toLowerCase())) {
+    throw new Error('Solo Recursos Humanos puede generar pases a nombre de otro colaborador.');
+  }
+
   const fechaInicioNueva = fechaPermiso;
   const fechaFinNueva = tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : fechaPermiso;
 
@@ -1153,8 +1160,25 @@ export const crearNuevaSolicitudPermiso = async ({
 
   if (!depto) throw new Error("No se encontró el departamento del colaborador.");
 
-  const hayPendientes = [estadoFirma1, estadoFirma2, estadoFirma3].includes('pendiente');
+  const hayPendientes = !esPaseGeneradoPorRH && [estadoFirma1, estadoFirma2, estadoFirma3].includes('pendiente');
   const estadoGeneral = hayPendientes ? 'en_firmas' : 'autorizado';
+
+  // Firmas finales: si lo genera RH, solo firma RH (autorizado) y las demás quedan omitidas
+  const firmasInsertRH = esPaseGeneradoPorRH
+    ? {
+        firma_1_id: null, firma_1_estado: 'omitido',
+        firma_2_id: null, firma_2_estado: 'omitido',
+        firma_3_id: generadoPorRH.id, firma_3_estado: 'autorizado'
+      }
+    : {
+        firma_1_id: jefeFinalId, firma_1_estado: estadoFirma1,
+        firma_2_id: gerenteFinalId, firma_2_estado: estadoFirma2,
+        firma_3_id: rhFinalId, firma_3_estado: estadoFirma3
+      };
+  let pagoInsertRH = hayPendientes ? 'Pendiente de dictamen' : 'Con goce';
+  if (esPaseGeneradoPorRH && tipoPermiso !== 'vacaciones' && String(dictamenPagoRH || '').toLowerCase() === 'sin goce') {
+    pagoInsertRH = 'Sin goce';
+  }
 
   let esSantaCatarina = false;
   if (sedeId) {
@@ -1183,6 +1207,13 @@ export const crearNuevaSolicitudPermiso = async ({
 
   const requiereCasetaAuto = esSantaCatarina && (tipoPermiso === 'salida' || tipoPermiso === 'retardo');
 
+  let observacionesInsert = detalleHorarioTexto;
+  if (esPaseGeneradoPorRH) {
+    const partesNomGenRH = String(generadoPorRH.nombre_completo || 'RH').trim().split(/\s+/).filter(Boolean);
+    const nomCortoGenRH = partesNomGenRH.length > 2 ? `${partesNomGenRH[0]} ${partesNomGenRH[partesNomGenRH.length - 2]}` : partesNomGenRH.join(' ');
+    observacionesInsert = `${detalleHorarioTexto} | ✅ VoBo RH: ${generadoPorRH.nombre_completo || nomCortoGenRH} | Pase generado por RH (${nomCortoGenRH}) a nombre del colaborador`;
+  }
+
   const { error: errInsert } = await supabase
     .from('permisos')
     .insert([{
@@ -1192,22 +1223,43 @@ export const crearNuevaSolicitudPermiso = async ({
       fecha_permiso: fechaPermiso,
       fecha_fin: tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : null,
       tipo_permiso: tipoPermiso,
-      pago: hayPendientes ? 'Pendiente de dictamen' : 'Con goce',
+      pago: pagoInsertRH,
       asunto_motivo: tipoPermiso === 'vacaciones' ? `[VACACIONES] ${motivo.trim()}` : `[${naturaleza.toUpperCase()}] ${motivo.trim()}`,
       total_horas: totalHoras,
-      observaciones: detalleHorarioTexto,
-      firma_empleado: true,
-      firma_1_id: jefeFinalId,
-      firma_1_estado: estadoFirma1,
-      firma_2_id: gerenteFinalId,
-      firma_2_estado: estadoFirma2,
-      firma_3_id: rhFinalId,
-      firma_3_estado: estadoFirma3,
+      observaciones: observacionesInsert,
+      firma_empleado: !esPaseGeneradoPorRH,
+      ...firmasInsertRH,
       requiere_caseta: requiereCasetaAuto,
       estado_general: estadoGeneral
     }]);
 
   if (errInsert) throw errInsert;
+
+  if (esPaseGeneradoPorRH) {
+    const mapaTitulosGenRH = { salida: 'Salida', retardo: 'Retardo', falta: 'Falta', vacaciones: 'Vacaciones' };
+    const tipoTxtGenRH = mapaTitulosGenRH[tipoPermiso] || tipoPermiso;
+    try {
+      await enviarNotificacionPushUsuarios(userId, {
+        titulo: `✅ RH generó tu pase de ${tipoTxtGenRH}`,
+        mensaje: `Folio Oficial: ${folioTemporal} • ${detalleHorarioTexto}`,
+        urlDestino: '/mis-permisos'
+      });
+    } catch (_) {}
+    if (tipoPermiso === 'salida' && esMismoDiaSolicitud) {
+      try {
+        const { data: guardiasGenRH } = await supabase.from('usuarios').select('id').eq('rol', 'caseta').eq('activo', true);
+        if (guardiasGenRH && guardiasGenRH.length > 0) {
+          await enviarNotificacionPushUsuarios(guardiasGenRH.map(g => g.id), {
+            titulo: '🔵 PASE DE SALIDA AUTORIZADO (RH)',
+            mensaje: `👤 ${nombreSolicitante} • Autorizado para salir de planta.`,
+            fotoUrl: fotoSolicitante,
+            urlDestino: '/caseta'
+          });
+        }
+      } catch (_) {}
+    }
+    return folioTemporal;
+  }
 
   if (notificarA.length > 0) {
     const mapaTitulos = { salida: 'SALIDA ANTICIPADA', retardo: 'RETARDO', falta: 'FALTA PROGRAMADA', vacaciones: 'VACACIONES' };

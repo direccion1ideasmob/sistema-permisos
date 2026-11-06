@@ -8,10 +8,10 @@ import { formatearApellidosNombre } from '../../../core/utils/ordenNombre';
 
 export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOscuro }) {
   const sesionActual = JSON.parse(localStorage.getItem("permisos_sesion") || '{}');
-  const userId = usuario?.id || sesionActual?.id;
+  const userIdSesion = usuario?.id || sesionActual?.id;
   const rolUsuario = usuario?.rol || sesionActual?.rol || 'empleado';
-  const deptoId = usuario?.departamento_id || sesionActual?.departamento_id;
-  const sedeId = usuario?.sede_id || sesionActual?.sede_id;
+  const deptoIdSesion = usuario?.departamento_id || sesionActual?.departamento_id;
+  const sedeIdSesion = usuario?.sede_id || sesionActual?.sede_id;
 
   const hoy = new Date();
   const formatearLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -21,6 +21,42 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   hace7Dias.setDate(hoy.getDate() - 7);
   const esAdminRHForm = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(rolUsuario);
   const minDate = esAdminRHForm ? formatearLocal(hace7Dias) : fechaHoy;
+
+  // RH puede generar el pase a nombre de otro colaborador (nace autorizado)
+  const [colaboradorDestino, setColaboradorDestino] = useState(null);
+  const [listaColaboradoresRH, setListaColaboradoresRH] = useState([]);
+  const [busquedaColabRH, setBusquedaColabRH] = useState('');
+  const [dictamenPagoRH, setDictamenPagoRH] = useState('Con goce');
+
+  useEffect(() => {
+    if (!esAdminRHForm) return;
+    supabase
+      .from('usuarios')
+      .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, rol, departamento_id, sede_id, tipo_personal, foto_url')
+      .eq('activo', true)
+      .neq('rol', 'caseta')
+      .order('nombre_completo', { ascending: true })
+      .then(({ data }) => setListaColaboradoresRH((data || []).filter(u => u.id !== userIdSesion)));
+  }, [esAdminRHForm, userIdSesion]);
+
+  const userId = colaboradorDestino?.id || userIdSesion;
+  const deptoId = colaboradorDestino ? colaboradorDestino.departamento_id : deptoIdSesion;
+  const sedeId = colaboradorDestino ? colaboradorDestino.sede_id : sedeIdSesion;
+
+  const terminoColabRH = busquedaColabRH.trim().toLowerCase();
+  const resultadosColabRH = terminoColabRH.length < 2 ? [] : listaColaboradoresRH.filter(u =>
+    String(u.nombre_completo || '').toLowerCase().includes(terminoColabRH) ||
+    formatearApellidosNombre(u.nombre_completo, u).toLowerCase().includes(terminoColabRH) ||
+    String(u.numero_empleado || '').toLowerCase().includes(terminoColabRH)
+  ).slice(0, 6);
+
+  const elegirColaboradorRH = (u) => {
+    setColaboradorDestino(u);
+    setBusquedaColabRH('');
+    setTipoPermiso('');
+    setNaturaleza('');
+    setDictamenPagoRH('Con goce');
+  };
 
   const [tipoPermiso, setTipoPermiso] = useState('');
   const [naturaleza, setNaturaleza] = useState('');
@@ -345,18 +381,25 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     }
 
     const etiquetaAviso = esRetardoUrgente ? "AVISO URGENTE DE RETARDO" : `SOLICITUD DE ${tipoPermiso.toUpperCase()}`;
-    if (!window.confirm(`¿Estás seguro de enviar esta ${etiquetaAviso}?\n\nRevisa que la fecha y los horarios sean los correctos antes de continuar.`)) return;
+    const textoConfirmacion = colaboradorDestino
+      ? `¿Generar y AUTORIZAR este pase de ${tipoPermiso.toUpperCase()} a nombre de ${colaboradorDestino.nombre_completo}?\n\nPago: ${tipoPermiso === 'vacaciones' ? 'Con goce' : dictamenPagoRH}\nEl pase queda autorizado por RH de inmediato.`
+      : `¿Estás seguro de enviar esta ${etiquetaAviso}?\n\nRevisa que la fecha y los horarios sean los correctos antes de continuar.`;
+    if (!window.confirm(textoConfirmacion)) return;
 
     setGuardando(true);
     try {
-      await crearNuevaSolicitudPermiso({
+      const folioGenerado = await crearNuevaSolicitudPermiso({
         userId,
-        rolUsuario,
+        rolUsuario: colaboradorDestino ? (colaboradorDestino.rol || 'empleado') : rolUsuario,
         deptoId,
         sedeId,
-        tipoPersonal: usuario?.tipo_personal || sesionActual?.tipo_personal,
-        nombreSolicitante: usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador',
-        fotoSolicitante: usuario?.foto_url || sesionActual?.foto_url || null,
+        tipoPersonal: colaboradorDestino ? colaboradorDestino.tipo_personal : (usuario?.tipo_personal || sesionActual?.tipo_personal),
+        nombreSolicitante: colaboradorDestino ? colaboradorDestino.nombre_completo : (usuario?.nombre_completo || sesionActual?.nombre_completo || 'Un colaborador'),
+        fotoSolicitante: colaboradorDestino ? (colaboradorDestino.foto_url || null) : (usuario?.foto_url || sesionActual?.foto_url || null),
+        generadoPorRH: colaboradorDestino
+          ? { id: userIdSesion, nombre_completo: usuario?.nombre_completo || sesionActual?.nombre_completo, rol: rolUsuario }
+          : null,
+        dictamenPagoRH,
         tipoPermiso,
         naturaleza,
         fechaHoy,
@@ -371,7 +414,11 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         esRetardoUrgente
       });
 
-      alert(`✅ Solicitud enviada correctamente a revisión.\n(Tu folio oficial se asignará al concluir las firmas)`);
+      if (colaboradorDestino) {
+        alert(`✅ Pase generado y AUTORIZADO a nombre de ${colaboradorDestino.nombre_completo}.\nFolio oficial: ${folioGenerado}`);
+      } else {
+        alert(`✅ Solicitud enviada correctamente a revisión.\n(Tu folio oficial se asignará al concluir las firmas)`);
+      }
 
       setTipoPermiso('');
       setNaturaleza('');
@@ -551,7 +598,11 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         <div className="form-header-row">
           <div>
             <div className="form-title-main">NUEVA SOLICITUD DE PASE</div>
-            <div className="form-subtitle-user">{formatearApellidosNombre(sesionActual.nombre_completo || usuario?.nombre_completo)}</div>
+            <div className="form-subtitle-user">
+              {colaboradorDestino
+                ? <>Para: {formatearApellidosNombre(colaboradorDestino.nombre_completo, colaboradorDestino)} <span style={{ color: '#16a34a' }}>(generado por RH)</span></>
+                : formatearApellidosNombre(sesionActual.nombre_completo || usuario?.nombre_completo)}
+            </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '11.5px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Elaboración</div>
@@ -560,6 +611,89 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* PASO 0 (SOLO RH): ¿PARA QUIÉN ES EL PASE? */}
+          {esAdminRHForm && (
+            <div style={{ minWidth: 0, border: `1.5px dashed ${t.border}`, borderRadius: '12px', padding: '12px 14px' }}>
+              <label className="zinc-label">0. ¿Para quién es el pase?</label>
+              {colaboradorDestino ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: t.text }}>
+                      {formatearApellidosNombre(colaboradorDestino.nombre_completo, colaboradorDestino)}
+                      <span style={{ color: t.textMuted, fontWeight: '600', fontSize: '13px' }}> · #{colaboradorDestino.numero_empleado || 'S/N'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setColaboradorDestino(null); setTipoPermiso(''); setNaturaleza(''); }}
+                      style={{ height: '34px', padding: '0 12px', borderRadius: '8px', border: `1px solid ${t.border}`, background: t.inputBg, color: t.text, fontSize: '12.5px', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      Cambiar (volver a mí)
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: '#16a34a', fontWeight: '700' }}>
+                    El pase quedará AUTORIZADO por RH de inmediato (sin firmas de Jefe ni Gerencia).
+                  </div>
+                  {tipoPermiso !== 'vacaciones' && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: '800', color: t.textMuted, textTransform: 'uppercase' }}>Pago:</span>
+                      {['Con goce', 'Sin goce'].map(op => (
+                        <button
+                          key={op}
+                          type="button"
+                          onClick={() => setDictamenPagoRH(op)}
+                          style={{
+                            height: '34px', padding: '0 14px', borderRadius: '8px',
+                            border: `1.5px solid ${dictamenPagoRH === op ? '#16a34a' : t.border}`,
+                            background: dictamenPagoRH === op ? 'rgba(22,163,74,0.12)' : t.inputBg,
+                            color: dictamenPagoRH === op ? '#16a34a' : t.text,
+                            fontSize: '13px', fontWeight: '800', cursor: 'pointer'
+                          }}
+                        >
+                          {op}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '13px', color: t.textMuted, fontWeight: '600' }}>
+                    Para ti mismo. Si es para otro colaborador, búscalo por nombre o número de empleado:
+                  </div>
+                  <input
+                    type="text"
+                    className="zinc-input"
+                    placeholder="Buscar colaborador..."
+                    value={busquedaColabRH}
+                    onChange={e => setBusquedaColabRH(e.target.value)}
+                  />
+                  {resultadosColabRH.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {resultadosColabRH.map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => elegirColaboradorRH(u)}
+                          style={{
+                            textAlign: 'left', padding: '10px 12px', borderRadius: '9px',
+                            border: `1px solid ${t.border}`, background: t.inputBg, color: t.text,
+                            fontSize: '14px', fontWeight: '700', cursor: 'pointer'
+                          }}
+                        >
+                          {formatearApellidosNombre(u.nombre_completo, u)}
+                          <span style={{ color: t.textMuted, fontWeight: '600', fontSize: '12.5px' }}> · #{u.numero_empleado || 'S/N'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {terminoColabRH.length >= 2 && resultadosColabRH.length === 0 && (
+                    <div style={{ fontSize: '13px', color: t.textMuted }}>No se encontró a nadie con "{busquedaColabRH}".</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* PASO 1: FECHA (SIEMPRE DISPONIBLE PARA CAMBIAR DE DÍA SI HOY ESTÁ CERRADO) */}
           <div className="grid-responsivo-fechas">
             <div style={{ minWidth: 0 }}>
