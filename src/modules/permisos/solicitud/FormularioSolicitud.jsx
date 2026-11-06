@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Clock, Calendar, AlertTriangle, ShieldAlert, Info, User, Stethoscope, Briefcase, Lock } from 'lucide-react';
-import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso } from '../services/permisosService';
+import { contarReincidenciasRetardo, crearNuevaSolicitudPermiso, tieneSelloFisicoCaseta } from '../services/permisosService';
 import { obtenerHoraLimiteTolerancia, obtenerHoraSalidaOficial, obtenerHoraInicioTurno } from '../../vigilancia/services/vigilanciaService';
 import { obtenerTemaGlobal } from '../../../core/theme/temaGlobal';
 import { supabase } from '../../../core/api/supabaseClient';
@@ -80,6 +80,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
   const [bloqueoFechaActiva, setBloqueoFechaActiva] = useState(null);
   const [jornadaTotalmenteCerrada, setJornadaTotalmenteCerrada] = useState(false);
   const [tiposBloqueadosMapa, setTiposBloqueadosMapa] = useState({});
+  const [pasesAReemplazar, setPasesAReemplazar] = useState([]);
 
   const tema = obtenerTemaGlobal(modoOscuro);
   const t = {
@@ -142,7 +143,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         const retardoHoy = activosDiaExacto.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
         const salidasHoy = activosDiaExacto.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
         const salidaAbierta = salidasHoy.find(s => !/\[(?:REINGRESO|ENTRADA) CASETA:/i.test(String(s.observaciones || '')) && s.estado_general !== 'completado_caseta');
-        const tieneSelloRetardo = retardoHoy && /\[(?:LLEGADA EN PUERTA|ENTRADA CASETA|REINGRESO CASETA):/i.test(retardoHoy.observaciones || '');
+        const tieneSelloRetardo = retardoHoy && tieneSelloFisicoCaseta(retardoHoy);
 
         const mapaBloqueos = {};
 
@@ -193,15 +194,27 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
         } else if (tieneSelloRetardo) {
           mapaBloqueos.falta = `Ya tienes llegada registrada en Caseta (${retardoHoy.folio}) el ${fechaPermiso}.`;
           mapaBloqueos.vacaciones = `Ya tienes llegada registrada en Caseta (${retardoHoy.folio}) el ${fechaPermiso}.`;
-        } else if (salidasHoy.length > 0) {
-          mapaBloqueos.falta = `Ya cuentas con un pase de Salida Anticipada (${salidasHoy[0].folio}) para el ${fechaPermiso}. No puedes registrar Falta el mismo día.`;
-          mapaBloqueos.vacaciones = `Ya cuentas con un pase de Salida Anticipada (${salidasHoy[0].folio}) para el ${fechaPermiso}. No puedes registrar Vacaciones el mismo día.`;
+        } else if (salidasHoy.some(s => tieneSelloFisicoCaseta(s))) {
+          const salidaSellada = salidasHoy.find(s => tieneSelloFisicoCaseta(s));
+          mapaBloqueos.falta = `Ya saliste por Caseta con el pase ${salidaSellada.folio} el ${fechaPermiso}. No puedes registrar Falta ese día.`;
+          mapaBloqueos.vacaciones = `Ya saliste por Caseta con el pase ${salidaSellada.folio} el ${fechaPermiso}. No puedes registrar Vacaciones ese día.`;
         }
 
-        if (!mapaBloqueos.vacaciones && tipoPermiso === 'vacaciones' && fechaFinVacaciones && activosRango.length > 0) {
-          const conflictoRango = activosRango[0];
-          mapaBloqueos.vacaciones = `El rango seleccionado se traslapa con otro permiso (${conflictoRango.folio} del ${conflictoRango.fecha_permiso}).`;
+        // Vacaciones: solo bloquean otra falta/vacaciones o un movimiento ya sellado en Caseta dentro del rango
+        if (!mapaBloqueos.vacaciones && tipoPermiso === 'vacaciones' && fechaFinVacaciones) {
+          const conflictoRango = activosRango.find(p =>
+            ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase()) || tieneSelloFisicoCaseta(p)
+          );
+          if (conflictoRango) {
+            mapaBloqueos.vacaciones = `El rango seleccionado se traslapa con otro permiso (${conflictoRango.folio} del ${conflictoRango.fecha_permiso}).`;
+          }
         }
+
+        // Falta / Vacaciones reemplazan los retardos y salidas sin sello (se avisa antes de enviar)
+        const baseReemplazo = tipoPermiso === 'vacaciones' ? activosRango : activosDiaExacto;
+        setPasesAReemplazar(['falta', 'vacaciones'].includes(tipoPermiso)
+          ? baseReemplazo.filter(p => ['retardo', 'salida'].includes((p.tipo_permiso || '').toLowerCase()) && !tieneSelloFisicoCaseta(p))
+          : []);
         const todosBloqueados = ['salida', 'retardo', 'falta', 'vacaciones'].every(k => Boolean(mapaBloqueos[k]));
         setJornadaTotalmenteCerrada(todosBloqueados);
         setTiposBloqueadosMapa(mapaBloqueos);
@@ -387,7 +400,10 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
     const textoConfirmacion = colaboradorDestino
       ? `¿Generar y AUTORIZAR este pase de ${tipoPermiso.toUpperCase()} a nombre de ${colaboradorDestino.nombre_completo}?\n\nPago: ${tipoPermiso === 'vacaciones' ? 'Con goce' : dictamenPagoRH}\nEl pase queda autorizado por RH de inmediato.`
       : `¿Estás seguro de enviar esta ${etiquetaAviso}?\n\nRevisa que la fecha y los horarios sean los correctos antes de continuar.`;
-    if (!window.confirm(textoConfirmacion)) return;
+    const avisoReemplazo = (['falta', 'vacaciones'].includes(tipoPermiso) && pasesAReemplazar.length > 0)
+      ? `\n\n⚠️ Se cancelarán estos pases porque quedan cubiertos por la ${tipoPermiso === 'falta' ? 'falta' : 'solicitud de vacaciones'}:\n${pasesAReemplazar.map(p => `• ${(p.tipo_permiso || '').toUpperCase()} ${p.folio} (${p.fecha_permiso})`).join('\n')}`
+      : '';
+    if (!window.confirm(textoConfirmacion + avisoReemplazo)) return;
 
     setGuardando(true);
     try {

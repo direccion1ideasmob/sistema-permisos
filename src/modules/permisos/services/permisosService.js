@@ -1050,6 +1050,7 @@ export const crearNuevaSolicitudPermiso = async ({
     throw new Error('Solo Recursos Humanos puede generar pases a nombre de otro colaborador.');
   }
 
+  let pasesAReemplazarCrear = [];
   const fechaInicioNueva = fechaPermiso;
   const fechaFinNueva = tipoPermiso === 'vacaciones' ? (fechaFinVacaciones || fechaPermiso) : fechaPermiso;
 
@@ -1090,7 +1091,25 @@ export const crearNuevaSolicitudPermiso = async ({
     ['falta', 'vacaciones'].includes((p.tipo_permiso || '').toLowerCase())
   );
   const retardoPrevio = activosMismaFecha.find(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
+  const retardosPrevios = activosMismaFecha.filter(p => (p.tipo_permiso || '').toLowerCase() === 'retardo');
   const salidasPrevias = activosMismaFecha.filter(p => (p.tipo_permiso || '').toLowerCase() === 'salida');
+
+  // Horarios de los pases ya existentes (para que no se crucen)
+  const minDeHHMMCrear = (h, m) => parseInt(h, 10) * 60 + parseInt(m, 10);
+  const leerMinObsCrear = (obs, regex) => {
+    const mObs = String(obs || '').match(regex);
+    return mObs ? minDeHHMMCrear(mObs[1], mObs[2]) : null;
+  };
+  const aHHMMCrear = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const horaSalidaOficialCrear = await obtenerHoraSalidaOficial();
+  const [hSOCrear, mSOCrear] = String(horaSalidaOficialCrear || '17:00').split(':');
+  const minSalidaOficialCrear = minDeHHMMCrear(hSOCrear || 17, mSOCrear || 0);
+  const rangoSalidaExistente = (s) => {
+    const obsS = s.observaciones || '';
+    const inicioS = leerMinObsCrear(obsS, /\[SALIDA CASETA:\s*(\d{1,2}):(\d{2})/i) ?? leerMinObsCrear(obsS, /Salida(?:\s+definitiva)?:\s*(\d{1,2}):(\d{2})/i);
+    const finS = leerMinObsCrear(obsS, /\[(?:REINGRESO|ENTRADA) CASETA:\s*(\d{1,2}):(\d{2})/i) ?? leerMinObsCrear(obsS, /Regresa:\s*(\d{1,2}):(\d{2})/i) ?? minSalidaOficialCrear;
+    return inicioS === null ? null : { inicio: inicioS, fin: finS };
+  };
 
   if (paseRegresadoACasa) {
     throw new Error(`No es posible generar otro permiso para esta fecha porque ya existe un dictamen de retiro de planta (Falta por retardo • Folio ${paseRegresadoACasa.folio}).`);
@@ -1108,6 +1127,14 @@ export const crearNuevaSolicitudPermiso = async ({
     if (asistenciaDia?.hora_entrada) {
       throw new Error(`No es posible solicitar un Retardo para esta fecha porque ya cuentas con registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
     }
+    const [hLlegCrear, mLlegCrear] = String(horaLlegadaRetardo || '').split(':');
+    const minLlegadaNueva = minDeHHMMCrear(hLlegCrear, mLlegCrear);
+    for (const sPrev of salidasPrevias) {
+      const rangoPrev = rangoSalidaExistente(sPrev);
+      if (rangoPrev && !isNaN(minLlegadaNueva) && minLlegadaNueva >= rangoPrev.inicio) {
+        throw new Error(`Tu hora de llegada (${horaLlegadaRetardo} hrs) debe ser antes de tu pase de Salida (${sPrev.folio}, sale a las ${aHHMMCrear(rangoPrev.inicio)} hrs).`);
+      }
+    }
   }
 
   if (tipoPermiso === 'salida') {
@@ -1121,44 +1148,38 @@ export const crearNuevaSolicitudPermiso = async ({
     if (salidaAbierta) {
       throw new Error(`Ya cuentas con un pase de Salida activo (${salidaAbierta.folio}) para esta fecha. No es posible duplicar pases de salida.`);
     }
+    const [hSalNueva, mSalNueva] = String(horaSalida || '').split(':');
+    const inicioSalidaNueva = minDeHHMMCrear(hSalNueva, mSalNueva);
+    let finSalidaNueva = minSalidaOficialCrear;
+    if (regresaMismoDia) {
+      const [hRegNueva, mRegNueva] = String(horaRegreso || '').split(':');
+      finSalidaNueva = minDeHHMMCrear(hRegNueva, mRegNueva);
+    }
+    if (retardoPrevio && !isNaN(inicioSalidaNueva)) {
+      const obsRet = retardoPrevio.observaciones || '';
+      const llegadaRet = leerMinObsCrear(obsRet, /\[ENTRADA CASETA:\s*(\d{1,2}):(\d{2})/i) ?? leerMinObsCrear(obsRet, /Llegada (?:estimada|en puerta):\s*(\d{1,2}):(\d{2})/i);
+      if (llegadaRet !== null && inicioSalidaNueva <= llegadaRet) {
+        throw new Error(`Tu hora de salida (${horaSalida} hrs) debe ser después de tu llegada por retardo (${retardoPrevio.folio}, ${aHHMMCrear(llegadaRet)} hrs).`);
+      }
+    }
+    for (const sPrev of salidasPrevias) {
+      const rangoPrev = rangoSalidaExistente(sPrev);
+      if (rangoPrev && !isNaN(inicioSalidaNueva) && inicioSalidaNueva < rangoPrev.fin && rangoPrev.inicio < finSalidaNueva) {
+        throw new Error(`El horario de esta salida se cruza con tu otro pase de Salida (${sPrev.folio}: ${aHHMMCrear(rangoPrev.inicio)} a ${aHHMMCrear(rangoPrev.fin)} hrs).`);
+      }
+    }
   }
 
   if (tipoPermiso === 'falta' || tipoPermiso === 'vacaciones') {
     if (asistenciaDia?.hora_entrada) {
       throw new Error(`No es posible registrar ${tipoPermiso} para esta fecha porque ya tienes registro de entrada en planta (${asistenciaDia.hora_entrada} hrs).`);
     }
-    if (salidasPrevias.length > 0) {
-      throw new Error(`No es posible registrar ${tipoPermiso} porque ya cuentas con un pase de Salida Anticipada (${salidasPrevias[0].folio} el ${salidasPrevias[0].fecha_permiso}) en las fechas seleccionadas.`);
+    const paseConSello = [...retardosPrevios, ...salidasPrevias].find(p => tieneSelloFisicoCaseta(p));
+    if (paseConSello) {
+      throw new Error(`No es posible registrar ${tipoPermiso} porque ya tienes un movimiento registrado en Caseta (${paseConSello.folio} del ${paseConSello.fecha_permiso}).`);
     }
-    if (retardoPrevio && tieneSelloFisicoCaseta(retardoPrevio)) {
-      throw new Error(`No es posible registrar ${tipoPermiso} porque ya tienes un registro de llegada en Caseta (${retardoPrevio.folio}).`);
-    }
-    if (tipoPermiso === 'vacaciones' && retardoPrevio) {
-      throw new Error(`El periodo de vacaciones se traslapa con un pase de Retardo previo (${retardoPrevio.folio} del ${retardoPrevio.fecha_permiso}). Cancela primero ese pase si tomarás vacaciones.`);
-    }
-    const pasesSinSello = (tipoPermiso === 'falta' && retardoPrevio && !tieneSelloFisicoCaseta(retardoPrevio)) ? [retardoPrevio] : [];
-    for (const pPrev of pasesSinSello) {
-      const obsSustituida = `${pPrev.observaciones || ''} | CANCELADO por Sistema: Sustituido por reporte de ${tipoPermiso.toUpperCase()} del mismo día`;
-      const { error: errSust } = await supabase
-        .from('permisos')
-        .update({
-          estado_general: 'rechazado',
-          pago: 'Cancelado',
-          observaciones: obsSustituida
-        })
-        .eq('id', pPrev.id);
-
-      if (errSust) {
-        await supabase
-          .from('permisos')
-          .update({
-            estado_general: 'rechazado',
-            pago: 'Sin goce',
-            observaciones: obsSustituida
-          })
-          .eq('id', pPrev.id);
-      }
-    }
+    // Se reemplazan (cancelan) DESPUÉS de guardar el nuevo pase, para no perderlos si algo falla
+    pasesAReemplazarCrear = [...retardosPrevios, ...salidasPrevias];
   }
 
   const esMismoDiaSolicitud = fechaPermiso === fechaHoy;
@@ -1256,6 +1277,30 @@ export const crearNuevaSolicitudPermiso = async ({
     }]);
 
   if (errInsert) throw errInsert;
+
+  // Falta / Vacaciones reemplazan los retardos y salidas sin sello de esas fechas (regla sagrada 1: 'Cancelado' → 'Sin goce')
+  for (const pPrev of pasesAReemplazarCrear) {
+    const obsSustituida = `${pPrev.observaciones || ''} | CANCELADO por Sistema: Sustituido por ${tipoPermiso.toUpperCase()} (${folioTemporal})`;
+    const { error: errSust } = await supabase
+      .from('permisos')
+      .update({
+        estado_general: 'rechazado',
+        pago: 'Cancelado',
+        observaciones: obsSustituida
+      })
+      .eq('id', pPrev.id);
+
+    if (errSust) {
+      await supabase
+        .from('permisos')
+        .update({
+          estado_general: 'rechazado',
+          pago: 'Sin goce',
+          observaciones: obsSustituida
+        })
+        .eq('id', pPrev.id);
+    }
+  }
 
   if (esPaseGeneradoPorRH) {
     const mapaTitulosGenRH = { salida: 'Salida', retardo: 'Retardo', falta: 'Falta', vacaciones: 'Vacaciones' };

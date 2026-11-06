@@ -151,7 +151,7 @@ esa regla se actualiza en el mismo cambio.
 ### Prioridad 3 — consistencia
 - [x] Reingreso después de una salida definitiva: se vuelve a retener en bucle y no limpia `hora_salida` (`permisosService.js:721-724`, `vigilanciaService.js:564-578, 662`).
 - [x] Una salida retenida por horario deja una hora congelada que contamina el reingreso, y la reautorización desactiva la revisión de +15 min (`vigilanciaService.js:479, 547, 597`).
-- [ ] Validar que no se crucen los horarios entre salidas, ni entre retardo y salida. Que vacaciones reemplace igual que falta.
+- [x] Validar que no se crucen los horarios entre salidas, ni entre retardo y salida. Que vacaciones reemplace igual que falta.
 - [x] Una salida pendiente de firma debe aparecer en Caseta como "espera firma".
 - [ ] Folios oficiales duplicados por calcular el consecutivo ordenando por `created_at` (`permisosService.js:400-418`, `vigilanciaService.js:811-818`).
 - [ ] Retardo rechazado: el aviso al empleado debe decir "preséntate en Caseta" (política, principio 6).
