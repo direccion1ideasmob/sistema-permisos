@@ -289,7 +289,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
           };
         }
       } else if (tipo === 'salida' && !esRechazado) {
-        const retenidoPorHora = rawPase.estado_general === 'en_firmas' && /\[HORARIO NO COINCIDE EN CASETA/i.test(obs);
+        const retenidoPorHora = rawPase.estado_general === 'en_firmas' && /\[HORARIO NO COINCIDE EN CASETA|\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(obs);
+        const salidaPendienteFirma = rawPase.estado_general === 'en_firmas' && !retenidoPorHora;
         const reautorizadoHora = rawPase.estado_general === 'autorizado' && /\[HORARIO AUTORIZADO EN CASETA\]/i.test(obs);
         const reingresoDefAutorizado = rawPase.estado_general === 'autorizado' && /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obs) && yaSalio && !yaRegreso;
         const estaFuera = yaSalio && (requiereRegreso || reingresoDefAutorizado) && !yaRegreso;
@@ -298,9 +299,20 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
             tipo: 'retardo_en_espera',
             paseId: rawPase.id,
             esperandoFirmaDe,
-            etiqueta: `⚠️ HORARIO DE PASE NO COINCIDE • Esperando a: ${esperandoFirmaDe}`,
+            etiqueta: /COMPORTAMIENTO INUSUAL EN CASETA/i.test(obs)
+              ? `🚨 PIDE REINGRESO TRAS SALIDA DEFINITIVA • Esperando a: ${esperandoFirmaDe}`
+              : `⚠️ HORARIO DE PASE NO COINCIDE • Esperando a: ${esperandoFirmaDe}`,
             color: '#dc2626',
             bg: 'rgba(220,38,38,0.14)'
+          };
+        } else if (salidaPendienteFirma) {
+          mapaIncidenciasHoy[rawPase.usuario_id] = {
+            tipo: 'salida_pendiente_firma',
+            paseId: rawPase.id,
+            esperandoFirmaDe,
+            etiqueta: `⏳ Pase de salida pendiente de firma • Firma: ${esperandoFirmaDe}`,
+            color: '#d97706',
+            bg: 'rgba(245,158,11,0.10)'
           };
         } else if (reautorizadoHora || reingresoDefAutorizado) {
           mapaIncidenciasHoy[rawPase.usuario_id] = {
@@ -374,6 +386,14 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
       }
     };
 
+    if (tipo === 'salida' && rawPase.estado_general === 'en_firmas') {
+      // Retenido en puerta: horario no coincide o pide reingreso tras salida definitiva
+      if (/\[HORARIO NO COINCIDE EN CASETA|\[COMPORTAMIENTO INUSUAL EN CASETA/i.test(obs)) {
+        retenidosEnEspera.push(p);
+      }
+      return;
+    }
+
     if (
       rawPase.estado_general === 'completado_caseta' ||
       ((tipo === 'retardo' || esFaltaRetenidaPuerta) && !seRegresaACasa && yaRegreso) ||
@@ -391,13 +411,6 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     if ((tipo === 'retardo' || esFaltaRetenidaPuerta) && !jefeYaDecidioRetardo) {
       // Solo está "retenido" quien ya se presentó físicamente en puerta
       if (horaLlegadaPuerta) retenidosEnEspera.push(p);
-      return;
-    }
-
-    if (tipo === 'salida' && rawPase.estado_general === 'en_firmas') {
-      if (/\[HORARIO NO COINCIDE EN CASETA/i.test(obs)) {
-        retenidosEnEspera.push(p);
-      }
       return;
     }
 
@@ -571,7 +584,9 @@ export const solicitarReautorizacionHorarioSalida = async (permisoId, tipoMovimi
 
   const obsActual = (permiso.observaciones || '').replace(/\s*\|\s*\[HORARIO AUTORIZADO EN CASETA\]/gi, '');
   const notaDesfase = `⚠️ [HORARIO NO COINCIDE EN CASETA (${horaFormateada} hrs - ${tipoMovimiento.toUpperCase()}): ${detalleDesfase}]`;
-  const nuevasObs = `${obsActual} | ${notaDesfase} | [LLEGADA EN PUERTA: ${horaFormateada} hrs]`.trim();
+  // Solo el regreso es una llegada física; al intentar salir no se congela hora de llegada
+  const selloLlegadaDesfase = String(tipoMovimiento).toLowerCase().includes('reingreso') ? ` | [LLEGADA EN PUERTA: ${horaFormateada} hrs]` : '';
+  const nuevasObs = `${obsActual} | ${notaDesfase}${selloLlegadaDesfase}`.trim();
 
   const f1Id = permiso.firma_1_id || null;
   const f2Id = permiso.firma_2_id || null;
@@ -639,9 +654,13 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   const requiereRegreso = obsActual.toLowerCase().includes('regresa:');
 
   const yaReautorizadoHorario = /\[HORARIO AUTORIZADO EN CASETA\]/i.test(obsActual);
-  if (tipo === 'salida' && !mov.includes('forzado') && !yaReautorizadoHorario) {
+  const reautorizoHoraSalida = yaReautorizadoHorario && /\[HORARIO NO COINCIDE EN CASETA \([^)]*- SALIDA\)/i.test(obsActual);
+  const reautorizoHoraReingreso =
+    (yaReautorizadoHorario && /\[HORARIO NO COINCIDE EN CASETA \([^)]*- REINGRESO\)/i.test(obsActual)) ||
+    /\[COMPORTAMIENTO INUSUAL AUTORIZADO\]/i.test(obsActual);
+  if (tipo === 'salida' && !mov.includes('forzado')) {
     const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
-    if (mov.includes('salida') || (!obsActual.includes('[SALIDA CASETA:') && !mov.includes('reingreso') && !mov.includes('retiro'))) {
+    if (!reautorizoHoraSalida && (mov.includes('salida') || (!obsActual.includes('[SALIDA CASETA:') && !mov.includes('reingreso') && !mov.includes('retiro')))) {
       const mSalida = obsActual.match(/Salida(?:\s+definitiva)?:\s*(\d{1,2}):(\d{2})/i);
       if (mSalida) {
         const minSalidaPactada = parseInt(mSalida[1], 10) * 60 + parseInt(mSalida[2], 10);
@@ -656,7 +675,7 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
         }
       }
     }
-    if (mov.includes('reingreso')) {
+    if (mov.includes('reingreso') && !reautorizoHoraReingreso) {
       const mRegresa = obsActual.match(/Regresa:\s*(\d{1,2}):(\d{2})/i);
       if (mRegresa) {
         const minRegresoPactado = parseInt(mRegresa[1], 10) * 60 + parseInt(mRegresa[2], 10);
@@ -831,6 +850,14 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
   } else if (tipo === 'salida' && mov.includes('salida') && !requiereRegreso) {
     try {
       await registrarAsistenciaListaConHora(permiso.usuario_id, 'salida', horaFormateada);
+    } catch (_) {}
+  } else if (tipo === 'salida' && mov.includes('reingreso')) {
+    try {
+      await supabase
+        .from('asistencias_caseta')
+        .update({ hora_salida: null })
+        .eq('usuario_id', permiso.usuario_id)
+        .eq('fecha', obtenerFechaLocalHoy());
     } catch (_) {}
   }
 };

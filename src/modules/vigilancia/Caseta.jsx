@@ -255,6 +255,16 @@ export default function Caseta() {
 
     // 6. Ya está en planta -> Salida de turno (solo desde la hora oficial de salida que fija RH)
     if (!salio) {
+      if (inc?.tipo === 'salida_pendiente_firma') {
+        return {
+          color: '#d97706',
+          fondo: modoOscuro ? 'rgba(245,158,11,0.12)' : '#fffbeb',
+          estado: `⏳ Su pase de salida aún no está firmado • Firma: ${inc.esperandoFirmaDe || 'Jefatura / RH'}`,
+          boton: 'Espera firma',
+          tipoAccion: 'SALIDA_TURNO',
+          deshabilitado: true
+        };
+      }
       if (ahoraM < aMinutos(horaSalidaOficialStr || '17:00')) {
         return {
           color: '#0284c7',
