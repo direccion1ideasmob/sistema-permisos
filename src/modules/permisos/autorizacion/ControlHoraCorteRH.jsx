@@ -170,7 +170,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
           top: 40px;
           right: 0;
           z-index: 9999;
-          width: 300px;
+          width: 320px;
           box-sizing: border-box;
         }
         @media (max-width: 640px) {
@@ -241,7 +241,7 @@ export default function ControlHoraCorteRH({ usuario, c }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
               <label style={estiloLabel}>Inicio turno</label>
               <input
@@ -249,6 +249,16 @@ export default function ControlHoraCorteRH({ usuario, c }) {
                 value={inputInicio}
                 disabled={!desbloqueado}
                 onChange={(e) => setInputInicio(e.target.value)}
+                style={estiloInput}
+              />
+            </div>
+            <div>
+              <label style={estiloLabel}>Salida oficial</label>
+              <input
+                type="time"
+                value={inputHoraSalida}
+                disabled={!desbloqueado}
+                onChange={(e) => setInputHoraSalida(e.target.value)}
                 style={estiloInput}
               />
             </div>
@@ -265,26 +275,12 @@ export default function ControlHoraCorteRH({ usuario, c }) {
               />
             </div>
             <div>
-              <label style={estiloLabel}>Salida oficial</label>
-              <input
-                type="time"
-                value={inputHoraSalida}
-                disabled={!desbloqueado}
-                onChange={(e) => setInputHoraSalida(e.target.value)}
-                style={estiloInput}
-              />
+              <label style={estiloLabel}>Entrada límite</label>
+              <div style={{ ...estiloInput, display: 'flex', alignItems: 'center', cursor: 'default', opacity: 1, background: 'transparent', border: `1px dashed ${c?.border || '#cbd5e1'}` }}>
+                {entradaCalculada}
+              </div>
             </div>
           </div>
-
-          <div style={{ fontSize: '11.5px', fontWeight: '700', color: c?.textMuted || '#64748b' }}>
-            Entrada límite (después es retardo): <span style={{ color: c?.text || '#111', fontFamily: 'ui-monospace, monospace' }}>{entradaCalculada}</span>
-          </div>
-
-          {toleranciaActual > 180 && (
-            <div style={{ fontSize: '11px', fontWeight: '700', color: '#b45309', background: 'rgba(245,158,11,0.12)', borderRadius: '8px', padding: '6px 8px' }}>
-              ⚠️ La entrada límite guardada ({horaCorte}) está muy lejos del inicio de turno. Abre el candado y pulsa «Restaurar» o pon la tolerancia correcta.
-            </div>
-          )}
 
           {desbloqueado && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
