@@ -1050,9 +1050,16 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
       return await solicitarAutorizacionInusualCaseta(faltaHoy.id, 'presentacion_en_falta');
     }
 
-    if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS || forzarDirectoRH) {
+    if (minutosDelDia <= LIMITE_TOLERANCIA_MINUTOS) {
       if (retardoHoy && retardoHoy.estado_general !== 'completado_caseta') {
         await cancelarPasePorInasistenciaOCambio(retardoHoy.id, `Asistió en horario normal (${horaActual} hrs)`);
+      }
+    } else if (forzarDirectoRH) {
+      // RH marca la entrada de alguien que llegó tarde: NO se cancela su retardo.
+      // Si el retardo está autorizado se sella con la hora real; si sigue en firmas se queda para que lo resuelvan.
+      if (retardoHoy && ['autorizado', 'aprobado'].includes(retardoHoy.estado_general)) {
+        await registrarCheckCaseta(retardoHoy.id, 'entrada');
+        return { resultado: 'entrada_registrada', data: retardoHoy };
       }
     } else {
       if (retardoHoy && (retardoHoy.estado_general === 'autorizado' || retardoHoy.estado_general === 'aprobado')) {
@@ -1191,4 +1198,68 @@ export const deshacerEntradaReciente = async (usuarioId) => {
   }
 
   return { ok: true };
+};
+// CORRECCIÓN MANUAL DE ASISTENCIA POR RH (cualquier día, con horas explícitas)
+// RH tiene la última palabra: puede fijar o quitar la hora de entrada/salida de un día pasado o de hoy.
+// No modifica permisos; los pendientes de esos días se resuelven en la bandeja de cierre.
+export const corregirAsistenciaRH = async ({ usuarioId, fecha, horaEntrada, horaSalida, usuarioRH }) => {
+  const rolCorrRH = String(usuarioRH?.rol || '').toLowerCase();
+  if (!['gerente_rh', 'rh_nominas', 'superadmin'].includes(rolCorrRH)) {
+    throw new Error('Solo Recursos Humanos puede corregir el pase de lista.');
+  }
+  if (!usuarioId || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) {
+    throw new Error('Colaborador o fecha inválidos.');
+  }
+  if (fecha > obtenerFechaLocalHoy()) {
+    throw new Error('No se puede registrar asistencia en una fecha futura.');
+  }
+
+  const normalizarHoraCorr = (valor, etiqueta) => {
+    const limpio = String(valor || '').trim();
+    if (!limpio) return null;
+    const m = limpio.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) {
+      throw new Error(`La hora de ${etiqueta} debe tener formato HH:MM (ej. 07:10).`);
+    }
+    return `${m[1].padStart(2, '0')}:${m[2]}`;
+  };
+  const entradaCorr = normalizarHoraCorr(horaEntrada, 'entrada');
+  const salidaCorr = normalizarHoraCorr(horaSalida, 'salida');
+  if (!entradaCorr && salidaCorr) {
+    throw new Error('No se puede registrar una salida sin hora de entrada.');
+  }
+  if (entradaCorr && salidaCorr && salidaCorr <= entradaCorr) {
+    throw new Error('La hora de salida debe ser posterior a la hora de entrada.');
+  }
+
+  const { data: existenteCorr, error: errBuscarCorr } = await supabase
+    .from('asistencias_caseta')
+    .select('id')
+    .eq('usuario_id', usuarioId)
+    .eq('fecha', fecha)
+    .maybeSingle();
+  if (errBuscarCorr) throw errBuscarCorr;
+
+  if (!entradaCorr && !salidaCorr) {
+    if (existenteCorr) {
+      const { error } = await supabase.from('asistencias_caseta').delete().eq('id', existenteCorr.id);
+      if (error) throw error;
+    }
+    return { resultado: 'sin_registro' };
+  }
+
+  const datosCorr = {
+    hora_entrada: entradaCorr,
+    hora_salida: salidaCorr,
+    registrado_por: usuarioRH?.id || null
+  };
+
+  if (existenteCorr) {
+    const { error } = await supabase.from('asistencias_caseta').update(datosCorr).eq('id', existenteCorr.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('asistencias_caseta').insert([{ usuario_id: usuarioId, fecha, ...datosCorr }]);
+    if (error) throw error;
+  }
+  return { resultado: 'corregido' };
 };

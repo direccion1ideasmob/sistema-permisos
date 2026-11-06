@@ -6,7 +6,8 @@ import {
   deshacerEntradaReciente,
   obtenerFechaLocalHoy,
   obtenerHoraLimiteTolerancia,
-  obtenerHoraSalidaOficial
+  obtenerHoraSalidaOficial,
+  corregirAsistenciaRH
 } from '../../vigilancia/services/vigilanciaService';
 import ControlHoraCorteRH from '../autorizacion/ControlHoraCorteRH';
 import {
@@ -86,6 +87,32 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
       await cargarAsistenciaDia();
     } catch (err) {
       alert('Error al registrar desde RH: ' + err.message);
+    } finally {
+      setProcesandoId(null);
+    }
+  };
+
+  const esRHAsistencia = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(String(usuario?.rol || '').toLowerCase());
+
+  // RH corrige el pase de lista de cualquier día (hoy o pasados) con horas explícitas
+  const handleCorregirRH = async (emp) => {
+    const regActual = mapaAsistencias[emp.id];
+    const entradaResp = window.prompt(
+      `Corregir asistencia de ${emp.nombre_completo} (${fecha})\n\nHora de ENTRADA (HH:MM). Déjalo vacío si no asistió:`,
+      regActual?.hora_entrada || ''
+    );
+    if (entradaResp === null) return;
+    let salidaResp = '';
+    if (entradaResp.trim()) {
+      salidaResp = window.prompt('Hora de SALIDA (HH:MM). Déjalo vacío si aún no sale o no se registró:', regActual?.hora_salida || '');
+      if (salidaResp === null) return;
+    }
+    setProcesandoId(`${emp.id}-corregir`);
+    try {
+      await corregirAsistenciaRH({ usuarioId: emp.id, fecha, horaEntrada: entradaResp, horaSalida: salidaResp, usuarioRH: usuario });
+      await cargarAsistenciaDia();
+    } catch (err) {
+      alert('No se pudo corregir: ' + err.message);
     } finally {
       setProcesandoId(null);
     }
@@ -726,8 +753,23 @@ export default function VistaAsistenciaDiariaRH({ usuario, departamentos = [], c
                   )}
                 </div>
 
-                {/* COLUMNA 4: ACCIONES RÁPIDAS RH (Solo para el día de hoy) */}
+                {/* COLUMNA 4: ACCIONES RÁPIDAS RH (marcar: solo hoy · corregir: cualquier día) */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px' }}>
+                  {esRHAsistencia && (
+                    <button
+                      type="button"
+                      onClick={() => handleCorregirRH(emp)}
+                      disabled={procesandoId === `${emp.id}-corregir`}
+                      title="Corregir horas de entrada/salida de este día"
+                      style={{
+                        height: '28px', padding: '0 9px', borderRadius: '6px',
+                        border: `1px solid ${c.border}`, background: 'transparent', color: c.textMuted,
+                        fontSize: '11px', fontWeight: '700', cursor: 'pointer'
+                      }}
+                    >
+                      {procesandoId === `${emp.id}-corregir` ? '...' : 'Corregir'}
+                    </button>
+                  )}
                   {fecha === hoyStr && (
                     tieneEntrada ? (
                       !tieneSalida && (
