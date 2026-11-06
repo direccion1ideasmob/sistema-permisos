@@ -32,6 +32,64 @@ const extraerHorarioProgramado = (obs = '') => {
     .trim() || 'Horario del día';
 };
 
+// ============================================================================
+// FALTA SIN AVISO (según el pase de lista)
+// Regla: si el último día laborado de la planta la persona no tuvo entrada ni ningún
+// permiso que lo justifique, hoy se le retiene en la puerta aunque llegue puntual.
+// "Último día laborado" = el día más reciente (antes de hoy) con al menos una entrada registrada,
+// así los fines de semana y días festivos no cuentan.
+// ============================================================================
+export const obtenerUltimoDiaLaboradoPlanta = async (fechaRef) => {
+  const refUlt = new Date(`${fechaRef}T12:00:00`);
+  refUlt.setDate(refUlt.getDate() - 10);
+  const fechaMinUlt = `${refUlt.getFullYear()}-${String(refUlt.getMonth() + 1).padStart(2, '0')}-${String(refUlt.getDate()).padStart(2, '0')}`;
+  const { data: diasUlt } = await supabase
+    .from('asistencias_caseta')
+    .select('fecha')
+    .lt('fecha', fechaRef)
+    .gte('fecha', fechaMinUlt)
+    .not('hora_entrada', 'is', null)
+    .order('fecha', { ascending: false })
+    .limit(1);
+  return diasUlt?.[0]?.fecha || null;
+};
+
+const permisoJustificaDia = (p, fechaDia) => {
+  const finJust = p.fecha_fin || p.fecha_permiso;
+  if (!(p.fecha_permiso <= fechaDia && finJust >= fechaDia)) return false;
+  const pagoJust = String(p.pago || '').toLowerCase();
+  const obsJust = String(p.observaciones || '');
+  if (pagoJust === 'cancelado' || /CANCELADO por/i.test(obsJust) || /\[PASE CANCELADO/i.test(obsJust)) return false;
+  if (p.estado_general === 'rechazado' && !pagoJust.includes('regresa')) return false;
+  return true;
+};
+
+// empleados: [{ id, fecha_ingreso }]. permisosPrecargados: opcional, para no repetir la consulta.
+export const calcularAusentesSinAviso = async ({ fechaDia, empleados = [], permisosPrecargados = null }) => {
+  const candidatosAus = (empleados || []).filter(e => e?.id && (!e.fecha_ingreso || e.fecha_ingreso <= fechaDia));
+  if (!fechaDia || candidatosAus.length === 0) return new Set();
+  const esUnoSolo = candidatosAus.length === 1;
+
+  let queryAsistAus = supabase.from('asistencias_caseta').select('usuario_id, hora_entrada').eq('fecha', fechaDia);
+  if (esUnoSolo) queryAsistAus = queryAsistAus.eq('usuario_id', candidatosAus[0].id);
+  const { data: asistAus } = await queryAsistAus;
+  const conEntrada = new Set((asistAus || []).filter(a => a.hora_entrada).map(a => a.usuario_id));
+
+  let permisosAus = permisosPrecargados;
+  if (!permisosAus) {
+    let queryPermAus = supabase
+      .from('permisos')
+      .select('usuario_id, fecha_permiso, fecha_fin, estado_general, pago, observaciones')
+      .lte('fecha_permiso', fechaDia);
+    if (esUnoSolo) queryPermAus = queryPermAus.eq('usuario_id', candidatosAus[0].id);
+    const { data } = await queryPermAus;
+    permisosAus = data || [];
+  }
+  const justificados = new Set(permisosAus.filter(p => permisoJustificaDia(p, fechaDia)).map(p => p.usuario_id));
+
+  return new Set(candidatosAus.filter(e => !conEntrada.has(e.id) && !justificados.has(e.id)).map(e => e.id));
+};
+
 // 1. OBTENER DATOS DE CASETA (CON TODAS LAS VARIANTES DE RETARDO, RETIRO, SALIDA Y LISTA)
 export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   const hoy = obtenerFechaLocalHoy();
@@ -39,7 +97,7 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
 
   let queryEmpleados = supabase
     .from('usuarios')
-    .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, foto_url, area, puesto, sede_id, activo, rol, departamentos:departamento_id (nombre)')
+    .select('id, numero_empleado, nombre_completo, nombre, apellido_paterno, apellido_materno, foto_url, area, puesto, sede_id, activo, rol, fecha_ingreso, departamentos:departamento_id (nombre)')
     .eq('activo', true)
     .neq('rol', 'caseta')
     .order('nombre_completo', { ascending: true });
@@ -75,21 +133,23 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
   const empleadosSede = (resEmpleados.data || []).slice().sort((a, b) => compararPorApellidoPaterno(a, b));
   const idsSede = new Set(empleadosSede.map(e => e.id));
 
-  const ahoraObj = new Date();
-  const ayerObj = new Date(ahoraObj);
-  ayerObj.setDate(ahoraObj.getDate() - (ahoraObj.getDay() === 1 ? 3 : 1));
-  const fechaAyerHab = new Date(ayerObj.getTime() - ayerObj.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-
-  const usuariosConFaltaSinAvisoAyer = new Set(
-    (resPermisos.data || [])
-      .filter(p =>
-        p.fecha_permiso === fechaAyerHab &&
-        (p.tipo_permiso || '').toLowerCase() === 'falta' &&
-        /SIN AVISO/i.test(p.asunto_motivo || '') &&
-        !String(p.observaciones || '').includes('[REINCORPORACION AUTORIZADA]')
-      )
-      .map(p => p.usuario_id)
-  );
+  // Falta sin aviso según el pase de lista (solo se evalúa para el día de hoy)
+  let usuariosConFaltaSinAvisoAyer = new Set();
+  let fechaUltimoDiaLaborado = null;
+  if (fechaTarget === hoy) {
+    try {
+      fechaUltimoDiaLaborado = await obtenerUltimoDiaLaboradoPlanta(hoy);
+      if (fechaUltimoDiaLaborado) {
+        usuariosConFaltaSinAvisoAyer = await calcularAusentesSinAviso({
+          fechaDia: fechaUltimoDiaLaborado,
+          empleados: empleadosSede,
+          permisosPrecargados: resPermisos.data || []
+        });
+      }
+    } catch (eAus) {
+      console.warn('Aviso al calcular faltas sin aviso:', eAus);
+    }
+  }
 
   const pasesDelDia = (resPermisos.data || []).filter(p => {
     const perteneceSede = !sedeId || p.usuarios?.sede_id === sedeId || idsSede.has(p.usuario_id);
@@ -357,7 +417,8 @@ export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
     if (!mapaIncidenciasHoy[uid]) {
       mapaIncidenciasHoy[uid] = {
         tipo: 'falta_ayer_sin_aviso',
-        etiqueta: '🚨 Faltó ayer sin aviso — Retener en puerta',
+        fechaFalta: fechaUltimoDiaLaborado,
+        etiqueta: `🚨 Faltó sin aviso el ${fechaUltimoDiaLaborado} — Retener en puerta`,
         color: '#dc2626',
         bg: 'rgba(220,38,38,0.14)'
       };
@@ -1021,25 +1082,18 @@ export const registrarAsistenciaLista = async (usuarioId, tipoMarca = 'entrada',
     }
 
     if (!forzarDirectoRH && !retardoHoy && !faltaHoy) {
-      const ayer = new Date(ahora);
-      ayer.setDate(ahora.getDate() - (ahora.getDay() === 1 ? 3 : 1));
-      const fechaAyerStr = new Date(ayer.getTime() - ayer.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-
-      const { data: faltaSinAvisoAyer } = await supabase
-        .from('permisos')
-        .select('id, folio, asunto_motivo, observaciones')
-        .eq('usuario_id', usuarioId)
-        .eq('fecha_permiso', fechaAyerStr)
-        .eq('tipo_permiso', 'falta')
-        .ilike('asunto_motivo', '%SIN AVISO%')
-        .maybeSingle();
-
-      if (faltaSinAvisoAyer && !String(faltaSinAvisoAyer.observaciones || '').includes('[REINCORPORACION AUTORIZADA]')) {
-        return await registrarRetardoEnPuerta(
-          usuarioId,
-          guardiaId,
-          `[FALTA PREVIA SIN AVISO] El colaborador faltó sin avisar el día ${fechaAyerStr} y se presenta en caseta. Requiere autorización de Jefatura / RH.`
-        );
+      // Falta sin aviso según el pase de lista: el último día laborado no tuvo entrada ni permiso
+      const ultimoDiaLabLista = await obtenerUltimoDiaLaboradoPlanta(hoyStr);
+      if (ultimoDiaLabLista) {
+        const { data: empAusLista } = await supabase.from('usuarios').select('id, fecha_ingreso').eq('id', usuarioId).maybeSingle();
+        const ausentesLista = await calcularAusentesSinAviso({ fechaDia: ultimoDiaLabLista, empleados: empAusLista ? [empAusLista] : [] });
+        if (ausentesLista.has(usuarioId)) {
+          return await registrarRetardoEnPuerta(
+            usuarioId,
+            guardiaId,
+            `[FALTA PREVIA SIN AVISO] El colaborador no registró asistencia ni tenía permiso el día ${ultimoDiaLabLista} y se presenta en caseta. Requiere autorización de Jefatura / RH.`
+          );
+        }
       }
     }
     const vacacionesHoyLista = pasesVigentesHoy.find(p => (p.tipo_permiso || '').toLowerCase() === 'vacaciones');

@@ -293,7 +293,7 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
 
   let query = supabase
     .from('permisos')
-    .select('id, tipo_permiso, estado_general, pago, observaciones')
+    .select('id, tipo_permiso, estado_general, pago, asunto_motivo, observaciones')
     .eq('usuario_id', usuarioId)
     .gte('fecha_permiso', fechaMinStr);
 
@@ -301,13 +301,21 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
     query = query.neq('id', permisoId);
   }
 
-  const { data } = await query;
+  const [{ data }, horaEReinc] = await Promise.all([query, obtenerHoraLimiteTolerancia()]);
+  const [hEReinc, mEReinc] = String(horaEReinc || '07:15').split(':').map(Number);
+  const minEReinc = (isNaN(hEReinc) ? 7 : hEReinc) * 60 + (isNaN(mEReinc) ? 15 : mEReinc);
+
   const total = (data || []).filter(p => {
     const pagoL = String(p.pago || '').toLowerCase();
     const obsL = String(p.observaciones || '');
     if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL)) return false;
     const tipoL = (p.tipo_permiso || '').toLowerCase();
     const fueRegresado = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
+    // Reincorporación tras falta sin aviso con llegada puntual: no es retardo
+    if (tipoL === 'retardo' && /FALTA PREVIA SIN AVISO/i.test(p.asunto_motivo || '')) {
+      const mLlegReinc = obsL.match(/\[LLEGADA EN PUERTA:\s*(\d{1,2}):(\d{2})/i);
+      if (mLlegReinc && parseInt(mLlegReinc[1], 10) * 60 + parseInt(mLlegReinc[2], 10) <= minEReinc) return false;
+    }
     if (tipoL === 'retardo' && p.estado_general !== 'rechazado') return true;
     if (tipoL === 'falta' && fueRegresado) return true;
     return false;
@@ -736,21 +744,15 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     } catch (_) {}
   }
 
+  // Falta previa sin aviso autorizada: se registra como REINCORPORACIÓN (no como retardo) en este mismo pase
   if (/FALTA PREVIA SIN AVISO/i.test(solicitud.asunto_motivo || '') && updates.estado_general === 'autorizado' && !seRegresaDictamen) {
     try {
-      const { data: faltasPrevias } = await supabase
-        .from('permisos')
-        .select('id, observaciones')
-        .eq('usuario_id', solicitud.usuario_id)
-        .eq('tipo_permiso', 'falta')
-        .ilike('asunto_motivo', '%SIN AVISO%');
-      for (const fp of (faltasPrevias || [])) {
-        if (!String(fp.observaciones || '').includes('[REINCORPORACION AUTORIZADA]')) {
-          await supabase
-            .from('permisos')
-            .update({ observaciones: `${fp.observaciones || ''} | [REINCORPORACION AUTORIZADA]` })
-            .eq('id', fp.id);
-        }
+      const obsReinc = updates.observaciones || solicitud.observaciones || '';
+      if (!obsReinc.includes('[REINCORPORACION AUTORIZADA]')) {
+        await supabase
+          .from('permisos')
+          .update({ observaciones: `${obsReinc} | [REINCORPORACION AUTORIZADA]` })
+          .eq('id', solicitud.id);
       }
     } catch (_) {}
   }

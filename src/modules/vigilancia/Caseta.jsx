@@ -216,7 +216,7 @@ export default function Caseta() {
         return {
           color: '#dc2626',
           fondo: modoOscuro ? 'rgba(220,38,38,0.10)' : '#fef2f2',
-          estado: '✋ Faltó ayer sin aviso',
+          estado: `✋ Faltó sin aviso${inc?.fechaFalta ? ` el ${inc.fechaFalta}` : ''} • Retener`,
           boton: '✋ DETENER',
           tipoAccion: 'ENTRADA_LISTA'
         };
