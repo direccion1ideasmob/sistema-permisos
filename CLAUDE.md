@@ -34,7 +34,7 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
 
 ### 5. Bloqueo de cancelación con sello físico de Caseta
 - `tieneSelloFisicoCaseta(permiso)` es `true` si: el folio empieza con `CAS-`, `estado_general === 'completado_caseta'`, o las observaciones contienen `[LLEGADA EN PUERTA:`, `[SALIDA CASETA:`, `[ENTRADA CASETA:`, `[REINGRESO CASETA:` o `[REGRESADO EN PUERTA:`.
-- Con sello físico **no se puede cancelar** (`cancelarSolicitudPermiso` lanza error) y la UI (`MisPermisos.jsx`, `TablaHistorial.jsx`) oculta el botón de cancelar.
+- Con sello físico **nadie puede cancelar excepto RH** (`gerente_rh`/`rh_nominas`/`superadmin`): `cancelarSolicitudPermiso` lanza error para cualquier otro rol y `MisPermisos.jsx` oculta el botón. En `TablaHistorial.jsx`, RH ve "Anular pase (RH)": el sello **nunca se borra** de `observaciones` y se agrega `[ANULADO POR RH CON SELLO DE CASETA — el sello se conserva]` junto a la marca `CANCELADO por`.
 - Un retardo con sello tampoco puede sustituirse por una falta del mismo día.
 
 ### 6. Directorio: Jefe General vs. supervisores de subárea

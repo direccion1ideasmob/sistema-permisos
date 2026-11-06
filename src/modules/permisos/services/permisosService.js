@@ -1547,8 +1547,10 @@ export const tieneSelloFisicoCaseta = (permiso) => {
 
 export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancelacion }) => {
   if (!permiso?.id) throw new Error('Permiso inválido.');
-  if (tieneSelloFisicoCaseta(permiso)) {
-    throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia.');
+  // Regla: con sello físico de Caseta nadie cancela, EXCEPTO RH (control total). El sello nunca se borra.
+  const esRHConControlTotal = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(usuario?.rol);
+  if (tieneSelloFisicoCaseta(permiso) && !esRHConControlTotal) {
+    throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia. Solo Recursos Humanos puede anularlo.');
   }
 
   // Re-leer el estado real en BD antes de cancelar (puede haber cambiado en Caseta o por una firma)
@@ -1558,8 +1560,8 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
     .eq('id', permiso.id)
     .maybeSingle();
   if (permisoBDCancel) {
-    if (tieneSelloFisicoCaseta(permisoBDCancel)) {
-      throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia.');
+    if (tieneSelloFisicoCaseta(permisoBDCancel) && !esRHConControlTotal) {
+      throw new Error('No se puede cancelar un pase que ya fue registrado o detenido físicamente en Caseta de Vigilancia. Solo Recursos Humanos puede anularlo.');
     }
     const pagoBDCancel = String(permisoBDCancel.pago || '').toLowerCase();
     if (permisoBDCancel.estado_general === 'rechazado' || pagoBDCancel === 'cancelado' || /CANCELADO por/i.test(permisoBDCancel.observaciones || '')) {
@@ -1596,7 +1598,8 @@ export const cancelarSolicitudPermiso = async ({ permiso, usuario, motivoCancela
   const nomCorto = partesNom.length > 2 ? `${partesNom[0]} ${partesNom[partesNom.length - 2]}` : partesNom.join(' ');
   const etiquetaQuien = usuario?.id === permiso.usuario_id ? `Colaborador (${nomCorto})` : `RH/Jefatura (${nomCorto})`;
 
-  const nuevasObs = `${permiso.observaciones || ''} | CANCELADO por ${etiquetaQuien}: ${motivoLimpio}`;
+  const marcaSelloAnulado = tieneSelloFisicoCaseta(permiso) ? ' [ANULADO POR RH CON SELLO DE CASETA — el sello se conserva]' : '';
+  const nuevasObs = `${permiso.observaciones || ''} | CANCELADO por ${etiquetaQuien}: ${motivoLimpio}${marcaSelloAnulado}`;
 
   const { error: error1 } = await supabase
     .from('permisos')

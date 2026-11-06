@@ -173,6 +173,7 @@ export default function TablaHistorial({
   onSeleccionarPapeleta
 }) {
   const { usuario: usuarioSesionTH } = useAuth();
+  const esRHSesionTH = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(String(usuarioSesionTH?.rol || '').toLowerCase());
   const [busqueda, setBusqueda] = useState('');
   const [nominaFiltro, setNominaFiltro] = useState('todas'); // 'todas' | 'produccion' | 'administracion' | 'obra'
   const [deptoFiltro, setDeptoFiltro] = useState('todos');
@@ -1020,12 +1021,13 @@ export default function TablaHistorial({
                                     </div>
                                   </div>
 
-                                  {esControlRH && !esCancelado && s.estado_general !== 'rechazado' && !tieneSelloFisicoCaseta(s) && (
+                                  {esControlRH && !esCancelado && s.estado_general !== 'rechazado' && (!tieneSelloFisicoCaseta(s) || esRHSesionTH) && (
                                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                       <button
                                         type="button"
                                         onClick={async (e) => {
                                           e.stopPropagation();
+                                          if (tieneSelloFisicoCaseta(s) && !window.confirm('Este pase ya tiene sello de Caseta.\n\nComo RH puedes anularlo: el sello se conserva en la bitácora y queda registrado quién lo anuló y por qué.\n\n¿Continuar?')) return;
                                           const mot = window.prompt('Motivo de cancelación del pase (ej. Vacaciones pospuestas / Ya no se ocupó):');
                                           if (!mot || !mot.trim()) return;
                                           try {
@@ -1040,7 +1042,7 @@ export default function TablaHistorial({
                                           background: 'transparent', color: '#ef4444', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer'
                                         }}
                                       >
-                                        Cancelar pase
+                                        {tieneSelloFisicoCaseta(s) ? 'Anular pase (RH)' : 'Cancelar pase'}
                                       </button>
                                     </div>
                                   )}

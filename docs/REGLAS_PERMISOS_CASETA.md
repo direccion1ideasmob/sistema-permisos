@@ -141,7 +141,7 @@ esa regla se actualiza en el mismo cambio.
 
 ### Prioridad 2 — control de RH
 - [x] RH no puede crear pases a nombre de otro colaborador (`Solicitar.jsx` / `FormularioSolicitud.jsx`).
-- [ ] RH no puede cancelar ni corregir pases con sello; el Historial ya envía su rol (hecho junto con el punto 4 de P1); falta permitir sello en `cancelarSolicitudPermiso`. Implica actualizar la regla sagrada 5.
+- [x] RH no puede cancelar ni corregir pases con sello; el Historial ya envía su rol (hecho junto con el punto 4 de P1); falta permitir sello en `cancelarSolicitudPermiso`. Implica actualizar la regla sagrada 5.
 - [ ] El pase de lista de RH solo permite marcar el día de hoy (`VistaAsistenciaDiariaRH.jsx:731`, `registrarAsistenciaLista`).
 - [ ] Cuando RH marca la entrada, se cancela el retardo aunque la persona haya llegado tarde (`forzarDirectoRH`).
 - [ ] La falta sin aviso de ayer busca un permiso con `SIN AVISO` que nadie crea; debe usar el pase de lista. Además debe registrarse como reincorporación y no como retardo, y solo marcar esa falta (`vigilanciaService.js:84-93, 1104-1125`, `permisosService.js:740-757`).
