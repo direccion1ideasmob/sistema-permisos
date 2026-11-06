@@ -284,6 +284,9 @@ export const escalarPermisoAGerencia = async (permiso) => {
   }
 };
 
+// Motivo con categoría "[Asunto de Trabajo]" (retardo/salida por trabajo: no cuenta como reincidencia)
+export const esMotivoAsuntoTrabajo = (asuntoMotivo = '') => /^\s*\[[^\]]*(TRABAJO|LABORAL)[^\]]*\]/i.test(String(asuntoMotivo || ''));
+
 // 3. VERIFICAR REINCIDENCIA DE RETARDOS (Últimos 15 días, incluyendo retardos donde fue regresado a casa)
 export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fechaBase = new Date()) => {
   if (!usuarioId) return 0;
@@ -311,6 +314,8 @@ export const contarReincidenciasRetardo = async (usuarioId, permisoId = null, fe
     if (pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL)) return false;
     const tipoL = (p.tipo_permiso || '').toLowerCase();
     const fueRegresado = pagoL.includes('regresa') || /\[REGRESADO EN PUERTA:/i.test(obsL);
+    // Un retardo por asunto de trabajo no es reincidencia
+    if (tipoL === 'retardo' && esMotivoAsuntoTrabajo(p.asunto_motivo)) return false;
     // Reincorporación tras falta sin aviso con llegada puntual: no es retardo
     if (tipoL === 'retardo' && /FALTA PREVIA SIN AVISO/i.test(p.asunto_motivo || '')) {
       const mLlegReinc = obsL.match(/\[LLEGADA EN PUERTA:\s*(\d{1,2}):(\d{2})/i);

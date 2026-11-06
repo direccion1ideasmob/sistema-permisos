@@ -37,6 +37,7 @@ export default function ModalFotoZoom({ fotoZoom, onClose }) {
         </button>
         <img 
           src={fotoZoom.url} 
+          data-no-zoom
           alt="Foto ampliada" 
           style={{
             maxWidth: '100%', maxHeight: '72vh',

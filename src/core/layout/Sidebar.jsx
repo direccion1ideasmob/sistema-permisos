@@ -186,7 +186,7 @@ export default function Sidebar({
             onClick={() => setShowPhotoModal(true)}
             title="Ver o cambiar foto de perfil"
           >
-            <img src={miFoto} alt="Perfil" style={s.avatarImg} />
+            <img src={miFoto} alt="Perfil" data-no-zoom style={s.avatarImg} />
             <div style={s.avatarEditBadge}>
               <Camera size={13} color="#fff" />
             </div>
@@ -402,7 +402,7 @@ export default function Sidebar({
             </div>
 
             <div style={s.photoPreviewWrap}>
-              <img src={miFoto} alt="Foto de perfil" style={s.photoPreviewLarge} />
+              <img src={miFoto} alt="Foto de perfil" data-no-zoom style={s.photoPreviewLarge} />
             </div>
 
             {loading ? (

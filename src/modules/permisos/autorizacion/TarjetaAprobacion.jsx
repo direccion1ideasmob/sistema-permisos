@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Check, X, AlertTriangle, Calendar, Clock, LockOpen, CheckCircle2, User, Stethoscope, Briefcase
 } from 'lucide-react';
-import { contarReincidenciasRetardo, contarFaltasRecientes30Dias } from '../services/permisosService';
+import { contarReincidenciasRetardo, contarFaltasRecientes30Dias, esMotivoAsuntoTrabajo } from '../services/permisosService';
 
 export default function TarjetaAprobacion({
   solicitud, esPendiente, onAprobar, onRechazar, onForzarFirma, usuarioActual, c, modoOscuro
@@ -57,7 +57,7 @@ const hoyIso = (() => {
     const checarHistorialIncidencias = async () => {
       if (!solicitud.usuario_id) return;
       try {
-        if (esRetardo) {
+        if (esRetardo && !esMotivoAsuntoTrabajo(solicitud.asunto_motivo)) {
           const totalR = await contarReincidenciasRetardo(solicitud.usuario_id, solicitud.id, new Date(solicitud.created_at));
           if (montado) setReincidencias(totalR || 0);
         }

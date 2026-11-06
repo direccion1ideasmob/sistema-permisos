@@ -816,7 +816,7 @@ export default function FormularioSolicitud({ usuario, onSolicitudCreada, modoOs
           {/* SI EL DÍA NO ESTÁ CERRADO Y YA ELIGIÓ UN TIPO DE PERMISO VÁLIDO, MOSTRAR EL RESTO DEL FORMULARIO */}
           {!jornadaTotalmenteCerrada && tipoPermiso && !tiposBloqueadosMapa[tipoPermiso] && (
             <>
-              {alertaReincidencia && tipoPermiso === 'retardo' && (
+              {alertaReincidencia && tipoPermiso === 'retardo' && naturaleza !== 'Asunto de Trabajo' && (
                 <div style={{ padding: '13px 15px', borderRadius: '11px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', fontSize: '13.5px', color: '#d97706', display: 'flex', alignItems: 'flex-start', gap: '10px', lineHeight: '1.45' }}>
                   <Info size={19} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
                   <span><strong>Atención:</strong> El sistema detecta incidencias previas de retardo en tu historial reciente. Esta información será anexada para la evaluación de tu Jefatura y Recursos Humanos.</span>

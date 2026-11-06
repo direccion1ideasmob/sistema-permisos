@@ -195,7 +195,7 @@ export default function ModalColaborador({
           <div className="modal-body">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="avatar-squircle" onClick={() => setMostrarSelectorFoto(true)}>
-                <img src={fotoPreview || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.nombre_completo || 'N')}&background=16a34a&color=fff`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={fotoPreview || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.nombre_completo || 'N')}&background=16a34a&color=fff`} alt="Avatar" data-no-zoom style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', opacity: fotoPreview ? 0 : 1 }}><Camera size={22} color="#fff" /></div>
               </div>
 
@@ -420,7 +420,7 @@ export default function ModalColaborador({
 
       {fotoAmpliada && fotoPreview && (
         <div onClick={() => setFotoAmpliada(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '20px' }}>
-          <img src={fotoPreview} alt="Foto ampliada" style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '20px', objectFit: 'contain' }} />
+          <img src={fotoPreview} alt="Foto ampliada" data-no-zoom style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '20px', objectFit: 'contain' }} />
         </div>
       )}
     </>

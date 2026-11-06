@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './core/auth/AuthContext';
 import Layout from './core/layout/Layout'; 
 import Login from './core/auth/Login';
+import VisorFotosGlobal from './core/ui/VisorFotosGlobal';
 
 // Carga inteligente por módulo (Code Splitting para que el sistema vuele)
 const Inicio = lazy(() => import('./modules/inicio/Inicio'));
@@ -39,6 +40,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <VisorFotosGlobal />
         <Suspense fallback={<PantallaCargando />}>
           <Routes>
             <Route path="/aprobar-directo" element={<AprobarDirecto />} />
