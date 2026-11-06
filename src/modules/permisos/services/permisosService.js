@@ -826,7 +826,11 @@ export const aprobarSolicitudPermiso = async ({ solicitud, usuario, dictamenPago
     } catch (_) {}
   }
 
-  if (updates.estado_general === 'autorizado') {
+  // Retardo del mismo día sin haber llegado: el colaborador se entera del dictamen al presentarse en Caseta.
+  const esRetardoDiaSinLlegarAprob = tipoLower === 'retardo' && !estaEnPuerta && solicitud.fecha_permiso <= obtenerFechaLocalHoyISO();
+  if (updates.estado_general === 'autorizado' && esRetardoDiaSinLlegarAprob) {
+    // Sin aviso al colaborador.
+  } else if (updates.estado_general === 'autorizado') {
     const tipoPase = solicitud.tipo_permiso.charAt(0).toUpperCase() + solicitud.tipo_permiso.slice(1);
     await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
       titulo: seRegresaDictamen ? '↩️ Acceso no autorizado' : `✅ ${tipoPase} Autorizado`,
@@ -1022,6 +1026,8 @@ export const rechazarSolicitudPermiso = async ({ solicitud, usuario, motivoRecha
     });
     return;
   }
+  // Retardo del mismo día sin haber llegado: el colaborador se entera del dictamen al presentarse en Caseta.
+  if (esRetardoDelDiaOEnPuerta && !estaEnPuertaRech && tipoRechLower === 'retardo') return;
   await enviarNotificacionPushUsuarios(solicitud.usuario_id, {
     titulo: esRetardoDelDiaOEnPuerta
       ? '↩️ Acceso no autorizado (Se regresa)'
@@ -1624,6 +1630,9 @@ export const rechazarPermisoDirectoJefatura = async (permiso, motivoRechazo) => 
     vacaciones: 'VACACIONES RECHAZADAS'
   };
   const tipoPaseR = mapaRechazo[permiso.tipo_permiso] || 'PASE RECHAZADO';
+
+  // Retardo del mismo día sin haber llegado: el colaborador se entera del dictamen al presentarse en Caseta.
+  if (esRetDelDia && !estaEnPuerta) return;
 
   await enviarNotificacionPushUsuarios(permiso.usuario_id, {
     titulo: `❌ ${tipoPaseR}`,

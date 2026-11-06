@@ -119,6 +119,18 @@ export default function MisPermisos() {
       .replace(/^Para el:\s*.*$/i, 'Día completo');
   };
 
+  // Retardo del mismo día ya dictaminado pero sin pasar por Caseta: el resultado se conoce al llegar a Caseta.
+  const hoyLocalMP = `${horaActual.getFullYear()}-${String(horaActual.getMonth() + 1).padStart(2, '0')}-${String(horaActual.getDate()).padStart(2, '0')}`;
+  const esperaDictamenEnCaseta = (p) => {
+    const obsEC = p.observaciones || '';
+    if (p.fecha_permiso !== hoyLocalMP) return false;
+    if (/CANCELADO por|\[PASE CANCELADO/i.test(obsEC) || String(p.pago || '').toLowerCase() === 'cancelado') return false;
+    if (/\[(LLEGADA EN PUERTA|ENTRADA CASETA|REGRESADO EN PUERTA|SALIDA CASETA|REINGRESO CASETA):/i.test(obsEC)) return false;
+    const tipoEC = String(p.tipo_permiso || '').toLowerCase();
+    if (tipoEC === 'retardo') return ['autorizado', 'aprobado'].includes(p.estado_general);
+    return tipoEC === 'falta' && String(p.pago || '').toLowerCase().includes('regresa');
+  };
+
   const enProceso = misPermisos.filter(p => p.estado_general === 'en_firmas');
   const finalizados = misPermisos.filter(p => {
     if (p.estado_general === 'en_firmas') return false;
@@ -794,7 +806,10 @@ export default function MisPermisos() {
                         const { horarioSolicitado, horaSalidaCaseta, horaEntradaCaseta, horaRegresadoCaseta, motivoRechazo, notasFlujo } = parsearDatosObservaciones(p.observaciones);
                         const { categoria, texto: motivoLimpio } = limpiarMotivo(p.asunto_motivo);
                         const baseEstilo = getEstiloTipo(p.tipo_permiso);
-                        const estilo = (p.tipo_permiso || '').toLowerCase() === 'falta' && seRegreso
+                        const ocultarDictamen = esperaDictamenEnCaseta(p);
+                        const estilo = ocultarDictamen
+                          ? getEstiloTipo('retardo')
+                          : (p.tipo_permiso || '').toLowerCase() === 'falta' && seRegreso
                           ? { ...baseEstilo, label: 'FALTA (RETARDO)' }
                           : baseEstilo;
                         const fechaTxt = p.fecha_fin && p.fecha_fin !== p.fecha_permiso
@@ -805,7 +820,11 @@ export default function MisPermisos() {
                         let colorDictamen = '#16a34a';
                         let bgDictamen = 'rgba(22, 163, 74, 0.1)';
                         let borderDictamen = 'rgba(22, 163, 74, 0.3)';
-                        if (esCanceladoMP) {
+                        if (ocultarDictamen) {
+                          colorDictamen = '#2563eb';
+                          bgDictamen = 'rgba(37, 99, 235, 0.1)';
+                          borderDictamen = 'rgba(37, 99, 235, 0.3)';
+                        } else if (esCanceladoMP) {
                           colorDictamen = c.textMuted;
                           bgDictamen = c.bg;
                           borderDictamen = c.border;
@@ -860,7 +879,7 @@ export default function MisPermisos() {
                                     className="mp-pill-dictamen"
                                     style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
                                   >
-                                    {esCanceladoMP ? 'CANCELADO' : (esAutorizado ? (seRegreso ? 'SE REGRESÓ' : esSinGoce ? 'SIN GOCE' : pagoLower.includes('con goce') ? 'CON GOCE' : pagoLower.includes('pendiente') ? 'PENDIENTE' : 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
+                                    {ocultarDictamen ? 'VE A CASETA' : esCanceladoMP ? 'CANCELADO' : (esAutorizado ? (seRegreso ? 'SE REGRESÓ' : esSinGoce ? 'SIN GOCE' : pagoLower.includes('con goce') ? 'CON GOCE' : pagoLower.includes('pendiente') ? 'PENDIENTE' : 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
                                   </span>
                                   {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
                                 </div>
@@ -923,7 +942,7 @@ export default function MisPermisos() {
                                   </div>
                                 )}
 
-                                {!esAutorizado && motivoRechazo && (
+                                {!ocultarDictamen && !esAutorizado && motivoRechazo && (
                                     <div style={{ fontSize: '13px', fontWeight: '700', color: '#dc2626', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', padding: '7px 12px', borderRadius: '8px' }}>
                                       Motivo de rechazo: {motivoRechazo}
                                     </div>

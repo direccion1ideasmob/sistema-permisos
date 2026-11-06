@@ -14,7 +14,7 @@
 4. RH puede corregir o anular cualquier cosa, también lo que ya tiene sello de Caseta y también días pasados.
    **El sello nunca se borra** y siempre queda una nota de quién hizo el cambio y por qué.
 5. Antes de cancelar un pase, el sistema vuelve a leer cómo está en ese momento.
-6. Política de la empresa: **en un retardo, el trabajador siempre se presenta en Caseta**, esté autorizado o rechazado.
+6. Política de la empresa: **en un retardo, el trabajador siempre se presenta en Caseta**, esté autorizado o rechazado. En el retardo del mismo día **no se le avisa el dictamen** (ni autorizado ni rechazado): se entera al llegar a Caseta; en Mis Permisos ve "VE A CASETA".
    La decisión se aplica en la puerta; nadie se regresa desde su casa.
 
 ---
@@ -169,6 +169,6 @@ esa regla se actualiza en el mismo cambio.
 - [x] Validar que no se crucen los horarios entre salidas, ni entre retardo y salida. Que vacaciones reemplace igual que falta.
 - [x] Una salida pendiente de firma debe aparecer en Caseta como "espera firma".
 - [x] Folios oficiales duplicados por calcular el consecutivo ordenando por `created_at` (`permisosService.js:400-418`, `vigilanciaService.js:811-818`).
-- [x] Retardo rechazado: el aviso al empleado debe decir "preséntate en Caseta" (política, principio 6).
+- [x] Retardo del mismo día: no se notifica el dictamen al empleado; lo conoce al llegar a Caseta (política, principio 6).
 - [x] `AprobarDirecto.jsx:214` dice "Regresar a Casa" para cualquier retardo, aunque sea anticipado.
 - [x] Quitar código muerto: `ControlCaseta.jsx`, `TablaRegistrosVig.jsx`, `FormularioAsistencia.jsx` (y `BuscadorPersonal.jsx`, que tampoco se usaba).

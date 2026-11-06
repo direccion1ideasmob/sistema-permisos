@@ -31,7 +31,7 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
 - **Retardo anticipado futuro**: `tipo === 'retardo'` que no es del día ni en puerta.
   - Al rechazar es un **rechazo simple, "Rechazar (Entra puntual)"**: `estado_general: 'rechazado'`; el colaborador debe presentarse en su horario normal.
 - Esta distinción debe ser consistente en `rechazarSolicitudPermiso` y `rechazarPermisoDirectoJefatura` (service), `TarjetaAprobacion.jsx` y `AprobarDirecto.jsx` (etiqueta del botón) y `ModalRechazoPermiso.jsx` (título, texto y botón).
-- Política: aunque el retardo del día se rechace antes de que llegue, el trabajador **siempre se presenta en Caseta**; el aviso se lo indica y ahí se sella el retiro.
+- Política: aunque el retardo del día se rechace antes de que llegue, el trabajador **siempre se presenta en Caseta** y ahí se sella el retiro. En el retardo del mismo día sin llegada **no se notifica el dictamen al colaborador** (ni autorizado ni rechazado) en `aprobarSolicitudPermiso`, `rechazarSolicitudPermiso` y `rechazarPermisoDirectoJefatura`; `MisPermisos.jsx` muestra "VE A CASETA" hasta que haya sello.
 
 ### 5. Bloqueo de cancelación con sello físico de Caseta
 - `tieneSelloFisicoCaseta(permiso)` es `true` si: el folio empieza con `CAS-`, `estado_general === 'completado_caseta'`, o las observaciones contienen `[LLEGADA EN PUERTA:`, `[SALIDA CASETA:`, `[ENTRADA CASETA:`, `[REINGRESO CASETA:` o `[REGRESADO EN PUERTA:`.
