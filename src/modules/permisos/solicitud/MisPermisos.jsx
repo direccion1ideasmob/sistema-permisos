@@ -333,7 +333,8 @@ export default function MisPermisos() {
           display: flex;
           align-items: center;
           gap: 12px;
-          flex-shrink: 0;
+          flex-shrink: 1;
+          min-width: 0;
         }
         .mp-row-bottom-mobile {
           display: none;
@@ -389,10 +390,13 @@ export default function MisPermisos() {
           align-items: center;
           justify-content: flex-end;
           gap: 5px;
-          min-width: 90px;
+          min-width: 0;
+          max-width: 180px;
           font-size: 13px;
           font-weight: 700;
           white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .mp-pill-dictamen {
           display: inline-flex;
@@ -407,6 +411,8 @@ export default function MisPermisos() {
           box-sizing: border-box;
           flex-shrink: 0;
           white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .sellos-grid-3 {
           display: grid;
@@ -854,7 +860,7 @@ export default function MisPermisos() {
                                     className="mp-pill-dictamen"
                                     style={{ color: colorDictamen, background: bgDictamen, border: `1px solid ${borderDictamen}` }}
                                   >
-                                    {esCanceladoMP ? 'CANCELADO' : (esAutorizado ? (p.pago || 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
+                                    {esCanceladoMP ? 'CANCELADO' : (esAutorizado ? (seRegreso ? 'SE REGRESÓ' : esSinGoce ? 'SIN GOCE' : pagoLower.includes('con goce') ? 'CON GOCE' : pagoLower.includes('pendiente') ? 'PENDIENTE' : 'AUTORIZADO') : (seRegreso ? 'SE REGRESÓ' : 'RECHAZADO'))}
                                   </span>
                                   {expandida ? <ChevronUp size={18} color={c.textMuted} /> : <ChevronDown size={18} color={c.textMuted} />}
                                 </div>
