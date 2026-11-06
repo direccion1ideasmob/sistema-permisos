@@ -404,24 +404,25 @@ export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuar
 };
 
 // 5. GENERADOR DE FOLIO OFICIAL (A-26-0001 / P-26-0001 / O-26-0001)
+// Toma el consecutivo MÁS ALTO del año (no el del último pase creado: un pase viejo que se oficializa
+// tarde dejaba de ser "el último creado" y el siguiente folio salía repetido).
+// Se consulta por longitud (4 y 5 dígitos) para que el orden alfabético coincida con el numérico.
 export const generarFolioOficial = async (prefijoLetra, anio2Digitos) => {
-  const patron = `${prefijoLetra}-${anio2Digitos}-%`;
-  const { data } = await supabase
-    .from('permisos')
-    .select('folio')
-    .ilike('folio', patron)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  const base = `${prefijoLetra}-${anio2Digitos}-`;
+  const [res4, res5] = await Promise.all([
+    supabase.from('permisos').select('folio').like('folio', `${base}____`).order('folio', { ascending: false }).limit(1),
+    supabase.from('permisos').select('folio').like('folio', `${base}_____`).order('folio', { ascending: false }).limit(1)
+  ]);
 
-  let consecutivo = 1;
-  if (data && data.length > 0 && data[0].folio) {
-    const partes = data[0].folio.split('-');
-    if (partes.length === 3) {
-      const num = parseInt(partes[2], 10);
-      if (!isNaN(num)) consecutivo = num + 1;
-    }
+  let maximo = 0;
+  for (const resFolio of [res4, res5]) {
+    const folioMax = resFolio?.data?.[0]?.folio;
+    if (!folioMax) continue;
+    const partes = String(folioMax).split('-');
+    const num = partes.length === 3 ? parseInt(partes[2], 10) : NaN;
+    if (!isNaN(num) && num > maximo) maximo = num;
   }
-  return `${prefijoLetra}-${anio2Digitos}-${String(consecutivo).padStart(4, '0')}`;
+  return `${base}${String(maximo + 1).padStart(4, '0')}`;
 };
 
 // AUXILIAR: BUSCAR SI UN SUPERVISOR DE SUBÁREA (encargado) TIENE ARRIBA UN JEFE DE DEPTO (jefe_area)

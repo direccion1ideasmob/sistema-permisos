@@ -153,7 +153,7 @@ esa regla se actualiza en el mismo cambio.
 - [x] Una salida retenida por horario deja una hora congelada que contamina el reingreso, y la reautorización desactiva la revisión de +15 min (`vigilanciaService.js:479, 547, 597`).
 - [x] Validar que no se crucen los horarios entre salidas, ni entre retardo y salida. Que vacaciones reemplace igual que falta.
 - [x] Una salida pendiente de firma debe aparecer en Caseta como "espera firma".
-- [ ] Folios oficiales duplicados por calcular el consecutivo ordenando por `created_at` (`permisosService.js:400-418`, `vigilanciaService.js:811-818`).
+- [x] Folios oficiales duplicados por calcular el consecutivo ordenando por `created_at` (`permisosService.js:400-418`, `vigilanciaService.js:811-818`).
 - [ ] Retardo rechazado: el aviso al empleado debe decir "preséntate en Caseta" (política, principio 6).
 - [ ] `AprobarDirecto.jsx:214` dice "Regresar a Casa" para cualquier retardo, aunque sea anticipado.
 - [ ] Quitar código muerto: `ControlCaseta.jsx`, `TablaRegistrosVig.jsx`, `FormularioAsistencia.jsx`.
