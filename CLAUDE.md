@@ -12,7 +12,7 @@ Viven principalmente en `src/modules/permisos/services/permisosService.js` y `sr
 ### 1. Restricción CHECK en `permisos.pago` (Supabase)
 - La columna `pago` tiene una restricción CHECK que **puede rechazar el valor `'Cancelado'`**.
 - Patrón obligatorio al cancelar: intentar primero `pago: 'Cancelado'` y, **si Supabase devuelve error**, reintentar el mismo update con `pago: 'Sin goce'` (manteniendo `estado_general: 'rechazado'` y la marca `CANCELADO por ...` en `observaciones`).
-- Usado en: `cancelarSalidasMismoDiaPorRetiro`, `cancelarSolicitudPermiso` y la sustitución de pases por falta del mismo día.
+- Usado en: `cancelarSalidasMismoDiaPorRetiro`, `cancelarSolicitudPermiso`, la sustitución de pases por falta del mismo día, `aplicarAccionCierreRH` (cancelar pase no usado) y en Caseta (`vigilanciaService.js`): `cancelarPasePorInasistenciaOCambio` y la cancelación de falta/vacaciones por reincorporación en `registrarCheckCaseta`.
 - Por eso un permiso cancelado se detecta por **cualquiera** de: `pago === 'cancelado'`, `/CANCELADO por/i` o `/\[PASE CANCELADO/i` en `observaciones`. Nunca dependas solo del valor de `pago`.
 
 ### 2. Regla Pedro Simón (retardos del mismo día)

@@ -663,10 +663,18 @@ export const registrarCheckCaseta = async (permisoId, tipoMovimiento = 'check') 
     updates.estado_general = 'completado_caseta';
   }
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('permisos')
     .update(updates)
     .eq('id', permisoId);
+
+  // Regla sagrada 1: la restricción CHECK de `pago` puede rechazar 'Cancelado' → reintentar con 'Sin goce'
+  if (error && updates.pago === 'Cancelado') {
+    ({ error } = await supabase
+      .from('permisos')
+      .update({ ...updates, pago: 'Sin goce' })
+      .eq('id', permisoId));
+  }
 
   if (error) throw error;
 
@@ -795,8 +803,22 @@ export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancel
     .select()
     .single();
 
-  if (error) throw error;
-  return data;
+  if (!error) return data;
+
+  // Regla sagrada 1: la restricción CHECK de `pago` puede rechazar 'Cancelado' → reintentar con 'Sin goce'
+  const { data: dataSinGoce, error: errorSinGoce } = await supabase
+    .from('permisos')
+    .update({
+      estado_general: 'rechazado',
+      pago: 'Sin goce',
+      observaciones: nuevasObs
+    })
+    .eq('id', permisoId)
+    .select()
+    .single();
+
+  if (errorSinGoce) throw errorSinGoce;
+  return dataSinGoce;
 };
 
 export const registrarRetardoEnPuerta = async (usuarioId, guardiaId = null, motivoEspecial = null) => {
