@@ -1,4 +1,4 @@
-import { registrarCheckCaseta, sincronizarCierreTurnoAutomatico } from '../../vigilancia/services/vigilanciaService';
+import { obtenerHoraSalidaOficial } from '../../vigilancia/services/vigilanciaService';
 import { supabase } from '../../../core/api/supabaseClient';
 import { enviarNotificacionPushUsuarios } from '../../../core/notificaciones/notificacionesService';
 import { esRolValidadorSuperior } from '../../directorio/utils/directorioHelpers';
@@ -369,7 +369,6 @@ export const enviarRecordatorioPermisosRezagados = async (listaPermisos = []) =>
 
 // 4. OBTENER TODAS LAS SOLICITUDES PARA BANDEJA DE APROBACIONES
 export const obtenerSolicitudesAprobacion = async ({ soloEnFirmas = false, usuarioId = null, rol = null } = {}) => {
-  await sincronizarCierreTurnoAutomatico();
   let query = supabase
     .from("permisos")
     .select(`
@@ -1243,7 +1242,6 @@ export const obtenerCatalogoDepartamentosSimple = async () => {
 
 // 11. HISTORIAL GENERAL CON FILTROS PARA RH (ControlHistorial)
 export const obtenerHistorialGeneralPermisos = async ({ deptoFiltro = 'todos', tipoFiltro = 'todos', fechaInicio = '', fechaFin = '' } = {}) => {
-  await sincronizarCierreTurnoAutomatico();
   let query = supabase
     .from('permisos')
     .select(`
@@ -1557,4 +1555,218 @@ export const depurarPermisosCanceladosRH = async (ids = []) => {
     .in('id', ids);
   if (error) throw error;
   return ids.length;
+};
+
+// ============================================================================
+// 16. BANDEJA DE REVISIÓN DE CIERRE (RH decide lo que quedó abierto al cerrar el día)
+// Regla: el corte del día NO modifica nada por su cuenta. Todo pasa por RH.
+// ============================================================================
+const ROLES_RH_CIERRE = ['gerente_rh', 'rh_nominas', 'superadmin'];
+const ESTADOS_ABIERTOS_CIERRE = ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta'];
+
+const fechaLocalISOCierre = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+const leerSellosCierre = (obs = '') => {
+  const mSal = obs.match(/\[SALIDA CASETA:\s*([^\]]+)\]/i);
+  return {
+    horaSalidaCierre: mSal ? mSal[1].replace(/\s*hrs/i, '').trim() : null,
+    tieneEntradaCierre: /\[(?:ENTRADA|REINGRESO) CASETA:/i.test(obs),
+    tieneLlegadaCierre: /\[LLEGADA EN PUERTA:/i.test(obs),
+    fueRegresadoCierre: /\[REGRESADO EN PUERTA:/i.test(obs)
+  };
+};
+
+const esPaseCanceladoCierre = (p) => {
+  const pagoL = String(p.pago || '').toLowerCase();
+  const obsL = String(p.observaciones || '');
+  return pagoL === 'cancelado' || /CANCELADO por/i.test(obsL) || /\[PASE CANCELADO/i.test(obsL);
+};
+
+// Clasifica un permiso de un día ya cerrado. Devuelve null si no requiere revisión.
+const clasificarPendienteCierre = (p, asistDia) => {
+  const obsCl = String(p.observaciones || '');
+  const tipoCl = String(p.tipo_permiso || '').toLowerCase();
+  const pagoCl = String(p.pago || '').toLowerCase();
+  if (esPaseCanceladoCierre(p)) return null;
+  if (/\[REVISADO RH CIERRE/i.test(obsCl)) return null;
+  const { horaSalidaCierre, tieneEntradaCierre, tieneLlegadaCierre, fueRegresadoCierre } = leerSellosCierre(obsCl);
+  if (pagoCl.includes('regresa') || fueRegresadoCierre) return null;
+
+  const enFirmas = p.estado_general === 'en_firmas';
+  const detenidoEnPuerta = enFirmas && (tieneLlegadaCierre || /\[HORARIO NO COINCIDE EN CASETA/i.test(obsCl));
+
+  if (detenidoEnPuerta) {
+    return { categoria: 'detenido_sin_resolver', titulo: 'Detenido en puerta sin resolver', sugerencia: 'RH decide en Aprobaciones', acciones: ['ir_aprobaciones', 'marcar_revisado'] };
+  }
+  if (tipoCl === 'retardo' && ['en_firmas', 'autorizado', 'aprobado'].includes(p.estado_general)) {
+    const llego = tieneEntradaCierre || tieneLlegadaCierre || Boolean(asistDia?.hora_entrada);
+    if (!llego) {
+      return { categoria: 'retardo_sin_llegada', titulo: 'Retardo sin ninguna llegada registrada', sugerencia: 'Marcar falta', acciones: ['convertir_falta', 'marcar_revisado'] };
+    }
+  }
+  if (tipoCl === 'salida') {
+    const pediaRegreso = obsCl.toLowerCase().includes('regresa:');
+    if (pediaRegreso && horaSalidaCierre && !tieneEntradaCierre && !/\[No reingres[óo] a planta/i.test(obsCl)) {
+      return { categoria: 'salida_sin_regreso', titulo: 'Salió con pase de regreso y no volvió', sugerencia: `Salida definitiva a las ${horaSalidaCierre} hrs`, acciones: ['salida_definitiva', 'marcar_revisado'] };
+    }
+    if (['autorizado', 'aprobado'].includes(p.estado_general) && !horaSalidaCierre) {
+      return { categoria: 'salida_no_usada', titulo: 'Salida autorizada que no se usó', sugerencia: 'Cancelar el pase', acciones: ['cancelar_pase', 'marcar_revisado'] };
+    }
+  }
+  if (enFirmas) {
+    return { categoria: 'pendiente_firma', titulo: 'Pase que sigue pendiente de firma', sugerencia: 'RH decide en Aprobaciones', acciones: ['ir_aprobaciones', 'marcar_revisado'] };
+  }
+  return null;
+};
+
+export const obtenerBandejaCierreRH = async ({ diasAtras = 15 } = {}) => {
+  const ahoraCierre = new Date();
+  const hoyCierre = obtenerFechaLocalHoyISO();
+  const minAhoraCierre = ahoraCierre.getHours() * 60 + ahoraCierre.getMinutes();
+  const horaSalidaCfg = await obtenerHoraSalidaOficial();
+  const [hSalCfg, mSalCfg] = String(horaSalidaCfg || '17:00').split(':').map(Number);
+  const minSalidaCfg = (isNaN(hSalCfg) ? 17 : hSalCfg) * 60 + (isNaN(mSalCfg) ? 0 : mSalCfg);
+  const turnoHoyCerrado = minAhoraCierre >= minSalidaCfg;
+
+  const inicioCierre = new Date(ahoraCierre);
+  inicioCierre.setDate(inicioCierre.getDate() - diasAtras);
+  const fechaMinCierre = fechaLocalISOCierre(inicioCierre);
+
+  const [{ data: pasesCierre, error: errPases }, { data: asistCierre }] = await Promise.all([
+    supabase
+      .from('permisos')
+      .select('id, folio, usuario_id, fecha_permiso, fecha_fin, tipo_permiso, estado_general, pago, asunto_motivo, observaciones, total_horas, usuarios:usuario_id (id, numero_empleado, nombre_completo, foto_url, departamentos:departamento_id (nombre))')
+      .gte('fecha_permiso', fechaMinCierre)
+      .lte('fecha_permiso', hoyCierre)
+      .in('estado_general', ESTADOS_ABIERTOS_CIERRE)
+      .order('fecha_permiso', { ascending: false }),
+    supabase
+      .from('asistencias_caseta')
+      .select('usuario_id, fecha, hora_entrada, hora_salida')
+      .gte('fecha', fechaMinCierre)
+      .lte('fecha', hoyCierre)
+  ]);
+  if (errPases) throw errPases;
+
+  const mapaAsistCierre = new Map((asistCierre || []).map(a => [`${a.usuario_id}_${a.fecha}`, a]));
+  const pendientesCierre = [];
+  for (const p of (pasesCierre || [])) {
+    const fPase = String(p.fecha_permiso || '').slice(0, 10);
+    const diaCerrado = fPase < hoyCierre || (fPase === hoyCierre && turnoHoyCerrado);
+    if (!diaCerrado) continue;
+    const clasif = clasificarPendienteCierre(p, mapaAsistCierre.get(`${p.usuario_id}_${fPase}`));
+    if (clasif) pendientesCierre.push({ ...clasif, permiso: p });
+  }
+  return pendientesCierre;
+};
+
+export const aplicarAccionCierreRH = async ({ permisoId, accion, usuario, nota = '' }) => {
+  if (!ROLES_RH_CIERRE.includes(String(usuario?.rol || '').toLowerCase())) {
+    throw new Error('Solo Recursos Humanos puede resolver la bandeja de cierre.');
+  }
+
+  const { data: pAccion, error: errLeer } = await supabase
+    .from('permisos')
+    .select('id, folio, usuario_id, fecha_permiso, tipo_permiso, estado_general, pago, observaciones, total_horas, firma_1_estado, firma_2_estado, firma_3_estado, usuarios:usuario_id (tipo_personal, departamentos:departamento_id (clasificacion))')
+    .eq('id', permisoId)
+    .single();
+  if (errLeer || !pAccion) throw new Error('No se pudo leer el pase. Actualiza la bandeja.');
+  if (!ESTADOS_ABIERTOS_CIERRE.includes(pAccion.estado_general)) {
+    throw new Error(`Este pase ya cambió de estado (${pAccion.estado_general}). Actualiza la bandeja.`);
+  }
+
+  const fAccion = String(pAccion.fecha_permiso || '').slice(0, 10);
+  const { data: asistAccion } = await supabase
+    .from('asistencias_caseta')
+    .select('id, hora_entrada, hora_salida')
+    .eq('usuario_id', pAccion.usuario_id)
+    .eq('fecha', fAccion)
+    .maybeSingle();
+
+  const clasifActual = clasificarPendienteCierre(pAccion, asistAccion);
+  if (!clasifActual || !clasifActual.acciones.includes(accion)) {
+    throw new Error('La situación de este pase cambió y esa acción ya no aplica. Actualiza la bandeja.');
+  }
+
+  const partesNomCierre = String(usuario?.nombre_completo || 'RH').trim().split(/\s+/).filter(Boolean);
+  const nomCortoCierre = partesNomCierre.length > 2 ? `${partesNomCierre[0]} ${partesNomCierre[partesNomCierre.length - 2]}` : partesNomCierre.join(' ');
+  const notaLimpiaCierre = String(nota || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '/').trim();
+  const sufijoNotaCierre = notaLimpiaCierre ? ` — ${notaLimpiaCierre}` : '';
+  const obsBaseCierre = String(pAccion.observaciones || '');
+
+  if (accion === 'marcar_revisado') {
+    const { error } = await supabase.from('permisos').update({
+      observaciones: `${obsBaseCierre} | [REVISADO RH CIERRE (${nomCortoCierre}): Sin cambios${sufijoNotaCierre}]`
+    }).eq('id', pAccion.id);
+    if (error) throw error;
+    return;
+  }
+
+  if (accion === 'convertir_falta') {
+    const updatesFaltaCierre = {
+      tipo_permiso: 'falta',
+      pago: 'Sin goce',
+      total_horas: 8,
+      estado_general: 'autorizado',
+      firma_3_id: usuario.id,
+      firma_3_estado: 'autorizado',
+      ...(pAccion.firma_1_estado === 'pendiente' ? { firma_1_estado: 'omitido' } : {}),
+      ...(pAccion.firma_2_estado === 'pendiente' ? { firma_2_estado: 'omitido' } : {}),
+      observaciones: `${obsBaseCierre} | [REVISADO RH CIERRE (${nomCortoCierre}): Convertido a Falta — solicitó retardo y no se presentó en todo el turno${sufijoNotaCierre}]`
+    };
+    if (!pAccion.folio || String(pAccion.folio).startsWith('REQ-')) {
+      const nominaCierre = (pAccion.usuarios?.tipo_personal || pAccion.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
+      const letraCierre = nominaCierre.includes('admin') ? 'A' : (nominaCierre.includes('obra') ? 'O' : 'P');
+      updatesFaltaCierre.folio = await generarFolioOficial(letraCierre, new Date().getFullYear().toString().slice(-2));
+    }
+    const { error } = await supabase.from('permisos').update(updatesFaltaCierre).eq('id', pAccion.id);
+    if (error) throw error;
+    return;
+  }
+
+  if (accion === 'salida_definitiva') {
+    const { horaSalidaCierre } = leerSellosCierre(obsBaseCierre);
+    const horaSalidaCfgAcc = await obtenerHoraSalidaOficial();
+    const [hFinCierre, mFinCierre] = String(horaSalidaCfgAcc || '17:00').split(':').map(Number);
+    const [hSCierre, mSCierre] = String(horaSalidaCierre || '').split(':').map(Number);
+    let horasSalidaDef = pAccion.total_horas || 0;
+    if (!isNaN(hSCierre) && !isNaN(mSCierre) && !isNaN(hFinCierre)) {
+      const diffDef = ((hFinCierre * 60 + (isNaN(mFinCierre) ? 0 : mFinCierre)) - (hSCierre * 60 + mSCierre)) / 60;
+      if (diffDef > 0) horasSalidaDef = parseFloat(diffDef.toFixed(2));
+    }
+    const obsSinRegresaCierre = obsBaseCierre.replace(/\(Regresa:\s*[^)]+\)/ig, '(Sin reingreso — Fin de turno)');
+    const { error } = await supabase.from('permisos').update({
+      total_horas: horasSalidaDef,
+      estado_general: 'completado_caseta',
+      observaciones: `${obsSinRegresaCierre} | [No reingresó a planta — Salida definitiva: ${horaSalidaCierre} hrs] | [REVISADO RH CIERRE (${nomCortoCierre}): Tomado como salida definitiva${sufijoNotaCierre}]`
+    }).eq('id', pAccion.id);
+    if (error) throw error;
+
+    if (!asistAccion) {
+      await supabase.from('asistencias_caseta').insert([{ usuario_id: pAccion.usuario_id, fecha: fAccion, hora_entrada: null, hora_salida: horaSalidaCierre }]);
+    } else if (!asistAccion.hora_salida) {
+      await supabase.from('asistencias_caseta').update({ hora_salida: horaSalidaCierre }).eq('id', asistAccion.id);
+    }
+    return;
+  }
+
+  if (accion === 'cancelar_pase') {
+    const obsCancelCierre = `${obsBaseCierre} | CANCELADO por RH (${nomCortoCierre}): Pase autorizado que no se utilizó (revisión de cierre)${sufijoNotaCierre}`;
+    const { error: errCan1 } = await supabase.from('permisos').update({
+      estado_general: 'rechazado',
+      pago: 'Cancelado',
+      observaciones: obsCancelCierre
+    }).eq('id', pAccion.id);
+    if (errCan1) {
+      const { error: errCan2 } = await supabase.from('permisos').update({
+        estado_general: 'rechazado',
+        pago: 'Sin goce',
+        observaciones: obsCancelCierre
+      }).eq('id', pAccion.id);
+      if (errCan2) throw errCan2;
+    }
+    return;
+  }
+
+  throw new Error('Acción no reconocida.');
 };

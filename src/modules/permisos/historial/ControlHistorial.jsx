@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../core/auth/AuthContext';
-import { obtenerHistorialGeneralPermisos, obtenerCatalogoDepartamentosSimple } from '../services/permisosService';
+import { obtenerHistorialGeneralPermisos, obtenerCatalogoDepartamentosSimple, obtenerBandejaCierreRH } from '../services/permisosService';
 import TablaHistorial from './TablaHistorial';
 import ModalPapeletaPDF from './ModalPapeletaPDF';
 import ModalExportarExcel from './ModalExportarExcel';
 import VistaAsistenciaDiariaRH from './VistaAsistenciaDiariaRH';
+import BandejaCierreRH from './BandejaCierreRH';
 import { obtenerTemaAprobaciones, generarEstilosAprobaciones } from '../aprobacionesStyles';
 
 export default function ControlHistorial() {
@@ -23,7 +24,9 @@ export default function ControlHistorial() {
 
   const c = obtenerTemaAprobaciones(modoOscuro);
 
-  const [pestanaRH, setPestanaRH] = useState('permisos'); // 'permisos' | 'asistencia_diaria'
+  const [pestanaRH, setPestanaRH] = useState('permisos'); // 'permisos' | 'asistencia_diaria' | 'cierre'
+  const esRHControl = ['gerente_rh', 'rh_nominas', 'superadmin'].includes(String(usuario?.rol || '').toLowerCase());
+  const [conteoCierre, setConteoCierre] = useState(0);
   const [solicitudes, setSolicitudes] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -50,6 +53,13 @@ export default function ControlHistorial() {
   useEffect(() => {
     if (usuario?.id) cargarTodasSolicitudes();
   }, [usuario?.id, cargarTodasSolicitudes]);
+
+  const cargarConteoCierre = useCallback(() => {
+    if (!esRHControl) return;
+    obtenerBandejaCierreRH().then(lista => setConteoCierre((lista || []).length)).catch(() => {});
+  }, [esRHControl]);
+
+  useEffect(() => { cargarConteoCierre(); }, [cargarConteoCierre]);
 
   const bgActivoTab = modoOscuro ? '#27272a' : '#0f172a';
 
@@ -91,6 +101,22 @@ export default function ControlHistorial() {
       >
         Asistencia
       </button>
+      {esRHControl && (
+        <button
+          type="button"
+          onClick={() => setPestanaRH('cierre')}
+          style={{
+            height: '28px', padding: '0 12px', borderRadius: '6px', border: 'none',
+            background: pestanaRH === 'cierre' ? bgActivoTab : 'transparent',
+            color: pestanaRH === 'cierre' ? '#ffffff' : (conteoCierre > 0 ? c.danger : c.textMuted),
+            fontWeight: '700',
+            fontSize: '12.5px', cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          Cierre del día{conteoCierre > 0 ? ` (${conteoCierre})` : ''}
+        </button>
+      )}
     </div>
   );
 
@@ -110,7 +136,14 @@ export default function ControlHistorial() {
         }
       `}</style>
 
-      {pestanaRH === 'asistencia_diaria' ? (
+      {pestanaRH === 'cierre' && esRHControl ? (
+        <BandejaCierreRH
+          usuario={usuario}
+          c={c}
+          selectorModo={selectorModo}
+          onCambio={() => { cargarConteoCierre(); cargarTodasSolicitudes(); }}
+        />
+      ) : pestanaRH === 'asistencia_diaria' ? (
         <VistaAsistenciaDiariaRH
           usuario={usuario}
           departamentos={departamentos}

@@ -34,7 +34,6 @@ const extraerHorarioProgramado = (obs = '') => {
 
 // 1. OBTENER DATOS DE CASETA (CON TODAS LAS VARIANTES DE RETARDO, RETIRO, SALIDA Y LISTA)
 export const obtenerDatosCaseta = async (sedeId, fechaConsulta = null) => {
-  await sincronizarCierreTurnoAutomatico();
   const hoy = obtenerFechaLocalHoy();
   const fechaTarget = fechaConsulta || hoy;
 
@@ -766,127 +765,8 @@ export const guardarHoraSalidaOficial = async (nuevaHora) => {
   return limpia;
 };
 
-export const sincronizarCierreTurnoAutomatico = async () => {
-  try {
-    const hoy = obtenerFechaLocalHoy();
-    const ahora = new Date();
-    const minActuales = ahora.getHours() * 60 + ahora.getMinutes();
-
-    const horaSalidaStr = await obtenerHoraSalidaOficial();
-    const [hSal, mSal] = (horaSalidaStr || '17:00').split(':').map(Number);
-    const minSalidaOficial = Math.max(17 * 60, (isNaN(hSal) ? 17 : hSal) * 60 + (isNaN(mSal) ? 0 : mSal));
-    const turnoHoyConcluido = minActuales >= minSalidaOficial;
-
-    const hace10 = new Date(ahora);
-    hace10.setDate(ahora.getDate() - 10);
-    const fechaMin = hace10.toISOString().split('T')[0];
-
-    const [{ data: pases }, { data: asistencias }] = await Promise.all([
-      supabase
-        .from('permisos')
-        .select('id, folio, usuario_id, fecha_permiso, tipo_permiso, estado_general, pago, observaciones, total_horas, usuarios:usuario_id (tipo_personal, departamentos:departamento_id (clasificacion))')
-        .gte('fecha_permiso', fechaMin)
-        .lte('fecha_permiso', hoy)
-        .in('tipo_permiso', ['retardo', 'salida'])
-        .in('estado_general', ['en_firmas', 'autorizado', 'aprobado', 'completado_caseta']),
-      supabase
-        .from('asistencias_caseta')
-        .select('usuario_id, fecha, hora_entrada, hora_salida')
-        .gte('fecha', fechaMin)
-        .lte('fecha', hoy)
-    ]);
-
-    if (!pases || pases.length === 0) return;
-
-    const mapaAsist = new Map();
-    (asistencias || []).forEach(a => {
-      mapaAsist.set(`${a.usuario_id}_${a.fecha}`, a);
-    });
-
-    for (const p of pases) {
-      const fPase = String(p.fecha_permiso || '').slice(0, 10);
-      const diaCerrado = fPase < hoy || (fPase === hoy && turnoHoyConcluido);
-      if (!diaCerrado) continue;
-
-      const obs = String(p.observaciones || '');
-      const pagoLow = String(p.pago || '').toLowerCase();
-      if (pagoLow === 'cancelado' || /CANCELADO por/i.test(obs) || /\[PASE CANCELADO/i.test(obs)) continue;
-
-      const tipo = (p.tipo_permiso || '').toLowerCase();
-      const regAsist = mapaAsist.get(`${p.usuario_id}_${fPase}`);
-      const { horaSalidaCaseta, horaEntradaCaseta, horaLlegadaPuerta, horaRetiroCaseta } = extraerHorasCaseta(obs);
-
-      if (tipo === 'retardo') {
-        const seRegreso = pagoLow.includes('regresa') || Boolean(horaRetiroCaseta);
-        const siLlego = Boolean(horaEntradaCaseta || horaLlegadaPuerta || regAsist?.hora_entrada);
-        if (!seRegreso && !siLlego) {
-          const nuevaObs = `${obs} | [Convertido a Falta: Solicitó retardo pero no se presentó en todo el turno]`.replace(/^\s*\|\s*/, '');
-          let folioFinal = p.folio;
-          if (String(p.folio || '').startsWith('REQ-')) {
-            const nominaEmp = (p.usuarios?.tipo_personal || p.usuarios?.departamentos?.clasificacion || 'produccion').toLowerCase();
-            const pref = nominaEmp.includes('admin') ? 'A' : (nominaEmp.includes('obra') ? 'O' : 'P');
-            const anio2 = new Date().getFullYear().toString().slice(-2);
-            const { data: ult } = await supabase.from('permisos').select('folio').ilike('folio', `${pref}-${anio2}-%`).order('created_at', { ascending: false }).limit(1);
-            let cons = 1;
-            if (ult && ult[0]?.folio) {
-              const num = parseInt(ult[0].folio.split('-')[2], 10);
-              if (!isNaN(num)) cons = num + 1;
-            }
-            folioFinal = `${pref}-${anio2}-${String(cons).padStart(4, '0')}`;
-          }
-          await supabase
-            .from('permisos')
-            .update({
-              folio: folioFinal,
-              tipo_permiso: 'falta',
-              pago: 'Sin goce de sueldo',
-              total_horas: 8,
-              estado_general: 'autorizado',
-              observaciones: nuevaObs
-            })
-            .eq('id', p.id);
-        }
-      }
-
-      if (tipo === 'salida') {
-        const pediaRegreso = obs.toLowerCase().includes('regresa:');
-        if (pediaRegreso && horaSalidaCaseta && !horaEntradaCaseta && !/\[No reingres[óo] a planta/i.test(obs)) {
-          const mHoraSal = horaSalidaCaseta.replace(/\s*hrs/i, '').trim();
-          const [hS, mS] = mHoraSal.split(':').map(Number);
-          let nuevasHoras = p.total_horas || 0;
-          if (!isNaN(hS) && !isNaN(mS)) {
-            const diff = (minSalidaOficial - (hS * 60 + mS)) / 60;
-            if (diff > 0) nuevasHoras = parseFloat(diff.toFixed(2));
-          }
-          const obsSinRegresa = obs.replace(/\(Regresa:\s*[^)]+\)/ig, '(Sin reingreso — Fin de turno)');
-          const nuevaObs = `${obsSinRegresa} | [No reingresó a planta — Salida definitiva: ${mHoraSal} hrs]`;
-
-          await supabase
-            .from('permisos')
-            .update({
-              total_horas: nuevasHoras,
-              estado_general: 'completado_caseta',
-              observaciones: nuevaObs
-            })
-            .eq('id', p.id);
-
-          if (!regAsist) {
-            await supabase.from('asistencias_caseta').insert([{
-              usuario_id: p.usuario_id,
-              fecha: fPase,
-              hora_entrada: null,
-              hora_salida: mHoraSal
-            }]);
-          } else if (!regAsist.hora_salida) {
-            await supabase.from('asistencias_caseta').update({ hora_salida: mHoraSal }).eq('usuario_id', p.usuario_id).eq('fecha', fPase);
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Aviso en sincronización automática de fin de turno:', err);
-  }
-};
+// El corte del día ya no modifica permisos automáticamente.
+// Lo abierto en días cerrados se revisa en la bandeja de RH (permisosService → obtenerBandejaCierreRH).
 
 export const cancelarPasePorInasistenciaOCambio = async (permisoId, motivoCancelacion = 'El colaborador no utilizó el pase o nunca se presentó en caseta') => {
   const ahora = new Date();
